@@ -94,6 +94,7 @@
 10.3.3 Given: ヘルスチェックポートを決める, When: `YURUTSUKU_ORCH_HEALTH_PORT` が未指定, Then: 既定ポートは `17707` を使う  
 10.3.4 Given: terminal window を開く, When: `GET /open-terminal?session_id=<id>` にアクセスする, Then: Terminal window を開き `{"status":"ok","session_id":"<id>"}` を返す（`session_id` 未指定なら自動採番する）  
 10.3.4.1 Given: すでに Terminal セッションが存在する, When: `GET /open-terminal`（`session_id` 未指定）にアクセスする, Then: 既存セッションを再利用して Terminal window をフォーカスし `{"status":"ok","session_id":"<existing>"}` を返す  
+10.3.4.2 Given: すでに Terminal セッションが存在する, When: `GET /open-terminal?session_id=<id>`（`session_id` 指定）にアクセスする, Then: Worker は単一セッションのため `<id>` は無視して既存セッションを再利用し `{"status":"ok","session_id":"<existing>"}` を返す  
 10.4 Given: Windows 環境で `worker_backend = wsl`, When: Worker を起動する, Then: Orchestrator は `wsl.exe` 経由で Linux Worker を起動する  
 10.5 Given: Windows 環境で `worker_backend = windows` または未指定, When: Worker を起動する, Then: Orchestrator は Windows Worker を起動する  
 10.6 Given: WSL で Worker を起動する, When: Linux 側コマンドを指定する, Then: `wsl.exe -d <distro> -- <command>` 形式で実行する  

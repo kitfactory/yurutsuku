@@ -81,6 +81,8 @@ struct SelectionState {
 }
 
 struct TerminalSessionState {
+    // Worker is single-session for now. / Worker は当面単一セッション前提。
+    current: Mutex<Option<String>>,
     active: Mutex<HashSet<String>>,
     labels: Mutex<HashMap<String, String>>,
 }
@@ -160,6 +162,12 @@ fn should_start_hidden() -> bool {
 fn pick_existing_terminal_session_id<R: Runtime>(app: &AppHandle<R>) -> Option<String> {
     let state = app.try_state::<TerminalSessionState>()?;
 
+    if let Ok(guard) = state.current.lock() {
+        if let Some(session_id) = guard.as_ref() {
+            return Some(session_id.clone());
+        }
+    }
+
     if let Ok(guard) = state.active.lock() {
         if let Some(session_id) = guard.iter().next() {
             return Some(session_id.clone());
@@ -217,10 +225,10 @@ fn handle_health_connection<R: Runtime>(mut stream: TcpStream, app: &AppHandle<R
                 .filter(|value| !value.is_empty())
                 .map(|value| value.to_string());
 
-            // If session_id is omitted, reuse the existing terminal session when present.
-            // session_id 未指定時は既存の Terminal セッションを再利用してフォーカスする。
-            let session_id = requested_session_id
-                .or_else(|| pick_existing_terminal_session_id(app))
+            // Worker is single-session for now: always reuse the existing session when present.
+            // Worker が単一セッションのため、既存セッションがあれば常に再利用する。
+            let session_id = pick_existing_terminal_session_id(app)
+                .or(requested_session_id)
                 .unwrap_or_else(generate_terminal_session_id);
 
             let _ = open_terminal_window_inner(app.clone(), session_id.clone());
@@ -438,10 +446,13 @@ fn register_terminal_window<R: Runtime>(
     session_id: &str,
     label: &str,
 ) -> Result<(), String> {
-    let state = app
+    let terminal_state = app
         .try_state::<TerminalSessionState>()
         .ok_or_else(|| "terminal session state missing".to_string())?;
-    let mut guard = state.labels.lock().map_err(|_| "terminal labels lock".to_string())?;
+    let mut guard = terminal_state
+        .labels
+        .lock()
+        .map_err(|_| "terminal labels lock".to_string())?;
     guard.insert(session_id.to_string(), label.to_string());
     Ok(())
 }
@@ -499,10 +510,25 @@ fn start_terminal_session<R: Runtime>(
         &app,
         &format!("terminal start requested: {session_id} cols={cols} rows={rows}"),
     );
-    let state = app
+    let terminal_state = app
         .try_state::<TerminalSessionState>()
         .ok_or_else(|| "terminal session state missing".to_string())?;
-    let mut active = state.active.lock().map_err(|_| "terminal session lock".to_string())?;
+
+    // Prevent "session already exists" / "session_id mismatch" by refusing to start a second session
+    // when the worker is already running one.
+    // Worker が単一セッションのため、2つ目の start は拒否して状態汚染を防ぐ。
+    if let Ok(guard) = terminal_state.current.lock() {
+        if let Some(existing) = guard.as_ref() {
+            if existing != &session_id {
+                return Err(format!("terminal session already active: {existing}"));
+            }
+        }
+    }
+
+    let mut active = terminal_state
+        .active
+        .lock()
+        .map_err(|_| "terminal session lock".to_string())?;
     if active.contains(&session_id) {
         return Ok(());
     }
@@ -511,8 +537,11 @@ fn start_terminal_session<R: Runtime>(
     } else {
         "sh".to_string()
     };
-    let state = app.state::<WorkerState>();
-    let mut process = state.process.lock().map_err(|_| "worker lock".to_string())?;
+    let worker_state = app.state::<WorkerState>();
+    let mut process = worker_state
+        .process
+        .lock()
+        .map_err(|_| "worker lock".to_string())?;
     process
         .send_start_session(yurutsuku_protocol::StartSession {
             session_id: session_id.clone(),
@@ -523,6 +552,10 @@ fn start_terminal_session<R: Runtime>(
             rows,
         })
         .map_err(|err| err.to_string())?;
+    if let Ok(mut guard) = terminal_state.current.lock() {
+        *guard = Some(session_id.clone());
+    }
+    active.clear();
     active.insert(session_id);
     Ok(())
 }
@@ -542,6 +575,13 @@ fn terminal_send_input<R: Runtime>(
     let state = app
         .try_state::<TerminalSessionState>()
         .ok_or_else(|| "terminal session state missing".to_string())?;
+    if let Ok(guard) = state.current.lock() {
+        if let Some(current) = guard.as_ref() {
+            if current != &session_id {
+                return Err("terminal session_id mismatch".to_string());
+            }
+        }
+    }
     let active = state.active.lock().map_err(|_| "terminal session lock".to_string())?;
     if !active.contains(&session_id) {
         return Err("terminal session not started".to_string());
@@ -571,6 +611,13 @@ fn terminal_resize<R: Runtime>(
     let state = app
         .try_state::<TerminalSessionState>()
         .ok_or_else(|| "terminal session state missing".to_string())?;
+    if let Ok(guard) = state.current.lock() {
+        if let Some(current) = guard.as_ref() {
+            if current != &session_id {
+                return Err("terminal session_id mismatch".to_string());
+            }
+        }
+    }
     let active = state.active.lock().map_err(|_| "terminal session lock".to_string())?;
     if !active.contains(&session_id) {
         return Err("terminal session not started".to_string());
@@ -599,9 +646,19 @@ fn stop_terminal_session<R: Runtime>(
     let state = app
         .try_state::<TerminalSessionState>()
         .ok_or_else(|| "terminal session state missing".to_string())?;
+    if let Ok(guard) = state.current.lock() {
+        if let Some(current) = guard.as_ref() {
+            if current != &session_id {
+                return Ok(());
+            }
+        }
+    }
     let mut active = state.active.lock().map_err(|_| "terminal session lock".to_string())?;
     if !active.remove(&session_id) {
         return Ok(());
+    }
+    if let Ok(mut guard) = state.current.lock() {
+        *guard = None;
     }
     let state = app.state::<WorkerState>();
     let mut process = state.process.lock().map_err(|_| "worker lock".to_string())?;
@@ -625,6 +682,7 @@ fn open_terminal_window_inner<R: Runtime>(
     app: AppHandle<R>,
     session_id: String,
 ) -> Result<(), String> {
+    let session_id = pick_existing_terminal_session_id(&app).unwrap_or(session_id);
     let _ = log_worker_event(&app, &format!("terminal window open requested: {session_id}"));
     let safe_id = session_id
         .chars()
@@ -1554,6 +1612,7 @@ fn main() {
                 current: Mutex::new(None),
             });
             handle.manage(TerminalSessionState {
+                current: Mutex::new(None),
                 active: Mutex::new(HashSet::new()),
                 labels: Mutex::new(HashMap::new()),
             });
