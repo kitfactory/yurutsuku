@@ -72,6 +72,14 @@ struct WorkerState {
     process: Mutex<worker::WorkerProcess>,
 }
 
+struct TerminalWorkerBus {
+    tx: std::sync::mpsc::Sender<Message>,
+}
+
+struct TerminalWorkerState {
+    processes: Mutex<HashMap<String, worker::WorkerProcess>>,
+}
+
 struct SessionState {
     current: Mutex<Option<String>>,
 }
@@ -81,10 +89,8 @@ struct SelectionState {
 }
 
 struct TerminalSessionState {
-    // Worker is single-session for now. / Worker は当面単一セッション前提。
-    current: Mutex<Option<String>>,
     active: Mutex<HashSet<String>>,
-    labels: Mutex<HashMap<String, HashSet<String>>>,
+    labels: Mutex<HashMap<String, String>>,
 }
 
 struct TerminalSmokeWaiter {
@@ -159,30 +165,6 @@ fn should_start_hidden() -> bool {
     std::env::args().any(|arg| arg == "--start-hidden")
 }
 
-fn pick_existing_terminal_session_id<R: Runtime>(app: &AppHandle<R>) -> Option<String> {
-    let state = app.try_state::<TerminalSessionState>()?;
-
-    if let Ok(guard) = state.current.lock() {
-        if let Some(session_id) = guard.as_ref() {
-            return Some(session_id.clone());
-        }
-    }
-
-    if let Ok(guard) = state.active.lock() {
-        if let Some(session_id) = guard.iter().next() {
-            return Some(session_id.clone());
-        }
-    }
-
-    if let Ok(guard) = state.labels.lock() {
-        if let Some((session_id, _)) = guard.iter().next() {
-            return Some(session_id.clone());
-        }
-    }
-
-    None
-}
-
 fn generate_terminal_session_id() -> String {
     static SEQ: AtomicU64 = AtomicU64::new(0);
     let nonce = SystemTime::now()
@@ -191,46 +173,6 @@ fn generate_terminal_session_id() -> String {
         .as_millis();
     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
     format!("terminal-{nonce}-{seq}")
-}
-
-static TERMINAL_WINDOW_SEQ: AtomicU64 = AtomicU64::new(0);
-
-fn focus_any_terminal_window_for_session<R: Runtime>(
-    app: &AppHandle<R>,
-    session_id: &str,
-) -> Result<bool, String> {
-    let state = app
-        .try_state::<TerminalSessionState>()
-        .ok_or_else(|| "terminal session state missing".to_string())?;
-    let labels = state.labels.lock().map_err(|_| "terminal labels lock".to_string())?;
-    let Some(set) = labels.get(session_id) else {
-        return Ok(false);
-    };
-    for label in set {
-        if let Some(window) = app.get_webview_window(label) {
-            let _ = window.show();
-            let _ = window.set_focus();
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-fn count_open_terminal_windows_for_session<R: Runtime>(
-    app: &AppHandle<R>,
-    session_id: &str,
-) -> Result<usize, String> {
-    let state = app
-        .try_state::<TerminalSessionState>()
-        .ok_or_else(|| "terminal session state missing".to_string())?;
-    let labels = state.labels.lock().map_err(|_| "terminal labels lock".to_string())?;
-    let Some(set) = labels.get(session_id) else {
-        return Ok(0);
-    };
-    Ok(set
-        .iter()
-        .filter(|label| app.get_webview_window(label.as_str()).is_some())
-        .count())
 }
 
 fn handle_health_connection<R: Runtime>(mut stream: TcpStream, app: &AppHandle<R>) {
@@ -265,11 +207,14 @@ fn handle_health_connection<R: Runtime>(mut stream: TcpStream, app: &AppHandle<R
                 .filter(|value| !value.is_empty())
                 .map(|value| value.to_string());
 
-            // Worker is single-session for now: always reuse the existing session when present.
-            // Worker が単一セッションのため、既存セッションがあれば常に再利用する。
-            let session_id = pick_existing_terminal_session_id(app)
-                .or(requested_session_id)
-                .unwrap_or_else(generate_terminal_session_id);
+            let mut session_id = requested_session_id.unwrap_or_else(generate_terminal_session_id);
+            if let Some(state) = app.try_state::<TerminalSessionState>() {
+                if let Ok(guard) = state.labels.lock() {
+                    if guard.contains_key(&session_id) {
+                        session_id = generate_terminal_session_id();
+                    }
+                }
+            }
 
             let _ = open_terminal_window_inner(app.clone(), session_id.clone());
             let body = format!(r#"{{"status":"ok","session_id":"{}"}}"#, session_id);
@@ -493,8 +438,7 @@ fn register_terminal_window<R: Runtime>(
         .labels
         .lock()
         .map_err(|_| "terminal labels lock".to_string())?;
-    let entry = guard.entry(session_id.to_string()).or_insert_with(HashSet::new);
-    entry.insert(label.to_string());
+    guard.insert(session_id.to_string(), label.to_string());
     Ok(())
 }
 
@@ -554,35 +498,31 @@ fn start_terminal_session<R: Runtime>(
     let terminal_state = app
         .try_state::<TerminalSessionState>()
         .ok_or_else(|| "terminal session state missing".to_string())?;
-
-    // Prevent "session already exists" / "session_id mismatch" by refusing to start a second session
-    // when the worker is already running one.
-    // Worker が単一セッションのため、2つ目の start は拒否して状態汚染を防ぐ。
-    if let Ok(guard) = terminal_state.current.lock() {
-        if let Some(existing) = guard.as_ref() {
-            if existing != &session_id {
-                return Err(format!("terminal session already active: {existing}"));
-            }
+    {
+        let active = terminal_state
+            .active
+            .lock()
+            .map_err(|_| "terminal session lock".to_string())?;
+        if active.contains(&session_id) {
+            return Ok(());
         }
-    }
-
-    let mut active = terminal_state
-        .active
-        .lock()
-        .map_err(|_| "terminal session lock".to_string())?;
-    if active.contains(&session_id) {
-        return Ok(());
     }
     let cmd = if cfg!(windows) {
         "cmd.exe".to_string()
     } else {
         "sh".to_string()
     };
-    let worker_state = app.state::<WorkerState>();
-    let mut process = worker_state
-        .process
-        .lock()
-        .map_err(|_| "worker lock".to_string())?;
+
+    let worker_path = worker::resolve_worker_path().map_err(|err| err.to_string())?;
+    let mut process = worker::WorkerProcess::spawn(&worker_path).map_err(|err| err.to_string())?;
+    if let Some(rx) = process.take_receiver() {
+        let tx = app.state::<TerminalWorkerBus>().tx.clone();
+        thread::spawn(move || {
+            while let Ok(message) = rx.recv() {
+                let _ = tx.send(message);
+            }
+        });
+    }
     process
         .send_start_session(yurutsuku_protocol::StartSession {
             session_id: session_id.clone(),
@@ -593,10 +533,18 @@ fn start_terminal_session<R: Runtime>(
             rows,
         })
         .map_err(|err| err.to_string())?;
-    if let Ok(mut guard) = terminal_state.current.lock() {
-        *guard = Some(session_id.clone());
+    {
+        let workers = app.state::<TerminalWorkerState>();
+        let mut guard = workers
+            .processes
+            .lock()
+            .map_err(|_| "terminal worker lock".to_string())?;
+        guard.insert(session_id.clone(), process);
     }
-    active.clear();
+    let mut active = terminal_state
+        .active
+        .lock()
+        .map_err(|_| "terminal session lock".to_string())?;
     active.insert(session_id);
     Ok(())
 }
@@ -613,23 +561,14 @@ fn terminal_send_input<R: Runtime>(
         &app,
         &format!("terminal input requested: {session_id} size={}", text.len()),
     );
-    let state = app
-        .try_state::<TerminalSessionState>()
-        .ok_or_else(|| "terminal session state missing".to_string())?;
-    if let Ok(guard) = state.current.lock() {
-        if let Some(current) = guard.as_ref() {
-            if current != &session_id {
-                return Err("terminal session_id mismatch".to_string());
-            }
-        }
-    }
-    let active = state.active.lock().map_err(|_| "terminal session lock".to_string())?;
-    if !active.contains(&session_id) {
+    let workers = app.state::<TerminalWorkerState>();
+    let mut guard = workers
+        .processes
+        .lock()
+        .map_err(|_| "terminal worker lock".to_string())?;
+    let Some(process) = guard.get_mut(&session_id) else {
         return Err("terminal session not started".to_string());
-    }
-    drop(active);
-    let state = app.state::<WorkerState>();
-    let mut process = state.process.lock().map_err(|_| "worker lock".to_string())?;
+    };
     process
         .send_input(yurutsuku_protocol::SendInput { session_id, text })
         .map_err(|err| err.to_string())?;
@@ -649,23 +588,14 @@ fn terminal_resize<R: Runtime>(
         &app,
         &format!("terminal resize requested: {session_id} cols={cols} rows={rows}"),
     );
-    let state = app
-        .try_state::<TerminalSessionState>()
-        .ok_or_else(|| "terminal session state missing".to_string())?;
-    if let Ok(guard) = state.current.lock() {
-        if let Some(current) = guard.as_ref() {
-            if current != &session_id {
-                return Err("terminal session_id mismatch".to_string());
-            }
-        }
-    }
-    let active = state.active.lock().map_err(|_| "terminal session lock".to_string())?;
-    if !active.contains(&session_id) {
+    let workers = app.state::<TerminalWorkerState>();
+    let mut guard = workers
+        .processes
+        .lock()
+        .map_err(|_| "terminal worker lock".to_string())?;
+    let Some(process) = guard.get_mut(&session_id) else {
         return Err("terminal session not started".to_string());
-    }
-    drop(active);
-    let state = app.state::<WorkerState>();
-    let mut process = state.process.lock().map_err(|_| "worker lock".to_string())?;
+    };
     process
         .send_resize(yurutsuku_protocol::Resize {
             session_id,
@@ -684,31 +614,34 @@ fn stop_terminal_session<R: Runtime>(
 ) -> Result<(), String> {
     ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
     let _ = log_worker_event(&app, &format!("terminal stop requested: {session_id}"));
-    let state = app
+    let terminal_state = app
         .try_state::<TerminalSessionState>()
         .ok_or_else(|| "terminal session state missing".to_string())?;
-    if let Ok(guard) = state.current.lock() {
-        if let Some(current) = guard.as_ref() {
-            if current != &session_id {
-                return Ok(());
-            }
-        }
+    {
+        let mut active = terminal_state
+            .active
+            .lock()
+            .map_err(|_| "terminal session lock".to_string())?;
+        active.remove(&session_id);
     }
-    if count_open_terminal_windows_for_session(&app, &session_id)? > 1 {
-        return Ok(());
+    {
+        let mut labels = terminal_state
+            .labels
+            .lock()
+            .map_err(|_| "terminal labels lock".to_string())?;
+        labels.remove(&session_id);
     }
-    let mut active = state.active.lock().map_err(|_| "terminal session lock".to_string())?;
-    if !active.remove(&session_id) {
-        return Ok(());
+    let workers = app.state::<TerminalWorkerState>();
+    let mut guard = workers
+        .processes
+        .lock()
+        .map_err(|_| "terminal worker lock".to_string())?;
+    if let Some(mut process) = guard.remove(&session_id) {
+        let _ = process.send_stop_session(yurutsuku_protocol::StopSession {
+            session_id: session_id.clone(),
+        });
+        let _ = process.stop();
     }
-    if let Ok(mut guard) = state.current.lock() {
-        *guard = None;
-    }
-    let state = app.state::<WorkerState>();
-    let mut process = state.process.lock().map_err(|_| "worker lock".to_string())?;
-    process
-        .send_stop_session(yurutsuku_protocol::StopSession { session_id })
-        .map_err(|err| err.to_string())?;
     Ok(())
 }
 
@@ -726,81 +659,12 @@ fn open_terminal_window_inner<R: Runtime>(
     app: AppHandle<R>,
     session_id: String,
 ) -> Result<(), String> {
-    // Ensure a session id is reserved early so that subsequent "open terminal" requests reuse it,
-    // even before the first window finishes initializing.
-    // 最初の window 初期化前でも session_id を予約して後続の open を同一セッションに寄せる。
-    let session_id = {
-        let state = app
-            .try_state::<TerminalSessionState>()
-            .ok_or_else(|| "terminal session state missing".to_string())?;
-        let mut current = state
-            .current
-            .lock()
-            .map_err(|_| "terminal current session lock".to_string())?;
-        match current.as_ref() {
-            Some(existing) => existing.clone(),
-            None => {
-                *current = Some(session_id.clone());
-                session_id.clone()
-            }
-        }
-    };
-
-    if focus_any_terminal_window_for_session(&app, &session_id)? {
-        return Ok(());
-    }
-
     let _ = log_worker_event(&app, &format!("terminal window open requested: {session_id}"));
     let safe_id = session_id
         .chars()
         .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
         .collect::<String>();
-    let suffix = TERMINAL_WINDOW_SEQ.fetch_add(1, Ordering::Relaxed);
-    let label = format!("terminal-{safe_id}-{suffix}");
-    let title = format!("Terminal {session_id}");
-    let query = format!("view=terminal&session_id={session_id}");
-    create_window(&app, &label, &title, &query).map_err(|err| err.to_string())?;
-    let _ = register_terminal_window(&app, &session_id, &label);
-    if let Some(window) = app.get_webview_window(&label) {
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
-    Ok(())
-}
-
-fn open_additional_terminal_window_inner<R: Runtime>(
-    app: AppHandle<R>,
-    session_id: String,
-) -> Result<(), String> {
-    // Reserve current session id first (single-session worker).
-    // 単一セッション前提のため、先に current を確定する。
-    let session_id = {
-        let state = app
-            .try_state::<TerminalSessionState>()
-            .ok_or_else(|| "terminal session state missing".to_string())?;
-        let mut current = state
-            .current
-            .lock()
-            .map_err(|_| "terminal current session lock".to_string())?;
-        match current.as_ref() {
-            Some(existing) => existing.clone(),
-            None => {
-                *current = Some(session_id.clone());
-                session_id.clone()
-            }
-        }
-    };
-
-    let _ = log_worker_event(
-        &app,
-        &format!("terminal window open requested (new): {session_id}"),
-    );
-    let safe_id = session_id
-        .chars()
-        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
-        .collect::<String>();
-    let suffix = TERMINAL_WINDOW_SEQ.fetch_add(1, Ordering::Relaxed);
-    let label = format!("terminal-{safe_id}-{suffix}");
+    let label = format!("terminal-{safe_id}");
     let title = format!("Terminal {session_id}");
     let query = format!("view=terminal&session_id={session_id}");
     create_window(&app, &label, &title, &query).map_err(|err| err.to_string())?;
@@ -1278,10 +1142,8 @@ fn build_tray<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
                 }
             }
             id if id == "open_terminal" => {
-                // Reuse existing session if worker is already running. / Workerが単一セッション前提のため既存を再利用
-                let session_id =
-                    pick_existing_terminal_session_id(app).unwrap_or_else(generate_terminal_session_id);
-                let _ = open_additional_terminal_window_inner(app.clone(), session_id);
+                let session_id = generate_terminal_session_id();
+                let _ = open_terminal_window_inner(app.clone(), session_id);
             }
             id if id == "arrange_terminals" => {
                 let _ = arrange_terminal_windows_inner(app.clone());
@@ -1431,22 +1293,17 @@ fn start_worker_reader<R: Runtime>(app: AppHandle<R>) {
                     let session = app.state::<SessionState>();
                     let mut guard = session.current.lock().expect("session lock");
                     *guard = None;
-                    let labels = {
+                    let label = {
                         let state = app.state::<TerminalSessionState>();
                         if let Ok(mut active) = state.active.lock() {
                             active.remove(&exit.session_id);
-                        }
-                        if let Ok(mut current) = state.current.lock() {
-                            if current.as_deref() == Some(exit.session_id.as_str()) {
-                                *current = None;
-                            }
                         }
                         let guard = state.labels.lock().ok();
                         guard
                             .and_then(|map| map.get(&exit.session_id).cloned())
                             .unwrap_or_default()
                     };
-                    if labels.is_empty() {
+                    if label.is_empty() {
                         let _ = log_worker_event(
                             &app,
                             &format!(
@@ -1454,43 +1311,39 @@ fn start_worker_reader<R: Runtime>(app: AppHandle<R>) {
                                 exit.session_id
                             ),
                         );
-                    } else {
-                        for label in labels {
-                            if let Some(window) = app.get_webview_window(&label) {
-                                let payload = TerminalExitPayload {
-                                    session_id: exit.session_id.clone(),
-                                    exit_code: exit.exit_code,
-                                };
-                                match window.emit("terminal-exit", payload.clone()) {
-                                    Ok(()) => {
-                                        let _ = log_worker_event(
-                                            &app,
-                                            &format!(
-                                                "terminal exit emitted: session={} label={}",
-                                                exit.session_id, label
-                                            ),
-                                        );
-                                    }
-                                    Err(err) => {
-                                        let _ = log_worker_event(
-                                            &app,
-                                            &format!(
-                                                "terminal exit emit failed: session={} label={} err={}",
-                                                exit.session_id, label, err
-                                            ),
-                                        );
-                                    }
-                                }
-                            } else {
+                    } else if let Some(window) = app.get_webview_window(&label) {
+                        let payload = TerminalExitPayload {
+                            session_id: exit.session_id.clone(),
+                            exit_code: exit.exit_code,
+                        };
+                        match window.emit("terminal-exit", payload) {
+                            Ok(()) => {
                                 let _ = log_worker_event(
                                     &app,
                                     &format!(
-                                        "terminal exit ignored: session={} window missing label={}",
+                                        "terminal exit emitted: session={} label={}",
                                         exit.session_id, label
                                     ),
                                 );
                             }
+                            Err(err) => {
+                                let _ = log_worker_event(
+                                    &app,
+                                    &format!(
+                                        "terminal exit emit failed: session={} label={} err={}",
+                                        exit.session_id, label, err
+                                    ),
+                                );
+                            }
                         }
+                    } else {
+                        let _ = log_worker_event(
+                            &app,
+                            &format!(
+                                "terminal exit ignored: session={} window missing label={}",
+                                exit.session_id, label
+                            ),
+                        );
                     }
                     }
                     Message::Error(error) => {
@@ -1498,14 +1351,14 @@ fn start_worker_reader<R: Runtime>(app: AppHandle<R>) {
                     let _ =
                         log_worker_event(&app, &format!("error {}: {}", error.session_id, error.message));
                     println!("[worker] error {}: {}", error.session_id, error.message);
-                    let labels = {
+                    let label = {
                         let state = app.state::<TerminalSessionState>();
                         let guard = state.labels.lock().ok();
                         guard
                             .and_then(|map| map.get(&error.session_id).cloned())
                             .unwrap_or_default()
                     };
-                    if labels.is_empty() {
+                    if label.is_empty() {
                         let _ = log_worker_event(
                             &app,
                             &format!(
@@ -1513,43 +1366,39 @@ fn start_worker_reader<R: Runtime>(app: AppHandle<R>) {
                                 error.session_id
                             ),
                         );
-                    } else {
-                        for label in labels {
-                            if let Some(window) = app.get_webview_window(&label) {
-                                let payload = TerminalErrorPayload {
-                                    session_id: error.session_id.clone(),
-                                    message: error.message.clone(),
-                                };
-                                match window.emit("terminal-error", payload) {
-                                    Ok(()) => {
-                                        let _ = log_worker_event(
-                                            &app,
-                                            &format!(
-                                                "terminal error emitted: session={} label={}",
-                                                error.session_id, label
-                                            ),
-                                        );
-                                    }
-                                    Err(err) => {
-                                        let _ = log_worker_event(
-                                            &app,
-                                            &format!(
-                                                "terminal error emit failed: session={} label={} err={}",
-                                                error.session_id, label, err
-                                            ),
-                                        );
-                                    }
-                                }
-                            } else {
+                    } else if let Some(window) = app.get_webview_window(&label) {
+                        let payload = TerminalErrorPayload {
+                            session_id: error.session_id.clone(),
+                            message: error.message,
+                        };
+                        match window.emit("terminal-error", payload) {
+                            Ok(()) => {
                                 let _ = log_worker_event(
                                     &app,
                                     &format!(
-                                        "terminal error ignored: session={} window missing label={}",
+                                        "terminal error emitted: session={} label={}",
                                         error.session_id, label
                                     ),
                                 );
                             }
+                            Err(err) => {
+                                let _ = log_worker_event(
+                                    &app,
+                                    &format!(
+                                        "terminal error emit failed: session={} label={} err={}",
+                                        error.session_id, label, err
+                                    ),
+                                );
+                            }
                         }
+                    } else {
+                        let _ = log_worker_event(
+                            &app,
+                            &format!(
+                                "terminal error ignored: session={} window missing label={}",
+                                error.session_id, label
+                            ),
+                        );
                     }
                     }
                     _ => {}
@@ -1578,7 +1427,7 @@ fn start_worker_reader<R: Runtime>(app: AppHandle<R>) {
                     entry.chunks.concat()
                 };
 
-                let labels = {
+                let label = {
                     let state = app.state::<TerminalSessionState>();
                     let guard = state.labels.lock().ok();
                     guard
@@ -1586,16 +1435,209 @@ fn start_worker_reader<R: Runtime>(app: AppHandle<R>) {
                         .unwrap_or_default()
                 };
 
-                if !labels.is_empty() {
-                    for label in labels {
-                        if let Some(window) = app.get_webview_window(&label) {
-                            let payload = TerminalOutputPayload {
-                                session_id: session_id.clone(),
-                                chunk: chunk.clone(),
-                                stream: stream.clone(),
-                            };
-                            let _ = window.emit("terminal-output", payload);
+                if !label.is_empty() {
+                    if let Some(window) = app.get_webview_window(&label) {
+                        let payload = TerminalOutputPayload {
+                            session_id: session_id.clone(),
+                            chunk: chunk.clone(),
+                            stream: stream.clone(),
+                        };
+                        let _ = window.emit("terminal-output", payload);
+                    }
+                }
+
+                if enable_broadcast {
+                    let broadcast_payload = TerminalOutputPayload {
+                        session_id,
+                        chunk,
+                        stream,
+                    };
+                    let _ = app.emit("terminal-output-broadcast", broadcast_payload);
+                }
+            }
+        }
+    });
+}
+
+fn start_terminal_worker_reader<R: Runtime>(
+    app: AppHandle<R>,
+    rx: std::sync::mpsc::Receiver<Message>,
+) {
+    thread::spawn(move || {
+        use std::collections::HashMap;
+
+        #[derive(Debug)]
+        struct PendingOutput {
+            queued_at: Instant,
+            bytes: usize,
+            chunks: Vec<String>,
+        }
+
+        // Terminal output coalescing defaults / ターミナル出力合体の既定値
+        const OUTPUT_BUSY_THRESHOLD_BYTES: usize = 256 * 1024;
+        const OUTPUT_FLUSH_DELAY_NORMAL: Duration = Duration::from_millis(16);
+        const OUTPUT_FLUSH_BYTES_NORMAL: usize = 64 * 1024;
+        const OUTPUT_FLUSH_DELAY_BUSY: Duration = Duration::from_millis(32);
+        const OUTPUT_FLUSH_BYTES_BUSY: usize = 128 * 1024;
+
+        let debug_io = std::env::var_os("YURUTSUKU_DEBUG_WORKER_IO").is_some();
+        let enable_broadcast =
+            std::env::var_os("YURUTSUKU_ENABLE_TERMINAL_OUTPUT_BROADCAST").is_some();
+        let mut pending: HashMap<(String, String), PendingOutput> = HashMap::new();
+
+        loop {
+            let total_pending_bytes: usize = pending.values().map(|entry| entry.bytes).sum();
+            let (flush_delay, flush_bytes) = if total_pending_bytes > OUTPUT_BUSY_THRESHOLD_BYTES {
+                (OUTPUT_FLUSH_DELAY_BUSY, OUTPUT_FLUSH_BYTES_BUSY)
+            } else {
+                (OUTPUT_FLUSH_DELAY_NORMAL, OUTPUT_FLUSH_BYTES_NORMAL)
+            };
+
+            // Flush deadline drives recv timeout so we can flush ~16ms even when output is sparse.
+            let now = Instant::now();
+            let mut next_deadline: Option<Instant> = None;
+            for entry in pending.values() {
+                let deadline = entry.queued_at + flush_delay;
+                next_deadline = Some(next_deadline.map_or(deadline, |prev| prev.min(deadline)));
+            }
+            let timeout = next_deadline
+                .map(|deadline| deadline.saturating_duration_since(now))
+                .unwrap_or(Duration::from_millis(200))
+                .min(Duration::from_millis(200));
+
+            let message = rx.recv_timeout(timeout).ok();
+            if let Some(message) = message {
+                match message {
+                    Message::Output(output) => {
+                        let session_id = output.session_id;
+                        let stream = output.stream;
+                        let chunk = output.chunk;
+
+                        if debug_io {
+                            let _ = log_worker_event(
+                                &app,
+                                &format!(
+                                    "terminal output received: session={session_id} stream={stream} size={}",
+                                    chunk.len()
+                                ),
+                            );
                         }
+
+                        let key = (session_id.clone(), stream.clone());
+                        let entry = pending.entry(key).or_insert_with(|| PendingOutput {
+                            queued_at: Instant::now(),
+                            bytes: 0,
+                            chunks: Vec::new(),
+                        });
+                        entry.bytes += chunk.len();
+                        entry.chunks.push(chunk);
+                    }
+                    Message::Exit(exit) => {
+                        let _ = log_worker_event(
+                            &app,
+                            &format!("terminal exit {}: {}", exit.session_id, exit.exit_code),
+                        );
+                        println!(
+                            "[terminal-worker] exit {}: {}",
+                            exit.session_id, exit.exit_code
+                        );
+
+                        let label = {
+                            let state = app.state::<TerminalSessionState>();
+                            let guard = state.labels.lock().ok();
+                            guard
+                                .and_then(|map| map.get(&exit.session_id).cloned())
+                                .unwrap_or_default()
+                        };
+                        if !label.is_empty() {
+                            if let Some(window) = app.get_webview_window(&label) {
+                                let payload = TerminalExitPayload {
+                                    session_id: exit.session_id.clone(),
+                                    exit_code: exit.exit_code,
+                                };
+                                let _ = window.emit("terminal-exit", payload);
+                            }
+                        }
+
+                        if let Ok(mut active) = app.state::<TerminalSessionState>().active.lock() {
+                            active.remove(&exit.session_id);
+                        }
+                        if let Ok(mut guard) =
+                            app.state::<TerminalWorkerState>().processes.lock()
+                        {
+                            if let Some(mut process) = guard.remove(&exit.session_id) {
+                                let _ = process.stop();
+                            }
+                        }
+                    }
+                    Message::Error(error) => {
+                        let _ = log_worker_event(
+                            &app,
+                            &format!("terminal error {}: {}", error.session_id, error.message),
+                        );
+                        println!(
+                            "[terminal-worker] error {}: {}",
+                            error.session_id, error.message
+                        );
+
+                        let label = {
+                            let state = app.state::<TerminalSessionState>();
+                            let guard = state.labels.lock().ok();
+                            guard
+                                .and_then(|map| map.get(&error.session_id).cloned())
+                                .unwrap_or_default()
+                        };
+                        if !label.is_empty() {
+                            if let Some(window) = app.get_webview_window(&label) {
+                                let payload = TerminalErrorPayload {
+                                    session_id: error.session_id.clone(),
+                                    message: error.message,
+                                };
+                                let _ = window.emit("terminal-error", payload);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            // Flush due output buffers (size or time).
+            let now = Instant::now();
+            let mut flush_keys: Vec<(String, String)> = Vec::new();
+            for (key, entry) in pending.iter() {
+                if entry.bytes >= flush_bytes || now.duration_since(entry.queued_at) >= flush_delay {
+                    flush_keys.push(key.clone());
+                }
+            }
+
+            for (session_id, stream) in flush_keys {
+                let Some(entry) = pending.remove(&(session_id.clone(), stream.clone())) else {
+                    continue;
+                };
+                if entry.chunks.is_empty() {
+                    continue;
+                }
+                let chunk = if entry.chunks.len() == 1 {
+                    entry.chunks.into_iter().next().unwrap_or_default()
+                } else {
+                    entry.chunks.concat()
+                };
+
+                let label = {
+                    let state = app.state::<TerminalSessionState>();
+                    let guard = state.labels.lock().ok();
+                    guard
+                        .and_then(|map| map.get(&session_id).cloned())
+                        .unwrap_or_default()
+                };
+                if !label.is_empty() {
+                    if let Some(window) = app.get_webview_window(&label) {
+                        let payload = TerminalOutputPayload {
+                            session_id: session_id.clone(),
+                            chunk: chunk.clone(),
+                            stream: stream.clone(),
+                        };
+                        let _ = window.emit("terminal-output", payload);
                     }
                 }
 
@@ -1738,14 +1780,19 @@ fn main() {
                 current: Mutex::new(None),
             });
             handle.manage(TerminalSessionState {
-                current: Mutex::new(None),
                 active: Mutex::new(HashSet::new()),
                 labels: Mutex::new(HashMap::new()),
+            });
+            let (terminal_tx, terminal_rx) = std::sync::mpsc::channel::<Message>();
+            handle.manage(TerminalWorkerBus { tx: terminal_tx });
+            handle.manage(TerminalWorkerState {
+                processes: Mutex::new(HashMap::new()),
             });
             handle.manage(TerminalSmokeState {
                 waiters: Mutex::new(HashMap::new()),
             });
             start_worker_reader(handle.clone());
+            start_terminal_worker_reader(handle.clone(), terminal_rx);
             if should_start_hidden() {
                 if let Some(window) = handle.get_webview_window(WINDOW_CHAT) {
                     let _ = window.hide();

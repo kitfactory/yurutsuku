@@ -26,7 +26,7 @@
 2.14 Given: phase が更新される, When: キャラクター表情を決める, Then: 優先順位に従って表情を切り替える  
 2.15 Given: success/error/attention になる, When: 表情保持時間に到達, Then: idle/thinking に戻す（既定 4s）  
 2.16 Given: Terminal 画面を開く, When: UI を描画する, Then: ターミナル表示領域が初期化される  
-2.16.1 Given: Worker が単一セッション前提（P0）, When: 複数の Terminal window を開く, Then: すべて同一 `session_id` を共有し同じ出力を表示する  
+2.16.1 Given: 複数の Terminal window を開く, When: `Open Terminal Window` / `GET /open-terminal` で追加する, Then: window ごとに別 `session_id` を持ち入力/出力は共有されない  
 2.17 Given: ターミナル入力が行われる, When: 入力が確定する, Then: PTY/Worker に入力が送られる  
 2.18 Given: PTY/Worker から出力が届く, When: 受信する, Then: ターミナルに表示されスクロールバックが更新される  
 2.19 Given: ユーザーがコピー/ペースト操作を行う, When: ターミナルにフォーカスがある, Then: OS のクリップボードで操作できる  
@@ -93,9 +93,9 @@
 10.3.1 Given: 起動済み判定を行う, When: CLI から生存確認が必要, Then: `127.0.0.1` のヘルスチェックエンドポイントで確認する  
 10.3.2 Given: ヘルスチェックを行う, When: `GET /health` にアクセスする, Then: `{"status":"ok","pid":<number>}` を返す  
 10.3.3 Given: ヘルスチェックポートを決める, When: `YURUTSUKU_ORCH_HEALTH_PORT` が未指定, Then: 既定ポートは `17707` を使う  
-10.3.4 Given: terminal window を開く, When: `GET /open-terminal?session_id=<id>` にアクセスする, Then: Terminal window を開き `{"status":"ok","session_id":"<id>"}` を返す（`session_id` 未指定なら自動採番する）  
-10.3.4.1 Given: すでに Terminal セッションが存在する, When: `GET /open-terminal`（`session_id` 未指定）にアクセスする, Then: 既存セッションを再利用して Terminal window をフォーカスし `{"status":"ok","session_id":"<existing>"}` を返す  
-10.3.4.2 Given: すでに Terminal セッションが存在する, When: `GET /open-terminal?session_id=<id>`（`session_id` 指定）にアクセスする, Then: Worker は単一セッションのため `<id>` は無視して既存セッションを再利用し `{"status":"ok","session_id":"<existing>"}` を返す  
+10.3.4 Given: terminal window を開く, When: `GET /open-terminal?session_id=<id>` にアクセスする, Then: Terminal window を開き `{"status":"ok","session_id":"<id>"}` を返す  
+10.3.4.1 Given: terminal window を開く, When: `GET /open-terminal`（`session_id` 未指定）にアクセスする, Then: `session_id` を自動採番し Terminal window を開き `{"status":"ok","session_id":"<generated>"}` を返す  
+10.3.4.2 Given: `session_id` に対応する window がすでに存在する, When: `GET /open-terminal?session_id=<id>` にアクセスする, Then: 既存 window をフォーカスし `{"status":"ok","session_id":"<id>"}` を返す  
 10.4 Given: Windows 環境で `worker_backend = wsl`, When: Worker を起動する, Then: Orchestrator は `wsl.exe` 経由で Linux Worker を起動する  
 10.5 Given: Windows 環境で `worker_backend = windows` または未指定, When: Worker を起動する, Then: Orchestrator は Windows Worker を起動する  
 10.6 Given: WSL で Worker を起動する, When: Linux 側コマンドを指定する, Then: `wsl.exe -d <distro> -- <command>` 形式で実行する  

@@ -10,7 +10,7 @@ use yurutsuku_protocol::{parse_line, serialize_message, Message, Resize, SendInp
 pub struct WorkerProcess {
     child: Child,
     stdin: ChildStdin,
-    rx: mpsc::Receiver<Message>,
+    rx: Option<mpsc::Receiver<Message>>,
 }
 
 impl WorkerProcess {
@@ -37,7 +37,7 @@ impl WorkerProcess {
         Ok(Self {
             child,
             stdin,
-            rx,
+            rx: Some(rx),
         })
     }
 
@@ -49,11 +49,18 @@ impl WorkerProcess {
     }
 
     pub fn read_message_with_timeout(&self, timeout: Duration) -> Result<Option<Message>> {
-        match self.rx.recv_timeout(timeout) {
+        let Some(rx) = self.rx.as_ref() else {
+            return Ok(None);
+        };
+        match rx.recv_timeout(timeout) {
             Ok(message) => Ok(Some(message)),
             Err(mpsc::RecvTimeoutError::Timeout) => Ok(None),
             Err(mpsc::RecvTimeoutError::Disconnected) => Ok(None),
         }
+    }
+
+    pub fn take_receiver(&mut self) -> Option<mpsc::Receiver<Message>> {
+        self.rx.take()
     }
 
     pub fn send_start_session(&mut self, message: StartSession) -> Result<()> {
