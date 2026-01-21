@@ -350,23 +350,23 @@
       }
 
       .terminal-shell.state-running::after {
-        background: rgba(31, 122, 140, 0.06);
+        background: rgba(140, 170, 165, 0.08);
       }
 
       .terminal-shell.state-need-input::after {
-        background: rgba(143, 185, 255, 0.08);
+        background: rgba(140, 160, 190, 0.08);
       }
 
       .terminal-shell.state-stalled::after {
-        background: rgba(246, 210, 139, 0.08);
+        background: rgba(190, 170, 140, 0.08);
       }
 
       .terminal-shell.state-success::after {
-        background: rgba(103, 185, 154, 0.1);
+        background: rgba(150, 190, 160, 0.1);
       }
 
       .terminal-shell.state-fail::after {
-        background: rgba(242, 106, 61, 0.12);
+        background: rgba(200, 140, 140, 0.1);
       }
 
       .terminal-watcher {
@@ -995,8 +995,8 @@
       });
 
       const TERMINAL_OBSERVE_TICK_MS = 1000;
-      const TERMINAL_STALLED_MS = 20_000;
-      const TERMINAL_NEED_INPUT_MS = 30_000;
+      const TERMINAL_STALLED_MS = 60_000;
+      const TERMINAL_NEED_INPUT_MS = 15_000;
 
       let terminalObservedState = TerminalObservation.running;
       let terminalLastOutputAt = Date.now();

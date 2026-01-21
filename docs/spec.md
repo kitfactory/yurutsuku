@@ -34,6 +34,11 @@
 2.21 Given: ターミナル設定を変更する, When: 設定を保存する, Then: フォント/テーマ/スクロールバックが反映される  
 2.22 Given: IME を使う, When: 変換操作を行う, Then: OS の IME に従って入力できる（専用処理は持たない）  
 2.23 Given: ターミナル画面を表示する, When: 描画する, Then: 画面内の表示は PTY 出力のみで構成し、説明文や装飾テキストは表示しない  
+2.24 Given: ターミナルが表示中, When: 観測（Watcher）を表示する, Then: 右下にキャラクター（nagomisan）を重ねて表示し、状態が一目で分かる  
+2.25 Given: 観測状態が変化する, When: 状態を適用する, Then: terminal の背景に対して半透明でトーンの揃った tint を重ねて状態を区別する  
+2.26 Given: プロセスが終了する, When: exit_code を受信する, Then: 即時に `success`（exit_code=0）または `fail`（exit_code!=0）として確定する  
+2.27 Given: プロセスが生存している, When: 無出力が続く, Then: 観測ベースで `running/stalled/need_input` を推定する（P0 既定は `stalled=60s`、`need_input=15s` かつ末尾がプロンプト風の場合のみ）  
+2.27.1 Given: `need_input` 推定を行う, When: 末尾がプロンプト風（例: `[y/n]`, `Press Enter`, `password:`）で無出力が続く, Then: 誤爆回避を優先し、強い兆候のときのみ `need_input` に遷移する  
 
 ## 3. Judge
 3.1 Given: exit_code が 0, When: 判定する, Then: state を success にする  
