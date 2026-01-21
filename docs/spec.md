@@ -26,6 +26,7 @@
 2.14 Given: phase が更新される, When: キャラクター表情を決める, Then: 優先順位に従って表情を切り替える  
 2.15 Given: success/error/attention になる, When: 表情保持時間に到達, Then: idle/thinking に戻す（既定 4s）  
 2.16 Given: Terminal 画面を開く, When: UI を描画する, Then: ターミナル表示領域が初期化される  
+2.16.1 Given: Worker が単一セッション前提（P0）, When: 複数の Terminal window を開く, Then: すべて同一 `session_id` を共有し同じ出力を表示する  
 2.17 Given: ターミナル入力が行われる, When: 入力が確定する, Then: PTY/Worker に入力が送られる  
 2.18 Given: PTY/Worker から出力が届く, When: 受信する, Then: ターミナルに表示されスクロールバックが更新される  
 2.19 Given: ユーザーがコピー/ペースト操作を行う, When: ターミナルにフォーカスがある, Then: OS のクリップボードで操作できる  
