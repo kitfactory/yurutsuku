@@ -1108,13 +1108,9 @@ fn build_tray<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
                 }
             }
             id if id == "open_terminal" => {
-                let session_id = format!(
-                    "session-{}",
-                    SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_millis()
-                );
+                // Reuse existing session if worker is already running. / Workerが単一セッション前提のため既存を再利用
+                let session_id =
+                    pick_existing_terminal_session_id(app).unwrap_or_else(generate_terminal_session_id);
                 let _ = open_terminal_window_inner(app.clone(), session_id);
             }
             id if id == "arrange_terminals" => {
