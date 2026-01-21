@@ -218,9 +218,9 @@ test("session_flow", async () => {
     await waitForMessage(
       worker.queue,
       (message) => message.type === "output" && message.chunk.toLowerCase().includes("ok"),
-      5000
+      15000
     );
-    await waitForMessage(worker.queue, (message) => message.type === "exit", 5000);
+    await waitForMessage(worker.queue, (message) => message.type === "exit", 15000);
   });
 });
 

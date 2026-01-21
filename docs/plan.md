@@ -32,6 +32,10 @@ nagomi（名称検討中）の中核である「複数ターミナル並列作�
 ### B. 観測（Watcher）: 実装の安定化（P0）
 - [ ] B-1 実装: `need_input=15s（末尾がプロンプト風のときのみ）` / `stalled=60s` を既定として運用する
 - [ ] B-1 テスト: 目視で遷移（Running→Stalled、プロンプト風ならNeedInput、exitでSuccess/Fail）
+- [ ] B-2 実装: 観測ロジックをモジュール化してテスト可能にする
+  - [ ] `apps/orchestrator/src/terminal_observer.js` に純粋関数として集約する
+  - [ ] UI 側（`apps/orchestrator/src/index.html`）はモジュールを呼び出すだけにする
+- [ ] B-2 テスト: `npm test -w apps/orchestrator` で `terminal_observer` の unit test が通る
 
 ### C. 起動導線（yuru / tray）
 - [ ] C-1 仕様（docs）: 2回目以降の `yuru` は **追加で新ターミナルを開く**を正とする（`docs/spec.md` 10.x）

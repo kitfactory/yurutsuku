@@ -900,6 +900,7 @@
     <script src="vendor/xterm/xterm.js"></script>
     <script src="vendor/xterm/xterm-addon-fit.js"></script>
     <script src="vendor/xterm/xterm-addon-webgl.js"></script>
+    <script src="terminal_observer.js"></script>
     <script>
       const output = document.getElementById('output');
       const input = document.getElementById('chat-input');
@@ -986,17 +987,19 @@
         },
       };
 
-      const TerminalObservation = Object.freeze({
-        running: 'running',
-        needInput: 'need-input',
-        stalled: 'stalled',
-        success: 'success',
-        fail: 'fail',
-      });
-
-      const TERMINAL_OBSERVE_TICK_MS = 1000;
-      const TERMINAL_STALLED_MS = 60_000;
-      const TERMINAL_NEED_INPUT_MS = 15_000;
+      const terminalObserver =
+        window.TerminalObserver || /** @type {any} */ ({ DEFAULT_THRESHOLDS_MS: {} });
+      const TerminalObservation =
+        terminalObserver.ObservationState ||
+        Object.freeze({
+          running: 'running',
+          needInput: 'need-input',
+          stalled: 'stalled',
+          success: 'success',
+          fail: 'fail',
+        });
+      const terminalObserverThresholdsMs =
+        terminalObserver.DEFAULT_THRESHOLDS_MS || Object.freeze({ observeTickMs: 1000 });
 
       let terminalObservedState = TerminalObservation.running;
       let terminalLastOutputAt = Date.now();
@@ -1005,6 +1008,7 @@
       let terminalObserveTimer = null;
 
       function terminalWatcherFaceForState(state) {
+        if (terminalObserver.assetPathForState) return terminalObserver.assetPathForState(state);
         switch (state) {
           case TerminalObservation.success:
             return 'assets/watcher/nagomisan_success.png';
@@ -1042,54 +1046,30 @@
         }
       }
 
-      function tailForObservation(text) {
-        if (!text) return '';
-        const normalized = String(text).replace(/\r\n/g, '\n');
-        return normalized.slice(Math.max(0, normalized.length - 400));
-      }
-
-      function looksLikeNeedInput(tail) {
-        if (!tail) return false;
-        // Heuristic prompt detection (limited to avoid false positives).
-        // 限定的なプロンプト検知（誤爆回避優先）。
-        const needle = tail.toLowerCase();
-        return (
-          needle.includes('press enter') ||
-          needle.includes('press return') ||
-          needle.includes('[y/n]') ||
-          needle.includes('(y/n)') ||
-          needle.includes('continue?') ||
-          needle.includes('password:') ||
-          needle.includes('are you sure') ||
-          /\b(y\/n)\b/i.test(tail)
-        );
-      }
-
       function startTerminalObservationLoop() {
         if (terminalObserveTimer) return;
         terminalObserveTimer = setInterval(() => {
           if (terminalExitCode !== null) return;
+          if (!terminalObserver.computeState) return;
           const now = Date.now();
-          const idleMs = now - terminalLastOutputAt;
-          if (idleMs >= TERMINAL_NEED_INPUT_MS && looksLikeNeedInput(terminalLastChunkTail)) {
-            setTerminalObservedState(
-              TerminalObservation.needInput,
-              `need input (idle ${(idleMs / 1000).toFixed(0)}s)`
-            );
+          const result = terminalObserver.computeState({
+            nowMs: now,
+            lastOutputAtMs: terminalLastOutputAt,
+            lastTail: terminalLastChunkTail,
+            exitCode: null,
+            thresholdsMs: terminalObserverThresholdsMs,
+          });
+          const idleSeconds = (result.idleMs / 1000).toFixed(0);
+          if (result.state === TerminalObservation.needInput) {
+            setTerminalObservedState(TerminalObservation.needInput, `need input (idle ${idleSeconds}s)`);
             return;
           }
-          if (idleMs >= TERMINAL_STALLED_MS) {
-            setTerminalObservedState(
-              TerminalObservation.stalled,
-              `stalled (idle ${(idleMs / 1000).toFixed(0)}s)`
-            );
+          if (result.state === TerminalObservation.stalled) {
+            setTerminalObservedState(TerminalObservation.stalled, `stalled (idle ${idleSeconds}s)`);
             return;
           }
-          setTerminalObservedState(
-            TerminalObservation.running,
-            `running (last output ${(idleMs / 1000).toFixed(0)}s ago)`
-          );
-        }, TERMINAL_OBSERVE_TICK_MS);
+          setTerminalObservedState(TerminalObservation.running, `running (last output ${idleSeconds}s ago)`);
+        }, terminalObserverThresholdsMs.observeTickMs || 1000);
       }
       let rawInputQueue = '';
       let rafScheduled = false;
@@ -1999,7 +1979,11 @@
             const nextChunk = payload.chunk || '';
             if (nextChunk) {
               terminalLastOutputAt = Date.now();
-              terminalLastChunkTail = tailForObservation(nextChunk);
+              if (terminalObserver.tailForObservation) {
+                terminalLastChunkTail = terminalObserver.tailForObservation(nextChunk);
+              } else {
+                terminalLastChunkTail = String(nextChunk);
+              }
               enqueueTerminalOutput(nextChunk);
             }
           });
