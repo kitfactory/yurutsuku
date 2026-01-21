@@ -7,4 +7,7 @@ target/
 /msedgedriver.log
 /screen*.png
 /terminal-screen.png
+/nagomisan.png
+/tmp_nagomi/
+/tmp_nagomi_auto/
 /plan.md

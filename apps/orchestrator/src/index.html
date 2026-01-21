@@ -387,13 +387,11 @@
         backdrop-filter: blur(8px);
       }
 
-      .terminal-watcher-face {
-        font-family: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, 'SFMono-Regular',
-          Menlo, Monaco, 'Liberation Mono', 'DejaVu Sans Mono', monospace;
-        font-weight: 600;
-        font-size: 16px;
-        line-height: 1;
-        color: #e6edf3;
+      .terminal-watcher img {
+        width: 38px;
+        height: 38px;
+        display: block;
+        image-rendering: auto;
       }
 
       #terminal-container {
@@ -759,7 +757,13 @@
         <div class="terminal-shell">
           <div id="terminal-container" data-role="terminal-container"></div>
           <div class="terminal-watcher" data-role="terminal-watcher" title="running">
-            <span class="terminal-watcher-face" data-role="terminal-watcher-face">:)</span>
+            <img
+              data-role="terminal-watcher-image"
+              alt="watcher"
+              src="assets/watcher/nagomisan_running.png"
+              width="34"
+              height="34"
+            />
           </div>
         </div>
       </section>
@@ -915,7 +919,7 @@
       const terminalBoard = document.querySelector('[data-role="terminal-board"]');
       const terminalContainer = document.querySelector('[data-role="terminal-container"]');
       const terminalWatcher = document.querySelector('[data-role="terminal-watcher"]');
-      const terminalWatcherFace = document.querySelector('[data-role="terminal-watcher-face"]');
+      const terminalWatcherImage = document.querySelector('[data-role="terminal-watcher-image"]');
 
       const notifyToggle = document.querySelector('[data-role="settings-notify-toggle"]');
       const notifyState = document.querySelector('[data-role="settings-notify-state"]');
@@ -1003,22 +1007,22 @@
       function terminalWatcherFaceForState(state) {
         switch (state) {
           case TerminalObservation.success:
-            return ':D';
+            return 'assets/watcher/nagomisan_success.png';
           case TerminalObservation.fail:
-            return '>:(';
+            return 'assets/watcher/nagomisan_fail.png';
           case TerminalObservation.needInput:
-            return ':?';
+            return 'assets/watcher/nagomisan_need-input.png';
           case TerminalObservation.stalled:
-            return ':|';
+            return 'assets/watcher/nagomisan_stalled.png';
           default:
-            return ':)';
+            return 'assets/watcher/nagomisan_running.png';
         }
       }
 
       function setTerminalObservedState(state, title) {
         terminalObservedState = state;
-        if (terminalWatcherFace) {
-          terminalWatcherFace.textContent = terminalWatcherFaceForState(state);
+        if (terminalWatcherImage) {
+          terminalWatcherImage.src = terminalWatcherFaceForState(state);
         }
         if (terminalWatcher) {
           terminalWatcher.title = title || state;
