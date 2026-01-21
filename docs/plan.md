@@ -21,7 +21,7 @@
 - [ ] 動作確認（手動）
   - [ ] IME / Copy&Paste / Resize が引き続き動く
   - [ ] `yuru` 起動で余計な window が勝手に出ない
-  - [ ] 全 terminal window を閉じたら Orchestrator も終了する（`yuru` 起動時 / `--exit-on-last-terminal`）
+  - [x] 全 terminal window を閉じたら Orchestrator も終了する（`yuru` 起動時 / `--exit-on-last-terminal`）
 
 ## 参照
 - `docs/spec.md`

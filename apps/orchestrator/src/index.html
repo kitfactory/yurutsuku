@@ -4,6 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>yurutsuku</title>
+    <script>
+      (() => {
+        try {
+          const params = new URLSearchParams(window.location.search);
+          if (params.get('view') === 'terminal') {
+            document.documentElement.classList.add('terminal-only');
+          }
+        } catch {
+          // no-op
+        }
+      })();
+    </script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
@@ -484,17 +496,20 @@
         }
       }
 
+      html.terminal-only body,
       body.terminal-only {
         background: #0d1117;
         overflow: hidden;
       }
 
       html.terminal-only,
+      html.terminal-only body,
       body.terminal-only {
         height: 100%;
         overflow: hidden;
       }
 
+      html.terminal-only .app,
       body.terminal-only .app {
         padding: 0;
         gap: 0;
@@ -502,6 +517,10 @@
         min-height: 100%;
       }
 
+      html.terminal-only header,
+      html.terminal-only .run-board,
+      html.terminal-only .settings-board,
+      html.terminal-only .main,
       body.terminal-only header,
       body.terminal-only .run-board,
       body.terminal-only .settings-board,
@@ -509,6 +528,11 @@
         display: none !important;
       }
 
+      html.terminal-only .terminal-board.hidden {
+        display: flex !important;
+      }
+
+      html.terminal-only .terminal-board,
       body.terminal-only .terminal-board {
         border-radius: 0;
         border: none;
@@ -519,10 +543,12 @@
         width: 100%;
       }
 
+      html.terminal-only .terminal-board h2,
       body.terminal-only .terminal-board h2 {
         display: none;
       }
 
+      html.terminal-only .terminal-shell,
       body.terminal-only .terminal-shell {
         border-radius: 0;
         border: none;
@@ -533,6 +559,7 @@
         position: relative;
       }
 
+      html.terminal-only #terminal-container,
       body.terminal-only #terminal-container {
         height: 100%;
         width: 100%;
