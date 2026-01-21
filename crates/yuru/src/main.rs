@@ -17,9 +17,7 @@ fn http_get(host: &str, port: u16, path: &str, timeout: Duration) -> Result<Stri
     let mut stream = TcpStream::connect(&addr).with_context(|| format!("connect {addr}"))?;
     let _ = stream.set_read_timeout(Some(timeout));
     let _ = stream.set_write_timeout(Some(timeout));
-    let request = format!(
-        "GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
-    );
+    let request = format!("GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n");
     stream.write_all(request.as_bytes())?;
     stream.flush()?;
     let mut buf = String::new();
@@ -35,7 +33,8 @@ fn is_healthy(port: u16) -> bool {
 
 fn workspace_root() -> Option<PathBuf> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    // Walk up until we find a workspace root (Cargo.toml). / 上位へ辿って workspace root を探す
+    // Walk up until we find a workspace root (Cargo.toml).
+    // workspace root（Cargo.toml）を見つけるまで上位ディレクトリを辿る。
     for dir in manifest_dir.ancestors() {
         let candidate = dir.join("Cargo.toml");
         if candidate.exists() {
@@ -63,7 +62,10 @@ fn resolve_orchestrator_path() -> Option<PathBuf> {
         }
     }
     if let Some(root) = workspace_root() {
-        let candidate = root.join("target").join("debug").join(orchestrator_exe_name());
+        let candidate = root
+            .join("target")
+            .join("debug")
+            .join(orchestrator_exe_name());
         if candidate.exists() {
             return Some(candidate);
         }
@@ -74,6 +76,7 @@ fn resolve_orchestrator_path() -> Option<PathBuf> {
 fn spawn_orchestrator(path: &Path) -> Result<()> {
     Command::new(path)
         .arg("--start-hidden")
+        .arg("--exit-on-last-terminal")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())

@@ -1,4 +1,4 @@
-﻿use anyhow::Result;
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -17,8 +17,8 @@ use tauri::{
 };
 use yurutsuku_protocol::Message;
 
-mod judge;
 mod ipc_session;
+mod judge;
 mod notify;
 mod worker;
 
@@ -165,6 +165,15 @@ fn should_start_hidden() -> bool {
     std::env::args().any(|arg| arg == "--start-hidden")
 }
 
+fn should_exit_on_last_terminal() -> bool {
+    std::env::args().any(|arg| arg == "--exit-on-last-terminal")
+}
+
+#[derive(Clone, Copy)]
+struct OrchestratorRuntimeFlags {
+    exit_on_last_terminal: bool,
+}
+
 fn generate_terminal_session_id() -> String {
     static SEQ: AtomicU64 = AtomicU64::new(0);
     let nonce = SystemTime::now()
@@ -202,7 +211,11 @@ fn handle_health_connection<R: Runtime>(mut stream: TcpStream, app: &AppHandle<R
             let requested_session_id = path
                 .splitn(2, '?')
                 .nth(1)
-                .and_then(|query| query.split('&').find(|part| part.starts_with("session_id=")))
+                .and_then(|query| {
+                    query
+                        .split('&')
+                        .find(|part| part.starts_with("session_id="))
+                })
                 .and_then(|part| part.splitn(2, '=').nth(1))
                 .filter(|value| !value.is_empty())
                 .map(|value| value.to_string());
@@ -373,7 +386,13 @@ fn monitor_index_for_window<R: Runtime>(
 }
 
 fn grid_for_window_count(count: usize) -> (usize, usize) {
-    let rows = if count >= 9 { 3 } else if count >= 4 { 2 } else { 1 };
+    let rows = if count >= 9 {
+        3
+    } else if count >= 4 {
+        2
+    } else {
+        1
+    };
     let cols = (count + rows - 1) / rows;
     (rows, cols)
 }
@@ -390,7 +409,11 @@ fn cell_size(width: u32, height: u32, rows: usize, cols: usize) -> (u32, u32) {
 fn row_group_threshold(height: u32) -> i32 {
     let min = 80i32;
     let dynamic = (height as f32 * 0.12) as i32;
-    if dynamic > min { dynamic } else { min }
+    if dynamic > min {
+        dynamic
+    } else {
+        min
+    }
 }
 
 fn pickup_terminal_window_handle<R: Runtime>(
@@ -416,8 +439,13 @@ fn pickup_terminal_window_handle<R: Runtime>(
     let center_y = base_y + ((height.saturating_sub(target_height)) as i32 / 2);
     let _ = arrange_terminal_windows_inner(app.clone());
     let _ = window.unmaximize();
-    let _ = window.set_position(Position::Physical(PhysicalPosition::new(center_x, center_y)));
-    let _ = window.set_size(Size::Physical(PhysicalSize::new(target_width, target_height)));
+    let _ = window.set_position(Position::Physical(PhysicalPosition::new(
+        center_x, center_y,
+    )));
+    let _ = window.set_size(Size::Physical(PhysicalSize::new(
+        target_width,
+        target_height,
+    )));
     let _ = window.show();
     let _ = window.set_focus();
     if let Ok(mut guard) = app.state::<SelectionState>().current.lock() {
@@ -642,6 +670,21 @@ fn stop_terminal_session<R: Runtime>(
         });
         let _ = process.stop();
     }
+    let workers_empty = guard.is_empty();
+    drop(guard);
+
+    let flags = app.state::<OrchestratorRuntimeFlags>();
+    if flags.exit_on_last_terminal {
+        let active_empty = terminal_state
+            .active
+            .lock()
+            .map_err(|_| "terminal session lock".to_string())?
+            .is_empty();
+        if active_empty && workers_empty {
+            let _ = log_worker_event(&app, "last terminal closed: exit orchestrator");
+            app.exit(0);
+        }
+    }
     Ok(())
 }
 
@@ -659,7 +702,10 @@ fn open_terminal_window_inner<R: Runtime>(
     app: AppHandle<R>,
     session_id: String,
 ) -> Result<(), String> {
-    let _ = log_worker_event(&app, &format!("terminal window open requested: {session_id}"));
+    let _ = log_worker_event(
+        &app,
+        &format!("terminal window open requested: {session_id}"),
+    );
     let safe_id = session_id
         .chars()
         .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
@@ -721,7 +767,9 @@ fn debug_emit_terminal_output<R: Runtime>(
         chunk: "[debug window]\r\n".to_string(),
         stream: "stdout".to_string(),
     };
-    window.emit("terminal-output", payload).map_err(|err| err.to_string())?;
+    window
+        .emit("terminal-output", payload)
+        .map_err(|err| err.to_string())?;
     Ok(())
 }
 
@@ -786,7 +834,10 @@ fn terminal_smoke<R: Runtime>(
         }
         worker_state.ok_or_else(|| "worker state missing".to_string())?
     };
-    let mut process = state.process.lock().map_err(|_| "worker lock".to_string())?;
+    let mut process = state
+        .process
+        .lock()
+        .map_err(|_| "worker lock".to_string())?;
     process
         .send_start_session(yurutsuku_protocol::StartSession {
             session_id: session_id.clone(),
@@ -903,7 +954,10 @@ fn arrange_terminal_windows_inner<R: Runtime>(app: AppHandle<R>) -> Result<(), S
             let target_height = cell_height.saturating_sub(frame_height).max(1);
             let _ = window.unmaximize();
             let _ = window.set_position(Position::Physical(PhysicalPosition::new(x, y)));
-            let _ = window.set_size(Size::Physical(PhysicalSize::new(target_width, target_height)));
+            let _ = window.set_size(Size::Physical(PhysicalSize::new(
+                target_width,
+                target_height,
+            )));
             let _ = window.show();
             let _ = window.set_focus();
         }
@@ -1021,7 +1075,11 @@ fn focus_next_terminal_window<R: Runtime>(
         None
     };
 
-    let step = if direction.as_deref() == Some("prev") { -1 } else { 1 };
+    let step = if direction.as_deref() == Some("prev") {
+        -1
+    } else {
+        1
+    };
     let (target_group, target_index) = match (selected_group, selected_index) {
         (Some(group_index), Some(index)) => {
             let group = &groups[group_index];
@@ -1087,8 +1145,13 @@ fn build_tray<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
     let open_run = MenuItem::with_id(app, "open_run", "Open Run", true, None::<&str>)?;
     let open_settings =
         MenuItem::with_id(app, "open_settings", "Open Settings", true, None::<&str>)?;
-    let open_terminal =
-        MenuItem::with_id(app, "open_terminal", "Open Terminal Window", true, None::<&str>)?;
+    let open_terminal = MenuItem::with_id(
+        app,
+        "open_terminal",
+        "Open Terminal Window",
+        true,
+        None::<&str>,
+    )?;
     let arrange_terminals = MenuItem::with_id(
         app,
         "arrange_terminals",
@@ -1096,12 +1159,27 @@ fn build_tray<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
         true,
         None::<&str>,
     )?;
-    let worker_start =
-        MenuItem::with_id(app, "worker_start", "Start Worker Session", true, None::<&str>)?;
-    let worker_send_sample =
-        MenuItem::with_id(app, "worker_send_sample", "Send Sample Input", true, None::<&str>)?;
-    let worker_stop =
-        MenuItem::with_id(app, "worker_stop", "Stop Worker Session", true, None::<&str>)?;
+    let worker_start = MenuItem::with_id(
+        app,
+        "worker_start",
+        "Start Worker Session",
+        true,
+        None::<&str>,
+    )?;
+    let worker_send_sample = MenuItem::with_id(
+        app,
+        "worker_send_sample",
+        "Send Sample Input",
+        true,
+        None::<&str>,
+    )?;
+    let worker_stop = MenuItem::with_id(
+        app,
+        "worker_stop",
+        "Stop Worker Session",
+        true,
+        None::<&str>,
+    )?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
     menu.append(&open_chat)?;
@@ -1266,7 +1344,10 @@ fn start_worker_reader<R: Runtime>(app: AppHandle<R>) {
                         if debug_io {
                             let _ = log_worker_event(
                                 &app,
-                                &format!("output received: session={session_id} stream={stream} size={}", chunk.len()),
+                                &format!(
+                                    "output received: session={session_id} stream={stream} size={}",
+                                    chunk.len()
+                                ),
                             );
                         }
 
@@ -1280,126 +1361,128 @@ fn start_worker_reader<R: Runtime>(app: AppHandle<R>) {
                         entry.chunks.push(chunk);
                     }
                     Message::Exit(exit) => {
-                    notify_smoke_error(
-                        &app,
-                        &exit.session_id,
-                        &format!("exit before token: {}", exit.exit_code),
-                    );
-                    let _ = log_worker_event(
-                        &app,
-                        &format!("exit {}: {}", exit.session_id, exit.exit_code),
-                    );
-                    println!("[worker] exit {}: {}", exit.session_id, exit.exit_code);
-                    let session = app.state::<SessionState>();
-                    let mut guard = session.current.lock().expect("session lock");
-                    *guard = None;
-                    let label = {
-                        let state = app.state::<TerminalSessionState>();
-                        if let Ok(mut active) = state.active.lock() {
-                            active.remove(&exit.session_id);
-                        }
-                        let guard = state.labels.lock().ok();
-                        guard
-                            .and_then(|map| map.get(&exit.session_id).cloned())
-                            .unwrap_or_default()
-                    };
-                    if label.is_empty() {
+                        notify_smoke_error(
+                            &app,
+                            &exit.session_id,
+                            &format!("exit before token: {}", exit.exit_code),
+                        );
                         let _ = log_worker_event(
                             &app,
-                            &format!(
-                                "terminal exit ignored: session={} label missing",
-                                exit.session_id
-                            ),
+                            &format!("exit {}: {}", exit.session_id, exit.exit_code),
                         );
-                    } else if let Some(window) = app.get_webview_window(&label) {
-                        let payload = TerminalExitPayload {
-                            session_id: exit.session_id.clone(),
-                            exit_code: exit.exit_code,
+                        println!("[worker] exit {}: {}", exit.session_id, exit.exit_code);
+                        let session = app.state::<SessionState>();
+                        let mut guard = session.current.lock().expect("session lock");
+                        *guard = None;
+                        let label = {
+                            let state = app.state::<TerminalSessionState>();
+                            if let Ok(mut active) = state.active.lock() {
+                                active.remove(&exit.session_id);
+                            }
+                            let guard = state.labels.lock().ok();
+                            guard
+                                .and_then(|map| map.get(&exit.session_id).cloned())
+                                .unwrap_or_default()
                         };
-                        match window.emit("terminal-exit", payload) {
-                            Ok(()) => {
-                                let _ = log_worker_event(
-                                    &app,
-                                    &format!(
-                                        "terminal exit emitted: session={} label={}",
-                                        exit.session_id, label
-                                    ),
-                                );
+                        if label.is_empty() {
+                            let _ = log_worker_event(
+                                &app,
+                                &format!(
+                                    "terminal exit ignored: session={} label missing",
+                                    exit.session_id
+                                ),
+                            );
+                        } else if let Some(window) = app.get_webview_window(&label) {
+                            let payload = TerminalExitPayload {
+                                session_id: exit.session_id.clone(),
+                                exit_code: exit.exit_code,
+                            };
+                            match window.emit("terminal-exit", payload) {
+                                Ok(()) => {
+                                    let _ = log_worker_event(
+                                        &app,
+                                        &format!(
+                                            "terminal exit emitted: session={} label={}",
+                                            exit.session_id, label
+                                        ),
+                                    );
+                                }
+                                Err(err) => {
+                                    let _ = log_worker_event(
+                                        &app,
+                                        &format!(
+                                            "terminal exit emit failed: session={} label={} err={}",
+                                            exit.session_id, label, err
+                                        ),
+                                    );
+                                }
                             }
-                            Err(err) => {
-                                let _ = log_worker_event(
-                                    &app,
-                                    &format!(
-                                        "terminal exit emit failed: session={} label={} err={}",
-                                        exit.session_id, label, err
-                                    ),
-                                );
-                            }
+                        } else {
+                            let _ = log_worker_event(
+                                &app,
+                                &format!(
+                                    "terminal exit ignored: session={} window missing label={}",
+                                    exit.session_id, label
+                                ),
+                            );
                         }
-                    } else {
-                        let _ = log_worker_event(
-                            &app,
-                            &format!(
-                                "terminal exit ignored: session={} window missing label={}",
-                                exit.session_id, label
-                            ),
-                        );
-                    }
                     }
                     Message::Error(error) => {
-                    notify_smoke_error(&app, &error.session_id, &error.message);
-                    let _ =
-                        log_worker_event(&app, &format!("error {}: {}", error.session_id, error.message));
-                    println!("[worker] error {}: {}", error.session_id, error.message);
-                    let label = {
-                        let state = app.state::<TerminalSessionState>();
-                        let guard = state.labels.lock().ok();
-                        guard
-                            .and_then(|map| map.get(&error.session_id).cloned())
-                            .unwrap_or_default()
-                    };
-                    if label.is_empty() {
+                        notify_smoke_error(&app, &error.session_id, &error.message);
                         let _ = log_worker_event(
                             &app,
-                            &format!(
-                                "terminal error ignored: session={} label missing",
-                                error.session_id
-                            ),
+                            &format!("error {}: {}", error.session_id, error.message),
                         );
-                    } else if let Some(window) = app.get_webview_window(&label) {
-                        let payload = TerminalErrorPayload {
-                            session_id: error.session_id.clone(),
-                            message: error.message,
+                        println!("[worker] error {}: {}", error.session_id, error.message);
+                        let label = {
+                            let state = app.state::<TerminalSessionState>();
+                            let guard = state.labels.lock().ok();
+                            guard
+                                .and_then(|map| map.get(&error.session_id).cloned())
+                                .unwrap_or_default()
                         };
-                        match window.emit("terminal-error", payload) {
-                            Ok(()) => {
-                                let _ = log_worker_event(
-                                    &app,
-                                    &format!(
-                                        "terminal error emitted: session={} label={}",
-                                        error.session_id, label
-                                    ),
-                                );
-                            }
-                            Err(err) => {
-                                let _ = log_worker_event(
-                                    &app,
-                                    &format!(
+                        if label.is_empty() {
+                            let _ = log_worker_event(
+                                &app,
+                                &format!(
+                                    "terminal error ignored: session={} label missing",
+                                    error.session_id
+                                ),
+                            );
+                        } else if let Some(window) = app.get_webview_window(&label) {
+                            let payload = TerminalErrorPayload {
+                                session_id: error.session_id.clone(),
+                                message: error.message,
+                            };
+                            match window.emit("terminal-error", payload) {
+                                Ok(()) => {
+                                    let _ = log_worker_event(
+                                        &app,
+                                        &format!(
+                                            "terminal error emitted: session={} label={}",
+                                            error.session_id, label
+                                        ),
+                                    );
+                                }
+                                Err(err) => {
+                                    let _ = log_worker_event(
+                                        &app,
+                                        &format!(
                                         "terminal error emit failed: session={} label={} err={}",
                                         error.session_id, label, err
                                     ),
-                                );
+                                    );
+                                }
                             }
+                        } else {
+                            let _ = log_worker_event(
+                                &app,
+                                &format!(
+                                    "terminal error ignored: session={} window missing label={}",
+                                    error.session_id, label
+                                ),
+                            );
                         }
-                    } else {
-                        let _ = log_worker_event(
-                            &app,
-                            &format!(
-                                "terminal error ignored: session={} window missing label={}",
-                                error.session_id, label
-                            ),
-                        );
-                    }
                     }
                     _ => {}
                 }
@@ -1409,7 +1492,8 @@ fn start_worker_reader<R: Runtime>(app: AppHandle<R>) {
             let now = Instant::now();
             let mut flush_keys: Vec<(String, String)> = Vec::new();
             for (key, entry) in pending.iter() {
-                if entry.bytes >= flush_bytes || now.duration_since(entry.queued_at) >= flush_delay {
+                if entry.bytes >= flush_bytes || now.duration_since(entry.queued_at) >= flush_delay
+                {
                     flush_keys.push(key.clone());
                 }
             }
@@ -1562,9 +1646,7 @@ fn start_terminal_worker_reader<R: Runtime>(
                         if let Ok(mut active) = app.state::<TerminalSessionState>().active.lock() {
                             active.remove(&exit.session_id);
                         }
-                        if let Ok(mut guard) =
-                            app.state::<TerminalWorkerState>().processes.lock()
-                        {
+                        if let Ok(mut guard) = app.state::<TerminalWorkerState>().processes.lock() {
                             if let Some(mut process) = guard.remove(&exit.session_id) {
                                 let _ = process.stop();
                             }
@@ -1605,7 +1687,8 @@ fn start_terminal_worker_reader<R: Runtime>(
             let now = Instant::now();
             let mut flush_keys: Vec<(String, String)> = Vec::new();
             for (key, entry) in pending.iter() {
-                if entry.bytes >= flush_bytes || now.duration_since(entry.queued_at) >= flush_delay {
+                if entry.bytes >= flush_bytes || now.duration_since(entry.queued_at) >= flush_delay
+                {
                     flush_keys.push(key.clone());
                 }
             }
@@ -1790,6 +1873,9 @@ fn main() {
             });
             handle.manage(TerminalSmokeState {
                 waiters: Mutex::new(HashMap::new()),
+            });
+            handle.manage(OrchestratorRuntimeFlags {
+                exit_on_last_terminal: should_exit_on_last_terminal(),
             });
             start_worker_reader(handle.clone());
             start_terminal_worker_reader(handle.clone(), terminal_rx);

@@ -89,13 +89,15 @@
 ## 10. 起動/バックエンド分岐（Windows + WSL）
 10.1 Given: ユーザーが `yuru`（launcher）を起動する, When: Orchestrator が未起動, Then: Orchestrator を起動し Worker を起動する  
 10.2 Given: ユーザーが `yuru`（launcher）を起動する, When: Orchestrator が起動済み, Then: Orchestrator は起動済みとして扱い terminal window を開く  
+10.2.1 Given: Orchestrator を起動する, When: `--start-hidden` を付与する, Then: 初期 window（Chat）は表示しない（tray から操作する）  
+10.2.2 Given: Orchestrator を起動する, When: `--exit-on-last-terminal` を付与する, Then: 最後の terminal session が停止した時点で Orchestrator は終了する  
 10.3 Given: Orchestrator の起動済み判定を行う, When: プロセス名で検出した後に IPC probe を試す, Then: IPC が応答しない場合は未起動として扱う  
 10.3.1 Given: 起動済み判定を行う, When: CLI から生存確認が必要, Then: `127.0.0.1` のヘルスチェックエンドポイントで確認する  
 10.3.2 Given: ヘルスチェックを行う, When: `GET /health` にアクセスする, Then: `{"status":"ok","pid":<number>}` を返す  
 10.3.3 Given: ヘルスチェックポートを決める, When: `YURUTSUKU_ORCH_HEALTH_PORT` が未指定, Then: 既定ポートは `17707` を使う  
 10.3.4 Given: terminal window を開く, When: `GET /open-terminal?session_id=<id>` にアクセスする, Then: Terminal window を開き `{"status":"ok","session_id":"<id>"}` を返す  
 10.3.4.1 Given: terminal window を開く, When: `GET /open-terminal`（`session_id` 未指定）にアクセスする, Then: `session_id` を自動採番し Terminal window を開き `{"status":"ok","session_id":"<generated>"}` を返す  
-10.3.4.2 Given: `session_id` に対応する window がすでに存在する, When: `GET /open-terminal?session_id=<id>` にアクセスする, Then: 既存 window をフォーカスし `{"status":"ok","session_id":"<id>"}` を返す  
+10.3.4.2 Given: `session_id` が既存と衝突する, When: `GET /open-terminal?session_id=<id>` にアクセスする, Then: 衝突を避けるため `session_id` を自動採番し直し、Terminal window を開き `{"status":"ok","session_id":"<generated>"}` を返す  
 10.4 Given: Windows 環境で `worker_backend = wsl`, When: Worker を起動する, Then: Orchestrator は `wsl.exe` 経由で Linux Worker を起動する  
 10.5 Given: Windows 環境で `worker_backend = windows` または未指定, When: Worker を起動する, Then: Orchestrator は Windows Worker を起動する  
 10.6 Given: WSL で Worker を起動する, When: Linux 側コマンドを指定する, Then: `wsl.exe -d <distro> -- <command>` 形式で実行する  
