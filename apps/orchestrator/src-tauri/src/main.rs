@@ -5,6 +5,7 @@ use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -156,6 +157,34 @@ fn should_start_hidden() -> bool {
     std::env::args().any(|arg| arg == "--start-hidden")
 }
 
+fn pick_existing_terminal_session_id<R: Runtime>(app: &AppHandle<R>) -> Option<String> {
+    let state = app.try_state::<TerminalSessionState>()?;
+
+    if let Ok(guard) = state.active.lock() {
+        if let Some(session_id) = guard.iter().next() {
+            return Some(session_id.clone());
+        }
+    }
+
+    if let Ok(guard) = state.labels.lock() {
+        if let Some((session_id, _)) = guard.iter().next() {
+            return Some(session_id.clone());
+        }
+    }
+
+    None
+}
+
+fn generate_terminal_session_id() -> String {
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_else(|_| Duration::from_millis(0))
+        .as_millis();
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    format!("terminal-{nonce}-{seq}")
+}
+
 fn handle_health_connection<R: Runtime>(mut stream: TcpStream, app: &AppHandle<R>) {
     let _ = stream.set_read_timeout(Some(Duration::from_millis(300)));
     let mut buffer = [0u8; 512];
@@ -180,20 +209,19 @@ fn handle_health_connection<R: Runtime>(mut stream: TcpStream, app: &AppHandle<R
 
     if let Some(path) = request.split_whitespace().nth(1) {
         if path.starts_with("/open-terminal") {
-            let session_id = path
+            let requested_session_id = path
                 .splitn(2, '?')
                 .nth(1)
                 .and_then(|query| query.split('&').find(|part| part.starts_with("session_id=")))
                 .and_then(|part| part.splitn(2, '=').nth(1))
                 .filter(|value| !value.is_empty())
-                .map(|value| value.to_string())
-                .unwrap_or_else(|| {
-                    let nonce = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or_else(|_| Duration::from_millis(0))
-                        .as_millis();
-                    format!("session-{nonce}")
-                });
+                .map(|value| value.to_string());
+
+            // If session_id is omitted, reuse the existing terminal session when present.
+            // session_id 未指定時は既存の Terminal セッションを再利用してフォーカスする。
+            let session_id = requested_session_id
+                .or_else(|| pick_existing_terminal_session_id(app))
+                .unwrap_or_else(generate_terminal_session_id);
 
             let _ = open_terminal_window_inner(app.clone(), session_id.clone());
             let body = format!(r#"{{"status":"ok","session_id":"{}"}}"#, session_id);
