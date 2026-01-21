@@ -26,19 +26,19 @@ nagomi（名称検討中）の中核である「複数ターミナル並列作�
 対象: REQ-004/005/012 + `docs/spec.md` 2.x / 10.x
 
 ### A. 観測（Watcher）: 仕様の確定（最優先）
-- [ ] A-1 仕様（docs）: 観測状態モデルを `docs/spec.md` に整理する
-- [ ] A-1 テスト: `docs/spec.md` の記述が一意で矛盾しない（自己レビュー）
+- [x] A-1 仕様（docs）: 観測状態モデルを `docs/spec.md` に整理する
+- [x] A-1 テスト: `docs/spec.md` の記述が一意で矛盾しない（自己レビュー）
 
 ### B. 観測（Watcher）: 実装の安定化（P0）
 - [ ] B-1 実装: `need_input=15s（末尾がプロンプト風のときのみ）` / `stalled=60s` を既定として運用する
 - [ ] B-1 テスト: 目視で遷移（Running→Stalled、プロンプト風ならNeedInput、exitでSuccess/Fail）
-- [ ] B-2 実装: 観測ロジックをモジュール化してテスト可能にする
-  - [ ] `apps/orchestrator/src/terminal_observer.js` に純粋関数として集約する
-  - [ ] UI 側（`apps/orchestrator/src/index.html`）はモジュールを呼び出すだけにする
-- [ ] B-2 テスト: `npm test -w apps/orchestrator` で `terminal_observer` の unit test が通る
+- [x] B-2 実装: 観測ロジックをモジュール化してテスト可能にする
+  - [x] `apps/orchestrator/src/terminal_observer.js` に純粋関数として集約する
+  - [x] UI 側（`apps/orchestrator/src/index.html`）はモジュールを呼び出すだけにする
+- [x] B-2 テスト: `npm test -w apps/orchestrator` で `terminal_observer` の unit test が通る
 
 ### C. 起動導線（yuru / tray）
-- [ ] C-1 仕様（docs）: 2回目以降の `yuru` は **追加で新ターミナルを開く**を正とする（`docs/spec.md` 10.x）
+- [x] C-1 仕様（docs）: 2回目以降の `yuru` は **追加で新ターミナルを開く**を正とする（`docs/spec.md` 10.x）
 - [ ] C-1 テスト: `target/debug/yuru.exe` を2回起動して Terminal が2枚増える
 
 ### D. Overview（タイル一覧 / Run相当） ※優先度低

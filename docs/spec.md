@@ -32,6 +32,7 @@
 2.19 Given: ユーザーがコピー/ペースト操作を行う, When: ターミナルにフォーカスがある, Then: OS のクリップボードで操作できる  
 2.20 Given: ターミナルウィンドウのサイズが変わる, When: リサイズが確定する, Then: PTY/Worker にサイズ変更が送られる  
 2.21 Given: ターミナル設定を変更する, When: 設定を保存する, Then: フォント/テーマ/スクロールバックが反映される  
+2.21.1 Given: P0 既定値を参照する, When: 初回起動で settings が未作成, Then: 既定値を採用する（実装参照: `apps/orchestrator/src-tauri/src/main.rs` の `Settings::default`、UI 参照: `apps/orchestrator/src/index.html` の `terminalSettingsDefaults`）  
 2.22 Given: IME を使う, When: 変換操作を行う, Then: OS の IME に従って入力できる（専用処理は持たない）  
 2.23 Given: ターミナル画面を表示する, When: 描画する, Then: 画面内の表示は PTY 出力のみで構成し、説明文や装飾テキストは表示しない  
 2.24 Given: ターミナルが表示中, When: 観測（Watcher）を表示する, Then: 右下にキャラクター（nagomisan）を重ねて表示し、状態が一目で分かる  
@@ -39,6 +40,7 @@
 2.26 Given: プロセスが終了する, When: exit_code を受信する, Then: 即時に `success`（exit_code=0）または `fail`（exit_code!=0）として確定する  
 2.27 Given: プロセスが生存している, When: 無出力が続く, Then: 観測ベースで `running/stalled/need_input` を推定する（P0 既定は `stalled=60s`、`need_input=15s` かつ末尾がプロンプト風の場合のみ）  
 2.27.1 Given: `need_input` 推定を行う, When: 末尾がプロンプト風（例: `[y/n]`, `Press Enter`, `password:`）で無出力が続く, Then: 誤爆回避を優先し、強い兆候のときのみ `need_input` に遷移する  
+2.27.2 Given: 観測を実装する, When: P0 を実装する, Then: 観測ロジックは純粋関数として切り出し unit test できる（実装参照: `apps/orchestrator/src/terminal_observer.js`）  
 
 ## 3. Judge
 3.1 Given: exit_code が 0, When: 判定する, Then: state を success にする  
@@ -96,6 +98,7 @@
 10.2 Given: ユーザーが `yuru`（launcher）を起動する, When: Orchestrator が起動済み, Then: Orchestrator は起動済みとして扱い terminal window を開く  
 10.2.1 Given: Orchestrator を起動する, When: `--start-hidden` を付与する, Then: 初期 window（Chat）は表示しない（tray から操作する）  
 10.2.2 Given: Orchestrator を起動する, When: `--exit-on-last-terminal` を付与する, Then: 最後の terminal session が停止した時点で Orchestrator は終了する  
+10.2.3 Given: ユーザーが `yuru` を繰り返し起動する, When: `--session-id` を指定しない, Then: 起動のたびに追加で新しい terminal window を開く  
 10.3 Given: Orchestrator の起動済み判定を行う, When: プロセス名で検出した後に IPC probe を試す, Then: IPC が応答しない場合は未起動として扱う  
 10.3.1 Given: 起動済み判定を行う, When: CLI から生存確認が必要, Then: `127.0.0.1` のヘルスチェックエンドポイントで確認する  
 10.3.2 Given: ヘルスチェックを行う, When: `GET /health` にアクセスする, Then: `{"status":"ok","pid":<number>}` を返す  
