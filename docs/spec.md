@@ -7,7 +7,7 @@
 1.2 Given: `send_input` を送信する, When: UI から入力が確定する, Then: phase を thinking に遷移させる  
 1.3 Given: 出力が一定時間止まる, When: 沈黙タイムアウト（既定 3.5s）に到達, Then: turn_completed 候補を生成する  
 1.4 Given: exit_code が確定する, When: `exit` を受信する, Then: turn_completed を確定させる  
-1.5 Given: レーンの表示行数が上限に達する, When: 追加出力が来る, Then: 先頭から破棄して最大 20,000 行を維持する  
+1.5 Given: レーンの表示行数が上限に達する, When: 追加出力が来る, Then: 先頭から破棄してスクロールバックを維持する（既定 5,000 行 / 上限 20,000 行）  
 
 ## 2. UI（Chat/Run/キャラクター）
 2.1 Given: Chat モードを開く, When: UI を描画する, Then: 左に対話レーン、右下にキャラクターを表示する  
@@ -50,7 +50,7 @@
 ## 5. NDJSON プロトコル
 5.1 Given: 送受信する, When: メッセージを作る, Then: UTF-8 の 1 行 1 JSON で送る  
 5.2 Given: Orchestrator → Worker, When: セッション開始する, Then: `start_session` を送る  
-5.3 Given: Worker → Orchestrator, When: 出力が来る, Then: `output` を chunk（目安 4096 bytes）で送る  
+5.3 Given: Worker → Orchestrator, When: 出力が来る, Then: `output` を chunk（目安 4096 bytes〜）で送る（実装は time/size で coalesce してよい。順序は保持する）  
 5.4 Given: Orchestrator → Worker, When: PTY サイズ変更が必要になる, Then: `resize` を送る  
 5.5 Given: Orchestrator → Worker, When: セッションを停止する, Then: `stop_session` を送る  
 5.6 Given: 不明な `type`, When: 受信する, Then: 無視して処理を継続する  
@@ -74,6 +74,8 @@
 - YURUTSUKU_TOOL_PATH: CLI の実行パス（未指定なら PATH 解決）
 - YURUTSUKU_TOOL_ARGS: 追加引数（空白区切り）
 - YURUTSUKU_TOOL_TIMEOUT_MS: 実行タイムアウト(ms）
+- YURUTSUKU_ORCH_HEALTH_PORT: ヘルスチェックポート（未指定なら 17707）
+- YURUTSUKU_ENABLE_TERMINAL_OUTPUT_BROADCAST: terminal-output-broadcast を有効化（`1` のとき有効、既定: 無効）
 
 ## 9. IPC通信セッション
 9.1 Given: UI が起動する, When: `ipc_session_open` を呼ぶ, Then: `session_id`/`server_epoch`/`phase` を返しセッションを登録する  
@@ -84,12 +86,13 @@
 9.6 Given: IPCセッションがない, When: IPCコマンドを呼ぶ, Then: `ipc_session_id` が不正としてエラーを返す  
 
 ## 10. 起動/バックエンド分岐（Windows + WSL）
-10.1 Given: ユーザーが `yuru` を起動する, When: Orchestrator が未起動, Then: Orchestrator を起動し Worker を起動する  
-10.2 Given: ユーザーが `yuru` を起動する, When: Orchestrator が起動済み, Then: Orchestrator は Worker を起動/再接続する  
+10.1 Given: ユーザーが `yuru`（launcher）を起動する, When: Orchestrator が未起動, Then: Orchestrator を起動し Worker を起動する  
+10.2 Given: ユーザーが `yuru`（launcher）を起動する, When: Orchestrator が起動済み, Then: Orchestrator は起動済みとして扱い terminal window を開く  
 10.3 Given: Orchestrator の起動済み判定を行う, When: プロセス名で検出した後に IPC probe を試す, Then: IPC が応答しない場合は未起動として扱う  
 10.3.1 Given: 起動済み判定を行う, When: CLI から生存確認が必要, Then: `127.0.0.1` のヘルスチェックエンドポイントで確認する  
 10.3.2 Given: ヘルスチェックを行う, When: `GET /health` にアクセスする, Then: `{"status":"ok","pid":<number>}` を返す  
 10.3.3 Given: ヘルスチェックポートを決める, When: `YURUTSUKU_ORCH_HEALTH_PORT` が未指定, Then: 既定ポートは `17707` を使う  
+10.3.4 Given: terminal window を開く, When: `GET /open-terminal?session_id=<id>` にアクセスする, Then: Terminal window を開き `{"status":"ok","session_id":"<id>"}` を返す（`session_id` 未指定なら自動採番する）  
 10.4 Given: Windows 環境で `worker_backend = wsl`, When: Worker を起動する, Then: Orchestrator は `wsl.exe` 経由で Linux Worker を起動する  
 10.5 Given: Windows 環境で `worker_backend = windows` または未指定, When: Worker を起動する, Then: Orchestrator は Windows Worker を起動する  
 10.6 Given: WSL で Worker を起動する, When: Linux 側コマンドを指定する, Then: `wsl.exe -d <distro> -- <command>` 形式で実行する  

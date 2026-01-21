@@ -115,10 +115,10 @@ async function main() {
       return Boolean(initialized);
     }, 10000);
     await waitFor(async () => {
-      const hasRows = await client.executeScript(
-        "return Boolean(document.querySelector('.xterm-rows'));"
+      const ready = await client.executeScript(
+        "return typeof terminal !== 'undefined' && terminal && terminal.cols > 0 && terminal.rows > 0;"
       );
-      return Boolean(hasRows);
+      return Boolean(ready);
     }, 10000);
 
     const diagnostics = await client.executeScript(`

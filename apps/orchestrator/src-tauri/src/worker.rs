@@ -321,7 +321,8 @@ mod tests {
 
         let mut saw_output = false;
         let mut saw_exit = false;
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline =
+            Instant::now() + Duration::from_secs(if cfg!(windows) { 12 } else { 5 });
         while Instant::now() < deadline {
             if let Some(message) = wait_for_message(&worker, Duration::from_millis(300)) {
                 match message {

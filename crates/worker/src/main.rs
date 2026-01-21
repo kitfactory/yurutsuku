@@ -280,13 +280,20 @@ fn stream_output(
 
     thread::spawn(move || {
         let mut buffer = [0u8; READ_BUFFER_BYTES];
+        let mut exit_seen_at: Option<Instant> = None;
+        let exit_grace = Duration::from_millis(250);
         loop {
+            if exit_clone.load(Ordering::SeqCst) && exit_seen_at.is_none() {
+                exit_seen_at = Some(Instant::now());
+            }
             match reader.read(&mut buffer) {
                 Ok(0) => {
-                    if exit_clone.load(Ordering::SeqCst) {
-                        break;
+                    if let Some(start) = exit_seen_at {
+                        if start.elapsed() >= exit_grace {
+                            break;
+                        }
                     }
-                    thread::yield_now();
+                    thread::yield_now(); // Windows/ConPTY may return 0 even when not EOF.
                 }
                 Ok(read_len) => {
                     let (lock, cvar) = &*shared_reader;
@@ -301,8 +308,10 @@ fn stream_output(
                 }
                 Err(err) => {
                     if matches!(err.kind(), ErrorKind::WouldBlock | ErrorKind::Interrupted) {
-                        if exit_clone.load(Ordering::SeqCst) {
-                            break;
+                        if let Some(start) = exit_seen_at {
+                            if start.elapsed() >= exit_grace {
+                                break;
+                            }
                         }
                         thread::yield_now();
                         continue;
@@ -328,7 +337,7 @@ fn stream_output(
         let (lock, cvar) = &*shared;
         let mut state = lock.lock().expect("output buffer lock");
 
-        if state.buf.is_empty() && !state.reader_done && !exit_flag.load(Ordering::SeqCst) {
+        if state.buf.is_empty() && !state.reader_done {
             let (guard, _) = cvar
                 .wait_timeout(state, max_delay)
                 .expect("output buffer wait");
@@ -336,7 +345,7 @@ fn stream_output(
         }
 
         if state.buf.is_empty() {
-            if state.reader_done || exit_flag.load(Ordering::SeqCst) {
+            if state.reader_done {
                 break;
             }
             continue;

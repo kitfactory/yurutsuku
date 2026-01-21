@@ -323,18 +323,22 @@ async function main() {
 
     try {
       await waitFor(async () => {
-        const hasXterm = await client
-          .executeScript("return Boolean(document.querySelector('.xterm-rows'));")
+        const ready = await client
+          .executeScript(
+            "return typeof terminal !== 'undefined' && terminal && terminal.cols > 0 && terminal.rows > 0;"
+          )
           .catch(() => false);
-        return Boolean(hasXterm);
+        return Boolean(ready);
       }, 20000);
     } catch (err) {
       const diag = await client.executeScript(`
         return {
           hasContainer: Boolean(document.querySelector('#terminal-container')),
-          hasXterm: Boolean(document.querySelector('.xterm')),
+          hasXtermRoot: Boolean(document.querySelector('.xterm')),
+          hasCanvas: Boolean(document.querySelector('.xterm canvas')),
           hasRows: Boolean(document.querySelector('.xterm-rows')),
-          terminalInitialized: typeof terminalInitialized !== 'undefined' ? terminalInitialized : null
+          terminalInitialized: typeof terminalInitialized !== 'undefined' ? terminalInitialized : null,
+          terminalSize: typeof terminal !== 'undefined' && terminal ? { cols: terminal.cols, rows: terminal.rows } : null
         };
       `);
       throw new Error(`xterm not ready: ${JSON.stringify(diag)}`);
@@ -385,8 +389,23 @@ async function main() {
     } catch {
       let snapshot = "";
       try {
-        const rows = await client.findElement(By.css(".xterm-rows"));
-        snapshot = (await rows.getText()).slice(0, 400);
+        snapshot = await client.executeScript(`
+          try {
+            if (typeof terminal === 'undefined' || !terminal || !terminal.buffer || !terminal.buffer.active) return '';
+            const buf = terminal.buffer.active;
+            const end = buf.baseY + buf.cursorY;
+            const start = Math.max(0, end - 20);
+            const lines = [];
+            for (let i = start; i <= end; i += 1) {
+              const line = buf.getLine(i);
+              if (!line) continue;
+              lines.push(line.translateToString(true));
+            }
+            return lines.join('\\n').slice(0, 400);
+          } catch {
+            return '';
+          }
+        `);
       } catch {
         snapshot = "";
       }

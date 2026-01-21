@@ -1,0 +1,12 @@
+[package]
+name = "yuru"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+
+[[bin]]
+name = "yuru"
+path = "src/main.rs"
+

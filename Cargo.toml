@@ -2,6 +2,7 @@
 members = [
   "crates/worker",
   "crates/protocol",
+  "crates/yuru",
   "apps/orchestrator/src-tauri"
 ]
 resolver = "2"

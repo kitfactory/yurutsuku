@@ -104,10 +104,10 @@ impl Default for Settings {
             llm_tool: "codex".to_string(),
             character_id: "default".to_string(),
             log_retention_lines: 20_000,
-            terminal_font_family: "JetBrains Mono".to_string(),
-            terminal_font_size: 13,
+            terminal_font_family: "ui-monospace, 'Cascadia Mono', Consolas, 'SFMono-Regular', Menlo, Monaco, 'Liberation Mono', 'DejaVu Sans Mono', monospace".to_string(),
+            terminal_font_size: 18,
             terminal_theme: "dark".to_string(),
-            terminal_scrollback_lines: 20_000,
+            terminal_scrollback_lines: 5000,
             terminal_copy_on_select: true,
         }
     }
@@ -152,6 +152,10 @@ fn start_health_server<R: Runtime>(app: AppHandle<R>) {
     });
 }
 
+fn should_start_hidden() -> bool {
+    std::env::args().any(|arg| arg == "--start-hidden")
+}
+
 fn handle_health_connection<R: Runtime>(mut stream: TcpStream, app: &AppHandle<R>) {
     let _ = stream.set_read_timeout(Some(Duration::from_millis(300)));
     let mut buffer = [0u8; 512];
@@ -173,6 +177,36 @@ fn handle_health_connection<R: Runtime>(mut stream: TcpStream, app: &AppHandle<R
         let _ = stream.write_all(response.as_bytes());
         return;
     }
+
+    if let Some(path) = request.split_whitespace().nth(1) {
+        if path.starts_with("/open-terminal") {
+            let session_id = path
+                .splitn(2, '?')
+                .nth(1)
+                .and_then(|query| query.split('&').find(|part| part.starts_with("session_id=")))
+                .and_then(|part| part.splitn(2, '=').nth(1))
+                .filter(|value| !value.is_empty())
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| {
+                    let nonce = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_else(|_| Duration::from_millis(0))
+                        .as_millis();
+                    format!("session-{nonce}")
+                });
+
+            let _ = open_terminal_window_inner(app.clone(), session_id.clone());
+            let body = format!(r#"{{"status":"ok","session_id":"{}"}}"#, session_id);
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(response.as_bytes());
+            return;
+        }
+    }
+
     let body = r#"{"status":"not_found"}"#;
     let response = format!(
         "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
@@ -1503,10 +1537,11 @@ fn main() {
                 waiters: Mutex::new(HashMap::new()),
             });
             start_worker_reader(handle.clone());
-
-            create_window(handle, WINDOW_CHAT, "Chat", "view=chat")?;
-            create_window(handle, WINDOW_RUN, "Run", "view=run")?;
-            create_window(handle, WINDOW_SETTINGS, "Settings", "view=settings")?;
+            if should_start_hidden() {
+                if let Some(window) = handle.get_webview_window(WINDOW_CHAT) {
+                    let _ = window.hide();
+                }
+            }
 
             let path = settings_path(handle);
             let settings = read_settings(&path)?;
@@ -1547,7 +1582,9 @@ mod tests {
             llm_tool: "codex".to_string(),
             character_id: "test".to_string(),
             log_retention_lines: 100,
-            terminal_font_family: "JetBrains Mono".to_string(),
+            terminal_font_family:
+                "ui-monospace, 'Cascadia Mono', Consolas, 'SFMono-Regular', Menlo, Monaco, 'Liberation Mono', 'DejaVu Sans Mono', monospace"
+                    .to_string(),
             terminal_font_size: 14,
             terminal_theme: "light".to_string(),
             terminal_scrollback_lines: 5000,
@@ -1585,8 +1622,6 @@ mod tests {
             .collect();
 
         assert!(labels.contains(&WINDOW_CHAT));
-        assert!(labels.contains(&WINDOW_RUN));
-        assert!(labels.contains(&WINDOW_SETTINGS));
     }
 
     #[test]

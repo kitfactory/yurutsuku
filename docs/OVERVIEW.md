@@ -7,11 +7,9 @@
 ## 現在地（必ず更新）
 - 現在フェーズ: P0
 - 今回スコープ（1〜5行）:
-  - Terminal Window を最小限のターミナルアプリとして完成させる
-  - PTY/Worker と接続し、入出力/スクロール/コピペ/リサイズを動かす
-  - ターミナル設定（見た目/スクロールバック等）を UI/保存と接続する
-  - IPC通信セッション層を切り分け、E2Eでハンドシェイクを検証できるようにする
-  - P0 は Windows Worker 優先で単一OS内のターミナル体験を作り込む
+  - 起動導線（`yuru.exe`）を軸に、Orchestrator/Terminal を「必要時だけ開く」体験を固める
+  - 既定値（フォント/サイズ/scrollback 等）の参照元を docs→実装まで辿れる状態にする（値は当面ハードコードでOK）
+  - docs（正本）を実装に追従させ、将来の改修が迷子にならない状態にする
 - 非ゴール（やらないこと）:
   - P1 (WSL Worker) の実装
   - P2 (Linux/macOS) の対応
@@ -22,6 +20,7 @@
   - spec: `./spec.md`
   - architecture: `./architecture.md`
   - plan (NOW): `./plan.md`
+  - plan (archive): `./plan.archive.md`
   - complete spec: `../yurutsuku_complete_spec_v1.3.md`
 
 ---

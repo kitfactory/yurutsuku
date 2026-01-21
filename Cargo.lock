@@ -5489,6 +5489,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "yuru"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
 name = "yurutsuku-orchestrator"
 version = "0.0.0"
 dependencies = [

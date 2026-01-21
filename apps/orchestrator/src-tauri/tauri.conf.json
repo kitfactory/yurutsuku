@@ -18,19 +18,8 @@
         "label": "chat",
         "title": "Chat",
         "width": 1200,
-        "height": 800
-      },
-      {
-        "label": "run",
-        "title": "Run",
-        "width": 1200,
-        "height": 800
-      },
-      {
-        "label": "settings",
-        "title": "Settings",
-        "width": 900,
-        "height": 700
+        "height": 800,
+        "visible": false
       }
     ]
   },

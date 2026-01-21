@@ -8,6 +8,7 @@
     "lint": "echo TODO: lint",
     "test": "node --test",
     "e2e": "node e2e/terminal.e2e.js",
+    "e2e:stress": "node e2e/terminal.stress.e2e.js",
     "e2e:smoke": "node e2e/terminal.smoke.e2e.js",
     "e2e:ipc": "node e2e/ipc.session.e2e.js",
     "e2e:screenshot": "node e2e/terminal.screenshot.e2e.js"

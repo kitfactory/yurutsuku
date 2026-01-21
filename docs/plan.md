@@ -1,21 +1,26 @@
 ﻿# Plan (NOW)
 
-## 今回（P0 / Windows Terminal 体験）
-- [ ] Terminal: 入力/表示の体感改善（A/B）
-  - [x] B: 送受信の coalesce / single-flight / 送出頻度の適応
-  - [x] A: xterm WebGL renderer addon（失敗時は自動フォールバック）
-  - [x] scrollback デフォルト 5000
-  - [x] terminal-output-broadcast は既定 OFF（必要時のみ `YURUTSUKU_ENABLE_TERMINAL_OUTPUT_BROADCAST=1`）
-- [ ] 現物テスト
-  - [ ] Backspace 連打 / 行編集 / IME 変換 / Copy&Paste / Resize
-  - [ ] E2E: `npm run e2e -w apps/orchestrator`
-- [ ] リリースビルド確認
-  - [ ] `cargo build -p yurutsuku-orchestrator --release`（または `cargo tauri build`）
-- [ ] Git
-  - [ ] 変更をコミット
-  - [ ] origin/main に push
+入口は `docs/OVERVIEW.md`。このファイルは **NOW のみ**（完了/履歴は `docs/plan.archive.md`）。
+
+---
+
+## 今回: 次の作業（P0）: 起動導線と設定の地ならし
+対象: REQ-004/005/012 + `docs/spec.md` 2.x / 7.x / 10.x
+
+- [ ] 起動導線を整理する（「不要な画面が勝手に増える」を根絶する）
+  - [ ] Terminal/Chat/Run/Settings を「必要時にだけ開く」導線を確定する（tray/yuru/内部API）
+  - [ ] 2回目以降の `yuru` の期待動作を確定する（追加で開く or 既存フォーカス）
+- [ ] 設定値の参照元を明確化する（ハードコードは現状維持でOK）
+  - [ ] 既定値（terminal font/size/scrollback 等）の参照元を `docs/spec.md` から辿れるようにする（実装ファイルへのリンク）
+  - [ ] 既定値の責務を整理する（UI 既定 / Rust Settings::default / .env 既定）
+- [ ] Terminal 設定 UI を「将来の拡張前提」で整える（まだUIの作り込みはしない）
+  - [ ] font family / font size の入力バリデーション方針を決める
+  - [ ] 設定の反映タイミング（即時/保存時）を明文化する
+- [ ] 動作確認（手動）
+  - [ ] IME / Copy&Paste / Resize が引き続き動く
+  - [ ] `yuru` 起動で余計な window が勝手に出ない
 
 ## 参照
-- `docs/OVERVIEW.md`
 - `docs/spec.md`
+- `docs/concept.md`
 - `docs/architecture.md`

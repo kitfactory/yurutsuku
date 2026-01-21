@@ -169,7 +169,8 @@
         border-radius: 14px;
         padding: 18px 20px;
         color: #f5f5f5;
-        font-family: 'JetBrains Mono', monospace;
+        font-family: ui-monospace, 'Cascadia Mono', Consolas, 'SFMono-Regular', Menlo, Monaco,
+          'Liberation Mono', 'DejaVu Sans Mono', monospace;
         font-size: 13px;
         line-height: 1.6;
         box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
@@ -283,7 +284,8 @@
 
       .tile-output {
         margin-top: 10px;
-        font-family: 'JetBrains Mono', monospace;
+        font-family: ui-monospace, 'Cascadia Mono', Consolas, 'SFMono-Regular', Menlo, Monaco,
+          'Liberation Mono', 'DejaVu Sans Mono', monospace;
         font-size: 10px;
         line-height: 1.4;
         color: #cbd5e1;
@@ -765,7 +767,11 @@
             </div>
             <div class="settings-row">
               <span>font family</span>
-              <input type="text" value="JetBrains Mono" data-role="settings-terminal-font" />
+              <input
+                type="text"
+                value="ui-monospace, 'Cascadia Mono', Consolas, monospace"
+                data-role="settings-terminal-font"
+              />
             </div>
             <div class="settings-row">
               <span>font size</span>
@@ -774,9 +780,9 @@
                 min="10"
                 max="24"
                 step="1"
-                value="13"
-                data-role="settings-terminal-font-size"
-              />
+                  value="18"
+                  data-role="settings-terminal-font-size"
+                />
             </div>
             <div class="settings-row">
               <span>scrollback</span>
@@ -859,8 +865,17 @@
       let lastResizeCols = null;
       let lastResizeRows = null;
 
-      const terminalPerfDefaults = {
+      const terminalSettingsDefaults = {
+        // Prefer widely-available monospace fonts on Windows first. / Windowsで入手性が高い等幅フォントを優先
+        fontFamily:
+          "ui-monospace, 'Cascadia Mono', Consolas, 'SFMono-Regular', Menlo, Monaco, 'Liberation Mono', 'DejaVu Sans Mono', monospace",
+        fontSize: 18,
+        theme: 'dark',
         scrollbackLines: 5000,
+        copyOnSelect: true,
+      };
+
+      const terminalPerfDefaults = {
         output: {
           maxBufferChars: 2 * 1024 * 1024,
           drain: {
@@ -911,18 +926,18 @@
         llm_tool: 'codex',
         character_id: 'default',
         log_retention_lines: 20000,
-        terminal_font_family: 'JetBrains Mono',
-        terminal_font_size: 13,
-        terminal_theme: 'dark',
-        terminal_scrollback_lines: terminalPerfDefaults.scrollbackLines,
-        terminal_copy_on_select: true,
+        terminal_font_family: terminalSettingsDefaults.fontFamily,
+        terminal_font_size: terminalSettingsDefaults.fontSize,
+        terminal_theme: terminalSettingsDefaults.theme,
+        terminal_scrollback_lines: terminalSettingsDefaults.scrollbackLines,
+        terminal_copy_on_select: terminalSettingsDefaults.copyOnSelect,
       };
-      const DEFAULT_SCROLLBACK_LINES = terminalPerfDefaults.scrollbackLines;
+      const DEFAULT_SCROLLBACK_LINES = terminalSettingsDefaults.scrollbackLines;
       const characterBundles = new Set(['default']);
       let ipcSessionId = null;
       let debugTerminalEnabled =
         new URLSearchParams(window.location.search).get('debug_terminal') === '1';
-      // Terminal debug buffer avoids per-keystroke console spam / 郢ｧ・ｿ郢晢ｽｼ郢晄ｺ倥Μ郢晢ｽｫ郢昴・繝ｰ郢昴・縺堤ｸｺ・ｮconsole鬨ｾ・｣隰・侭・帝ｩ包ｽｿ邵ｺ莉｣・狗ｹ晁・繝｣郢晁ｼ斐＜
+      // Terminal debug buffer avoids per-keystroke console spam / ターミナルのデバッグログをバッファして console 連打を避ける
       const TERMINAL_DEBUG_BUFFER_LIMIT = 800;
       const terminalDebugBuffer = [];
       let terminalDebugCount = 0;
@@ -1612,19 +1627,64 @@
           if (!data) return;
           enqueueTerminalInput(data);
         });
+
+        // Enable paste shortcuts (Windows-like behavior) / ペーストショートカットを有効化
+        // - Ctrl+V: paste (fallback to ^V if clipboard read fails)
+        // - Ctrl+Shift+V / Shift+Insert: paste
+        terminal.attachCustomKeyEventHandler((event) => {
+          try {
+            if (!event || event.type !== 'keydown') return true;
+            const key = String(event.key || '').toLowerCase();
+            const isShiftInsert = event.shiftKey && key === 'insert';
+            const isCtrlV = event.ctrlKey && !event.altKey && !event.metaKey && key === 'v';
+            const isCtrlShiftV =
+              event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && key === 'v';
+            if (!isCtrlV && !isCtrlShiftV && !isShiftInsert) return true;
+
+            // Let the browser fire a real "paste" event (no permission prompt),
+            // but prevent xterm from treating Ctrl+V as ^V.
+            // ブラウザの paste イベントに任せて（許可ダイアログ無し）、xterm 側の ^V を抑止する
+            if (terminal && typeof terminal.focus === 'function') {
+              queueMicrotask(() => terminal.focus());
+            }
+            return false;
+          } catch {
+            return true;
+          }
+        });
+
         terminal.onSelectionChange(() => {
           if (!terminalCopyOnSelect) return;
           const selection = terminal.getSelection();
           if (!selection) return;
           navigator.clipboard.writeText(selection).catch(() => {});
         });
-        if (terminalContainer) {
-          terminalContainer.addEventListener('paste', (event) => {
-            const text = event.clipboardData && event.clipboardData.getData('text');
-            if (!text) return;
+        const onPaste = async (event) => {
+          let text = '';
+          if (event && event.clipboardData && typeof event.clipboardData.getData === 'function') {
+            text =
+              event.clipboardData.getData('text/plain') ||
+              event.clipboardData.getData('text') ||
+              event.clipboardData.getData('Text') ||
+              '';
+          }
+          if (!text) {
+            return;
+          }
+          if (!text) return;
+          // Prevent xterm's default paste to avoid double-send, and forward to PTY instead.
+          // xterm の既定ペーストを止めて、PTY へ貼り付け文字列を送る（二重送信を避ける）
+          if (event && typeof event.preventDefault === 'function') {
             event.preventDefault();
-            ingestInput(text);
-          });
+          }
+          ingestInput(text);
+        };
+
+        if (terminal && terminal.textarea) {
+          terminal.textarea.addEventListener('paste', onPaste, { capture: true });
+        }
+        if (terminalContainer) {
+          terminalContainer.addEventListener('paste', onPaste, { capture: true });
         }
         window.addEventListener('beforeunload', () => {
           invokeWithSession('stop_terminal_session', { sessionId: terminalSessionId }).catch(
@@ -2042,7 +2102,8 @@
 
       if (terminalFont) {
         terminalFont.addEventListener('change', () => {
-          settingsState.terminal_font_family = terminalFont.value.trim() || 'JetBrains Mono';
+          settingsState.terminal_font_family =
+            terminalFont.value.trim() || terminalSettingsDefaults.fontFamily;
           applyTerminalSettings();
           saveSettingsToBackend();
         });
@@ -2050,7 +2111,8 @@
 
       if (terminalFontSize) {
         terminalFontSize.addEventListener('change', () => {
-          settingsState.terminal_font_size = Number(terminalFontSize.value) || 13;
+          settingsState.terminal_font_size =
+            Number(terminalFontSize.value) || terminalSettingsDefaults.fontSize;
           applyTerminalSettings();
           saveSettingsToBackend();
         });
