@@ -9,9 +9,15 @@
 
 - [ ] 起動導線を整理する（「不要な画面が勝手に増える」を根絶する）
   - [ ] Terminal/Chat/Run/Settings を「必要時にだけ開く」導線を確定する（tray/yuru/内部API）
+  - [ ] Overview（タイル一覧 / Run相当）を Orchestrator から起動できるようにする（tray/メニュー/ショートカット）
+  - [ ] Overview の起動時表示はユーザー設定で切替できるようにする（OFFなら表示しない / ONなら起動時表示）
   - [x] `yuru` 多重起動でも Terminal が壊れない（session 重複で `[error session already exists]` にならない）
   - [x] 複数 Terminal window で入力/出力が混ざらない（各 window は独立セッション）
   - [ ] 2回目以降の `yuru` の期待動作を確定する（追加で開く or 既存フォーカス）
+- [ ] Terminal の観測ベース状態（nagomi向けの最小）
+  - [ ] 状態モデル（Running/NeedInput/Success/Fail/Stalled）と判定根拠を `docs/spec.md` に追記する
+  - [ ] Orchestrator が terminal の「最後の出力時刻/無出力時間/exit code」を保持できるようにする
+  - [x] UI（まずは Terminal window 側）に状態が分かる表示を追加する（タイルは後回しでOK）
 - [ ] 設定値の参照元を明確化する（ハードコードは現状維持でOK）
   - [ ] 既定値（terminal font/size/scrollback 等）の参照元を `docs/spec.md` から辿れるようにする（実装ファイルへのリンク）
   - [ ] 既定値の責務を整理する（UI 既定 / Rust Settings::default / .env 既定）

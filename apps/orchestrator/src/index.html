@@ -336,6 +336,64 @@
         padding: 12px;
         border: 1px solid rgba(255, 255, 255, 0.08);
         display: flex;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .terminal-shell::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: transparent;
+        pointer-events: none;
+        transition: background 140ms ease;
+      }
+
+      .terminal-shell.state-running::after {
+        background: rgba(31, 122, 140, 0.06);
+      }
+
+      .terminal-shell.state-need-input::after {
+        background: rgba(143, 185, 255, 0.08);
+      }
+
+      .terminal-shell.state-stalled::after {
+        background: rgba(246, 210, 139, 0.08);
+      }
+
+      .terminal-shell.state-success::after {
+        background: rgba(103, 185, 154, 0.1);
+      }
+
+      .terminal-shell.state-fail::after {
+        background: rgba(242, 106, 61, 0.12);
+      }
+
+      .terminal-watcher {
+        position: absolute;
+        right: 14px;
+        bottom: 14px;
+        width: 46px;
+        height: 46px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 23, 42, 0.62);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
+        z-index: 4;
+        user-select: none;
+        backdrop-filter: blur(8px);
+      }
+
+      .terminal-watcher-face {
+        font-family: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, 'SFMono-Regular',
+          Menlo, Monaco, 'Liberation Mono', 'DejaVu Sans Mono', monospace;
+        font-weight: 600;
+        font-size: 16px;
+        line-height: 1;
+        color: #e6edf3;
       }
 
       #terminal-container {
@@ -700,6 +758,9 @@
         <h2>terminal</h2>
         <div class="terminal-shell">
           <div id="terminal-container" data-role="terminal-container"></div>
+          <div class="terminal-watcher" data-role="terminal-watcher" title="running">
+            <span class="terminal-watcher-face" data-role="terminal-watcher-face">:)</span>
+          </div>
         </div>
       </section>
 
@@ -853,6 +914,8 @@
       const settingsBoard = document.querySelector('[data-role="settings-board"]');
       const terminalBoard = document.querySelector('[data-role="terminal-board"]');
       const terminalContainer = document.querySelector('[data-role="terminal-container"]');
+      const terminalWatcher = document.querySelector('[data-role="terminal-watcher"]');
+      const terminalWatcherFace = document.querySelector('[data-role="terminal-watcher-face"]');
 
       const notifyToggle = document.querySelector('[data-role="settings-notify-toggle"]');
       const notifyState = document.querySelector('[data-role="settings-notify-state"]');
@@ -918,6 +981,112 @@
           controlFlushMaxMs: 16,
         },
       };
+
+      const TerminalObservation = Object.freeze({
+        running: 'running',
+        needInput: 'need-input',
+        stalled: 'stalled',
+        success: 'success',
+        fail: 'fail',
+      });
+
+      const TERMINAL_OBSERVE_TICK_MS = 1000;
+      const TERMINAL_STALLED_MS = 20_000;
+      const TERMINAL_NEED_INPUT_MS = 30_000;
+
+      let terminalObservedState = TerminalObservation.running;
+      let terminalLastOutputAt = Date.now();
+      let terminalLastChunkTail = '';
+      let terminalExitCode = null;
+      let terminalObserveTimer = null;
+
+      function terminalWatcherFaceForState(state) {
+        switch (state) {
+          case TerminalObservation.success:
+            return ':D';
+          case TerminalObservation.fail:
+            return '>:(';
+          case TerminalObservation.needInput:
+            return ':?';
+          case TerminalObservation.stalled:
+            return ':|';
+          default:
+            return ':)';
+        }
+      }
+
+      function setTerminalObservedState(state, title) {
+        terminalObservedState = state;
+        if (terminalWatcherFace) {
+          terminalWatcherFace.textContent = terminalWatcherFaceForState(state);
+        }
+        if (terminalWatcher) {
+          terminalWatcher.title = title || state;
+        }
+        const shell =
+          (terminalWatcher && terminalWatcher.parentElement) ||
+          (terminalContainer && terminalContainer.parentElement);
+        if (shell && shell.classList) {
+          shell.classList.remove(
+            'state-running',
+            'state-need-input',
+            'state-stalled',
+            'state-success',
+            'state-fail'
+          );
+          shell.classList.add(`state-${state}`);
+        }
+      }
+
+      function tailForObservation(text) {
+        if (!text) return '';
+        const normalized = String(text).replace(/\r\n/g, '\n');
+        return normalized.slice(Math.max(0, normalized.length - 400));
+      }
+
+      function looksLikeNeedInput(tail) {
+        if (!tail) return false;
+        // Heuristic prompt detection (limited to avoid false positives).
+        // 限定的なプロンプト検知（誤爆回避優先）。
+        const needle = tail.toLowerCase();
+        return (
+          needle.includes('press enter') ||
+          needle.includes('press return') ||
+          needle.includes('[y/n]') ||
+          needle.includes('(y/n)') ||
+          needle.includes('continue?') ||
+          needle.includes('password:') ||
+          needle.includes('are you sure') ||
+          /\b(y\/n)\b/i.test(tail)
+        );
+      }
+
+      function startTerminalObservationLoop() {
+        if (terminalObserveTimer) return;
+        terminalObserveTimer = setInterval(() => {
+          if (terminalExitCode !== null) return;
+          const now = Date.now();
+          const idleMs = now - terminalLastOutputAt;
+          if (idleMs >= TERMINAL_NEED_INPUT_MS && looksLikeNeedInput(terminalLastChunkTail)) {
+            setTerminalObservedState(
+              TerminalObservation.needInput,
+              `need input (idle ${(idleMs / 1000).toFixed(0)}s)`
+            );
+            return;
+          }
+          if (idleMs >= TERMINAL_STALLED_MS) {
+            setTerminalObservedState(
+              TerminalObservation.stalled,
+              `stalled (idle ${(idleMs / 1000).toFixed(0)}s)`
+            );
+            return;
+          }
+          setTerminalObservedState(
+            TerminalObservation.running,
+            `running (last output ${(idleMs / 1000).toFixed(0)}s ago)`
+          );
+        }, TERMINAL_OBSERVE_TICK_MS);
+      }
       let rawInputQueue = '';
       let rafScheduled = false;
       let controlFlushTimer = null;
@@ -1736,6 +1905,11 @@
         fitAddon = new window.FitAddon.FitAddon();
         terminal.loadAddon(fitAddon);
         terminal.open(terminalContainer);
+        terminalExitCode = null;
+        terminalLastOutputAt = Date.now();
+        terminalLastChunkTail = '';
+        setTerminalObservedState(TerminalObservation.running, 'running');
+        startTerminalObservationLoop();
         try {
           const WebglAddonCtor =
             window.WebglAddon &&
@@ -1798,31 +1972,33 @@
               console.debug('[terminal] output ignored', { reason: 'missing payload' });
               return;
             }
-          if (payload.session_id !== terminalSessionId) {
-            console.debug('[terminal] output ignored', {
-              sessionId: terminalSessionId,
-              payloadSessionId: payload.session_id,
-            });
-            return;
-          }
-          if (debugTerminalEnabled) {
-            console.debug('[terminal] output', {
-              sessionId: payload.session_id,
+            if (payload.session_id !== terminalSessionId) {
+              console.debug('[terminal] output ignored', {
+                sessionId: terminalSessionId,
+                payloadSessionId: payload.session_id,
+              });
+              return;
+            }
+            if (debugTerminalEnabled) {
+              console.debug('[terminal] output', {
+                sessionId: payload.session_id,
+                size: (payload.chunk || '').length,
+                stream: payload.stream,
+              });
+            }
+            debugTerminal('output-chunk', {
               size: (payload.chunk || '').length,
-              stream: payload.stream,
+              preview: visualizeText(payload.chunk || ''),
+              pendingLen: pendingEcho.length,
+              suppressActive: suppressEchoActive,
             });
-          }
-          debugTerminal('output-chunk', {
-            size: (payload.chunk || '').length,
-            preview: visualizeText(payload.chunk || ''),
-            pendingLen: pendingEcho.length,
-            suppressActive: suppressEchoActive,
+            const nextChunk = payload.chunk || '';
+            if (nextChunk) {
+              terminalLastOutputAt = Date.now();
+              terminalLastChunkTail = tailForObservation(nextChunk);
+              enqueueTerminalOutput(nextChunk);
+            }
           });
-          const nextChunk = payload.chunk || '';
-          if (nextChunk) {
-            enqueueTerminalOutput(nextChunk);
-          }
-        });
           listen('terminal-output-broadcast', (event) => {
             const payload = event && event.payload;
             if (!payload) {
@@ -1856,6 +2032,15 @@
               sessionId: payload.session_id,
               code: payload.exit_code,
             });
+            terminalExitCode = payload.exit_code;
+            if (payload.exit_code === 0) {
+              setTerminalObservedState(TerminalObservation.success, 'success');
+            } else {
+              setTerminalObservedState(
+                TerminalObservation.fail,
+                `fail (exit ${payload.exit_code})`
+              );
+            }
             enqueueTerminalOutput(`\r\n[exit ${payload.exit_code}]\r\n`);
           });
           listen('terminal-error', (event) => {
@@ -1875,6 +2060,7 @@
               sessionId: payload.session_id,
               message: payload.message,
             });
+            setTerminalObservedState(TerminalObservation.fail, 'fail (error)');
             enqueueTerminalOutput(`\r\n[error ${payload.message}]\r\n`);
           });
         }
