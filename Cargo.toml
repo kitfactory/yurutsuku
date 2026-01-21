@@ -1,0 +1,7 @@
+[workspace]
+members = [
+  "crates/worker",
+  "crates/protocol",
+  "apps/orchestrator/src-tauri"
+]
+resolver = "2"

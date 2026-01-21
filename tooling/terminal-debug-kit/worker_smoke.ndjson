@@ -1,0 +1,6 @@
+{"chunk":"\u001b[?9001h\u001b[?1004h","session_id":"session-1768888592337","stream":"stdout","type":"output"}
+{"chunk":"\u001b[?25l\u001b[2J\u001b[m\u001b[HMicrosoft Windows [Version 10.0.26200.7623]\u001b]0;C:\\Windows\\system32\\cmd.exe\u0007\u001b[?25h","session_id":"session-1768888592337","stream":"stdout","type":"output"}
+{"chunk":"\u001b[?25l\r\n(c) Microsoft Corporation. All rights reserved.\u001b[4;1HC:\\Users\\kitad>\u001b[?25h","session_id":"session-1768888592337","stream":"stdout","type":"output"}
+{"chunk":"echo ok\r\n","session_id":"session-1768888592337","stream":"stdout","type":"output"}
+{"exit_code":1,"session_id":"session-1768888592337","type":"exit"}
+{"chunk":"\u001b[?25lok\u001b[7;1HC:\\Users\\kitad>\u001b[?25h","session_id":"session-1768888592337","stream":"stdout","type":"output"}

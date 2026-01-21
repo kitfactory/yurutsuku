@@ -1,0 +1,10 @@
+{
+  "identifier": "default",
+  "description": "Default permissions for the app.",
+  "windows": ["*"],
+  "local": true,
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "yurutsuku-orchestrator",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "echo TODO: tauri dev",
+    "build": "echo TODO: tauri build",
+    "lint": "echo TODO: lint",
+    "test": "node --test",
+    "e2e": "node e2e/terminal.e2e.js",
+    "e2e:smoke": "node e2e/terminal.smoke.e2e.js",
+    "e2e:ipc": "node e2e/ipc.session.e2e.js",
+    "e2e:screenshot": "node e2e/terminal.screenshot.e2e.js"
+  },
+  "devDependencies": {
+    "selenium-webdriver": "^4.40.0",
+    "webdriverio": "^9.23.2"
+  }
+}

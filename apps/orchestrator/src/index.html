@@ -1,0 +1,2088 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>yurutsuku</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+      :root {
+        color-scheme: light;
+        --bg: #f6f1e6;
+        --bg-2: #efe5d5;
+        --ink: #1f2429;
+        --ink-soft: #4a4f55;
+        --accent: #1f7a8c;
+        --accent-2: #f26a3d;
+        --panel: #ffffff;
+        --panel-border: #e1d6c6;
+        --shadow: 0 20px 40px rgba(27, 25, 22, 0.14);
+        --radius: 18px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: 'Space Grotesk', sans-serif;
+        color: var(--ink);
+        background: radial-gradient(circle at 10% 20%, #fff7ea, var(--bg)) fixed,
+          linear-gradient(135deg, rgba(31, 122, 140, 0.08), rgba(242, 106, 61, 0.08));
+        min-height: 100vh;
+      }
+
+      .app {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        padding: 28px 32px 32px;
+        gap: 20px;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      header nav {
+        display: flex;
+        gap: 8px;
+      }
+
+      .mode-chip {
+        border: 1px solid var(--panel-border);
+        background: #fffaf2;
+        color: var(--ink);
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      .mode-chip.active {
+        background: var(--accent);
+        color: #fff;
+        border-color: transparent;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .brand-mark {
+        width: 42px;
+        height: 42px;
+        border-radius: 14px;
+        background: linear-gradient(140deg, var(--accent), #67b99a);
+        box-shadow: 0 8px 16px rgba(31, 122, 140, 0.25);
+      }
+
+      .brand h1 {
+        margin: 0;
+        font-size: 26px;
+        letter-spacing: 0.3px;
+      }
+
+      .brand span {
+        display: block;
+        font-size: 13px;
+        color: var(--ink-soft);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .pill {
+        border-radius: 999px;
+        padding: 8px 16px;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        font-size: 13px;
+        color: var(--ink-soft);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .pill strong {
+        color: var(--ink);
+      }
+
+      .main {
+        flex: 1;
+        display: grid;
+        grid-template-columns: minmax(0, 2.2fr) minmax(280px, 1fr);
+        gap: 20px;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      .lane {
+        background: var(--panel);
+        border-radius: var(--radius);
+        border: 1px solid var(--panel-border);
+        box-shadow: var(--shadow);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .lane-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--panel-border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .lane-header h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .lane-body {
+        padding: 18px 20px 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .output {
+        flex: 1;
+        overflow: auto;
+        background: #111820;
+        border-radius: 14px;
+        padding: 18px 20px;
+        color: #f5f5f5;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+      }
+
+      .output-line {
+        white-space: pre-wrap;
+      }
+
+      .output-line.system {
+        color: #8fb9ff;
+      }
+
+      .output-line.user {
+        color: #f6d28b;
+      }
+
+      .input-area {
+        margin-top: 16px;
+        display: flex;
+        gap: 12px;
+        align-items: flex-end;
+      }
+
+      .input-area textarea {
+        flex: 1;
+        resize: none;
+        min-height: 54px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--panel-border);
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 14px;
+        background: #faf7f0;
+      }
+
+      .input-area button {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 12px;
+        padding: 12px 18px;
+        font-size: 14px;
+        cursor: pointer;
+        box-shadow: 0 10px 20px rgba(31, 122, 140, 0.25);
+      }
+
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .run-board {
+        background: var(--panel);
+        border-radius: var(--radius);
+        border: 1px solid var(--panel-border);
+        padding: 18px 20px 20px;
+        box-shadow: var(--shadow);
+      }
+
+      .run-board h2 {
+        margin: 0 0 14px;
+        font-size: 18px;
+      }
+
+      .tiles {
+        display: grid;
+        gap: 14px;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      }
+
+      .tile {
+        background: #121821;
+        color: #f5f5f5;
+        border-radius: 14px;
+        padding: 16px;
+        min-height: 120px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+        transition: transform 200ms ease, box-shadow 200ms ease;
+        cursor: pointer;
+      }
+
+      .tile-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .tile-face {
+        width: 26px;
+        height: 26px;
+        border-radius: 8px;
+        background: #1f2933;
+        display: grid;
+        place-items: center;
+        font-size: 10px;
+        color: #f6d28b;
+      }
+
+      .tile-status {
+        font-size: 10px;
+        color: #9fb3c8;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+
+      .tile-output {
+        margin-top: 10px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        line-height: 1.4;
+        color: #cbd5e1;
+        opacity: 0.85;
+      }
+
+      .tile.focused {
+        transform: scale(1.8);
+        z-index: 2;
+        box-shadow: 0 16px 30px rgba(18, 24, 33, 0.35);
+      }
+
+      .tile small {
+        color: #9fb3c8;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .terminal-board {
+        background: var(--panel);
+        border-radius: var(--radius);
+        border: 1px solid var(--panel-border);
+        padding: 18px 20px 20px;
+        box-shadow: var(--shadow);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 70vh;
+      }
+
+      .terminal-shell {
+        flex: 1;
+        background: #0d1117;
+        border-radius: 16px;
+        padding: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+      }
+
+      #terminal-container {
+        flex: 1;
+        height: 100%;
+      }
+
+      .terminal-shell .xterm {
+        height: 100%;
+      }
+
+      .panel {
+        background: var(--panel);
+        border-radius: var(--radius);
+        border: 1px solid var(--panel-border);
+        padding: 18px 20px;
+        box-shadow: var(--shadow);
+      }
+
+      .settings-board {
+        background: var(--panel);
+        border-radius: var(--radius);
+        border: 1px solid var(--panel-border);
+        padding: 22px 24px;
+        box-shadow: var(--shadow);
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .settings-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+      }
+
+      .settings-card {
+        background: #fffaf2;
+        border: 1px solid var(--panel-border);
+        border-radius: 16px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .settings-card h3 {
+        margin: 0;
+        font-size: 15px;
+      }
+
+      .settings-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--ink-soft);
+      }
+
+      .settings-row strong {
+        color: var(--ink);
+      }
+
+      .settings-row select,
+      .settings-row input[type="number"],
+      .settings-row input[type="range"] {
+        width: 140px;
+      }
+
+      .settings-upload {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--ink-soft);
+      }
+
+      .settings-upload input[type="file"] {
+        font-size: 12px;
+      }
+
+      .character-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 10px;
+      }
+
+      .character-card {
+        border: 1px dashed var(--panel-border);
+        border-radius: 12px;
+        padding: 10px;
+        background: #fff;
+        font-size: 12px;
+        color: var(--ink-soft);
+      }
+
+      .character {
+        flex: 1;
+        min-height: 220px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .avatar {
+        width: 100%;
+        height: 220px;
+        border-radius: 16px;
+        background: linear-gradient(160deg, #f1c27d, #f7e0b4 45%, #fff5df);
+        border: 1px dashed #d2b48c;
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        color: #7b5b2d;
+        letter-spacing: 0.1em;
+      }
+
+      .status-line {
+        margin-top: 12px;
+        font-size: 13px;
+        color: var(--ink-soft);
+      }
+
+      .phase-controls {
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .phase-controls button {
+        border: 1px solid var(--panel-border);
+        background: #fffaf2;
+        color: var(--ink);
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        cursor: pointer;
+      }
+
+      .toggle {
+        border: 1px solid var(--panel-border);
+        background: #faf7f0;
+        color: var(--ink);
+        padding: 8px 12px;
+        border-radius: 10px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      @media (max-width: 980px) {
+        .main {
+          grid-template-columns: 1fr;
+        }
+        .sidebar {
+          order: -1;
+        }
+      }
+
+      body.terminal-only {
+        background: #0d1117;
+        overflow: hidden;
+      }
+
+      html.terminal-only,
+      body.terminal-only {
+        height: 100%;
+        overflow: hidden;
+      }
+
+      body.terminal-only .app {
+        padding: 0;
+        gap: 0;
+        height: 100%;
+        min-height: 100%;
+      }
+
+      body.terminal-only header,
+      body.terminal-only .run-board,
+      body.terminal-only .settings-board,
+      body.terminal-only .main {
+        display: none !important;
+      }
+
+      body.terminal-only .terminal-board {
+        border-radius: 0;
+        border: none;
+        padding: 0;
+        box-shadow: none;
+        min-height: 100%;
+        height: 100%;
+        width: 100%;
+      }
+
+      body.terminal-only .terminal-board h2 {
+        display: none;
+      }
+
+      body.terminal-only .terminal-shell {
+        border-radius: 0;
+        border: none;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+        position: relative;
+      }
+
+      body.terminal-only #terminal-container {
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+      }
+
+    </style>
+    <link rel="stylesheet" href="vendor/xterm/xterm.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div>
+            <h1>yurutsuku</h1>
+            <span data-role="mode-subtitle">chat mode</span>
+          </div>
+        </div>
+        <nav data-role="mode-switch">
+          <button class="mode-chip active" data-role="mode-chip" data-mode="chat" type="button">
+            chat
+          </button>
+          <button class="mode-chip" data-role="mode-chip" data-mode="run" type="button">
+            run
+          </button>
+        </nav>
+        <div class="toolbar" data-role="chat-toolbar">
+          <div class="pill">
+            follow
+            <strong id="follow-state">on</strong>
+          </div>
+          <button class="toggle" data-role="follow-toggle" type="button">
+            toggle follow
+          </button>
+        </div>
+      </header>
+
+      <div class="main" data-role="chat-main">
+        <section class="lane">
+          <div class="lane-header">
+            <h2>conversation lane</h2>
+            <span class="pill">session: draft</span>
+          </div>
+          <div class="lane-body">
+            <div class="output" data-role="chat-lane" id="output">
+              <div class="output-line system">[system] lane ready</div>
+              <div class="output-line user">[you] type a command to continue</div>
+            </div>
+            <div class="input-area">
+              <textarea
+                id="chat-input"
+                data-role="chat-input"
+                placeholder="type here and press send"
+              ></textarea>
+              <button id="send-btn" type="button">send</button>
+            </div>
+          </div>
+        </section>
+
+        <aside class="sidebar">
+          <div class="panel">
+            <h3>status</h3>
+            <p class="status-line">phase: idle</p>
+            <p class="status-line">silence timeout: 3.5s</p>
+          </div>
+          <div class="panel character">
+            <div class="avatar">character</div>
+            <p class="status-line">
+              expression: <strong data-role="character-phase">idle</strong>
+            </p>
+            <div class="phase-controls" data-role="phase-controls">
+              <button type="button" data-role="phase-button" data-phase="idle">idle</button>
+              <button type="button" data-role="phase-button" data-phase="thinking">thinking</button>
+              <button type="button" data-role="phase-button" data-phase="success">success</button>
+              <button type="button" data-role="phase-button" data-phase="error">error</button>
+              <button type="button" data-role="phase-button" data-phase="attention">attention</button>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <section class="run-board hidden" data-role="run-board">
+        <h2>session board</h2>
+        <div class="settings-row" style="justify-content: flex-start; gap: 12px; margin-bottom: 12px;">
+          <button class="toggle" data-role="run-arrange" type="button">arrange windows</button>
+          <span class="status-line">tile layout: 1 row / 2 rows (5+) / 3 rows (9+)</span>
+        </div>
+        <div class="tiles" data-role="run-tiles">
+          <div class="tile" data-role="run-tile" data-session="session-01">
+            <div class="tile-header">
+              <small>session 01</small>
+              <span class="tile-status">running</span>
+            </div>
+            <div class="tile-header">
+              <strong>build</strong>
+              <span class="tile-face" data-role="run-tile-face">:)</span>
+            </div>
+            <div class="tile-output">[log] cargo build ...</div>
+          </div>
+          <div class="tile" data-role="run-tile" data-session="session-02">
+            <div class="tile-header">
+              <small>session 02</small>
+              <span class="tile-status">idle</span>
+            </div>
+            <div class="tile-header">
+              <strong>lint</strong>
+              <span class="tile-face" data-role="run-tile-face">:|</span>
+            </div>
+            <div class="tile-output">[log] waiting ...</div>
+          </div>
+          <div class="tile" data-role="run-tile" data-session="session-03">
+            <div class="tile-header">
+              <small>session 03</small>
+              <span class="tile-status">success</span>
+            </div>
+            <div class="tile-header">
+              <strong>test</strong>
+              <span class="tile-face" data-role="run-tile-face">:D</span>
+            </div>
+            <div class="tile-output">[log] ok 124 passed</div>
+          </div>
+          <div class="tile" data-role="run-tile" data-session="session-04">
+            <div class="tile-header">
+              <small>session 04</small>
+              <span class="tile-status">error</span>
+            </div>
+            <div class="tile-header">
+              <strong>ship</strong>
+              <span class="tile-face" data-role="run-tile-face">:(</span>
+            </div>
+            <div class="tile-output">[log] failed: auth</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="terminal-board hidden" data-role="terminal-board">
+        <h2>terminal</h2>
+        <div class="terminal-shell">
+          <div id="terminal-container" data-role="terminal-container"></div>
+        </div>
+      </section>
+
+      <section class="settings-board hidden" data-role="settings-board">
+        <h2>settings</h2>
+        <div class="settings-grid">
+          <div class="settings-card">
+            <h3>notifications</h3>
+            <div class="settings-row">
+              <span>OS toast</span>
+              <button class="toggle" data-role="settings-notify-toggle" type="button">
+                <strong data-role="settings-notify-state">on</strong>
+              </button>
+            </div>
+            <div class="settings-row">
+              <span>audio</span>
+              <button class="toggle" data-role="settings-audio-toggle" type="button">
+                <strong data-role="settings-audio-state">on</strong>
+              </button>
+            </div>
+            <div class="settings-row">
+              <span>volume</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value="0.8"
+                data-role="settings-volume"
+              />
+            </div>
+            <div class="settings-row">
+              <span>silence (ms)</span>
+              <input
+                type="number"
+                min="500"
+                step="100"
+                value="3500"
+                data-role="settings-silence-timeout"
+              />
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h3>LLM judge</h3>
+            <div class="settings-row">
+              <span>enabled</span>
+              <button class="toggle" data-role="settings-llm-toggle" type="button">
+                <strong data-role="settings-llm-state">off</strong>
+              </button>
+            </div>
+            <div class="settings-row">
+              <span>tool</span>
+              <select data-role="settings-llm-tool">
+                <option value="codex">codex</option>
+                <option value="claude">claude</option>
+                <option value="opencode">opencode</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h3>character</h3>
+            <div class="settings-upload">
+              <span>upload bundle (.zip)</span>
+              <input type="file" accept=".zip" data-role="settings-character-upload" />
+              <span data-role="settings-character-uploaded">no upload</span>
+            </div>
+            <div class="settings-row">
+              <span>log retention (lines)</span>
+              <input
+                type="number"
+                min="1000"
+                step="1000"
+                value="20000"
+                data-role="settings-log-retention"
+              />
+            </div>
+            <div class="character-list" data-role="settings-character-list">
+              <div class="character-card">default</div>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h3>terminal</h3>
+            <div class="settings-row">
+              <span>theme</span>
+              <select data-role="settings-terminal-theme">
+                <option value="dark">dark</option>
+                <option value="light">light</option>
+              </select>
+            </div>
+            <div class="settings-row">
+              <span>font family</span>
+              <input type="text" value="JetBrains Mono" data-role="settings-terminal-font" />
+            </div>
+            <div class="settings-row">
+              <span>font size</span>
+              <input
+                type="number"
+                min="10"
+                max="24"
+                step="1"
+                value="13"
+                data-role="settings-terminal-font-size"
+              />
+            </div>
+            <div class="settings-row">
+              <span>scrollback</span>
+              <input
+                type="number"
+                min="1000"
+                step="1000"
+                value="5000"
+                data-role="settings-terminal-scrollback"
+              />
+            </div>
+            <div class="settings-row">
+              <span>copy on select</span>
+              <button class="toggle" data-role="settings-terminal-copy" type="button">
+                <strong data-role="settings-terminal-copy-state">on</strong>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script src="vendor/xterm/xterm.js"></script>
+    <script src="vendor/xterm/xterm-addon-fit.js"></script>
+    <script src="vendor/xterm/xterm-addon-webgl.js"></script>
+    <script>
+      const output = document.getElementById('output');
+      const input = document.getElementById('chat-input');
+      const sendBtn = document.getElementById('send-btn');
+      const followToggle = document.querySelector('[data-role="follow-toggle"]');
+      const followState = document.getElementById('follow-state');
+      const tiles = document.querySelectorAll('[data-role="run-tile"]');
+      const phaseLabel = document.querySelector('[data-role="character-phase"]');
+      const phaseButtons = document.querySelectorAll('[data-role="phase-button"]');
+      const modeChips = document.querySelectorAll('[data-role="mode-chip"]');
+      const modeSwitch = document.querySelector('[data-role="mode-switch"]');
+      const modeSubtitle = document.querySelector('[data-role="mode-subtitle"]');
+      const chatMain = document.querySelector('[data-role="chat-main"]');
+      const chatToolbar = document.querySelector('[data-role="chat-toolbar"]');
+      const runBoard = document.querySelector('[data-role="run-board"]');
+      const settingsBoard = document.querySelector('[data-role="settings-board"]');
+      const terminalBoard = document.querySelector('[data-role="terminal-board"]');
+      const terminalContainer = document.querySelector('[data-role="terminal-container"]');
+
+      const notifyToggle = document.querySelector('[data-role="settings-notify-toggle"]');
+      const notifyState = document.querySelector('[data-role="settings-notify-state"]');
+      const audioToggle = document.querySelector('[data-role="settings-audio-toggle"]');
+      const audioState = document.querySelector('[data-role="settings-audio-state"]');
+      const volumeSlider = document.querySelector('[data-role="settings-volume"]');
+      const silenceInput = document.querySelector('[data-role="settings-silence-timeout"]');
+      const llmToggle = document.querySelector('[data-role="settings-llm-toggle"]');
+      const llmState = document.querySelector('[data-role="settings-llm-state"]');
+      const llmTool = document.querySelector('[data-role="settings-llm-tool"]');
+      const characterUpload = document.querySelector('[data-role="settings-character-upload"]');
+      const characterUploaded = document.querySelector(
+        '[data-role="settings-character-uploaded"]'
+      );
+      const characterList = document.querySelector('[data-role="settings-character-list"]');
+      const terminalTheme = document.querySelector('[data-role="settings-terminal-theme"]');
+      const terminalFont = document.querySelector('[data-role="settings-terminal-font"]');
+      const terminalFontSize = document.querySelector('[data-role="settings-terminal-font-size"]');
+      const terminalScrollback = document.querySelector('[data-role="settings-terminal-scrollback"]');
+      const terminalCopyToggle = document.querySelector('[data-role="settings-terminal-copy"]');
+      const terminalCopyState = document.querySelector('[data-role="settings-terminal-copy-state"]');
+
+      let followEnabled = true;
+      let notifyEnabled = true;
+      let audioEnabled = true;
+      let llmEnabled = false;
+      let terminalCopyOnSelect = true;
+      const isTerminalView = new URLSearchParams(window.location.search).get('view') === 'terminal';
+      const terminalSessionId =
+        new URLSearchParams(window.location.search).get('session_id') || `session-${Date.now()}`;
+      let terminal;
+      let fitAddon;
+      let webglAddon;
+      let terminalInitialized = false;
+      let resizeObserver;
+      let resizeDebounceTimer = null;
+      let lastResizeCols = null;
+      let lastResizeRows = null;
+
+      const terminalPerfDefaults = {
+        scrollbackLines: 5000,
+        output: {
+          maxBufferChars: 2 * 1024 * 1024,
+          drain: {
+            initialMaxChars: 64 * 1024,
+            minChars: 8 * 1024,
+            maxCapChars: 128 * 1024,
+            maxParts: 64,
+          },
+        },
+        input: {
+          controlFlushInitialMs: 8,
+          controlFlushMinMs: 8,
+          controlFlushMaxMs: 16,
+        },
+      };
+      let rawInputQueue = '';
+      let rafScheduled = false;
+      let controlFlushTimer = null;
+      let controlInputFlushMs = terminalPerfDefaults.input.controlFlushInitialMs;
+      const CONTROL_INPUT_FLUSH_MIN = terminalPerfDefaults.input.controlFlushMinMs;
+      const CONTROL_INPUT_FLUSH_MAX = terminalPerfDefaults.input.controlFlushMaxMs;
+      let pendingEcho = '';
+      let pendingEchoTimer = null;
+      let suppressEchoActive = true;
+      // Send queue for single-flight invoke / 送信キューで invoke を単発化
+      let sendQueue = '';
+      let sendInFlight = false;
+      // Output buffer to coalesce writes / 出力を合体して write 回数を削減
+      const outputChunks = [];
+      let outputHead = 0;
+      let outputBytes = 0;
+      let outputScheduled = false;
+      let outputWriting = false;
+      const MAX_TERMINAL_OUTPUT_BUFFER = terminalPerfDefaults.output.maxBufferChars;
+      let terminalOutputDrainMax = terminalPerfDefaults.output.drain.initialMaxChars;
+      const TERMINAL_OUTPUT_DRAIN_MIN = terminalPerfDefaults.output.drain.minChars;
+      const TERMINAL_OUTPUT_DRAIN_MAX_CAP = terminalPerfDefaults.output.drain.maxCapChars;
+      const TERMINAL_OUTPUT_DRAIN_MAX_PARTS = terminalPerfDefaults.output.drain.maxParts;
+      let terminalOutputLastWriteMs = 0;
+      const MAX_PENDING_ECHO = 256;
+      const PENDING_ECHO_TTL_MS = 1000;
+      const settingsState = {
+        notifications_enabled: true,
+        audio_enabled: true,
+        volume: 0.8,
+        silence_timeout_ms: 3500,
+        llm_enabled: false,
+        llm_tool: 'codex',
+        character_id: 'default',
+        log_retention_lines: 20000,
+        terminal_font_family: 'JetBrains Mono',
+        terminal_font_size: 13,
+        terminal_theme: 'dark',
+        terminal_scrollback_lines: terminalPerfDefaults.scrollbackLines,
+        terminal_copy_on_select: true,
+      };
+      const DEFAULT_SCROLLBACK_LINES = terminalPerfDefaults.scrollbackLines;
+      const characterBundles = new Set(['default']);
+      let ipcSessionId = null;
+      let debugTerminalEnabled =
+        new URLSearchParams(window.location.search).get('debug_terminal') === '1';
+      // Terminal debug buffer avoids per-keystroke console spam / 郢ｧ・ｿ郢晢ｽｼ郢晄ｺ倥Μ郢晢ｽｫ郢昴・繝ｰ郢昴・縺堤ｸｺ・ｮconsole鬨ｾ・｣隰・侭・帝ｩ包ｽｿ邵ｺ莉｣・狗ｹ晁・繝｣郢晁ｼ斐＜
+      const TERMINAL_DEBUG_BUFFER_LIMIT = 800;
+      const terminalDebugBuffer = [];
+      let terminalDebugCount = 0;
+      window.__setTerminalDebug = (enabled) => {
+        debugTerminalEnabled = Boolean(enabled);
+      };
+      window.__getTerminalDebugBuffer = () => terminalDebugBuffer.slice();
+      window.__clearTerminalDebug = () => {
+        terminalDebugBuffer.length = 0;
+      };
+      window.__terminalDebugStats = () => ({
+        total: terminalDebugCount,
+        buffered: terminalDebugBuffer.length,
+        limit: TERMINAL_DEBUG_BUFFER_LIMIT,
+      });
+      window.__dumpTerminalDebug = (options = {}) => {
+        const rawLimit = Number(options.limit);
+        const limit = Number.isFinite(rawLimit)
+          ? Math.max(1, Math.floor(rawLimit))
+          : terminalDebugBuffer.length;
+        const start = Math.max(0, terminalDebugBuffer.length - limit);
+        const slice = terminalDebugBuffer.slice(start);
+        if (options.log !== false) {
+          console.debug('[terminal-debug] dump', {
+            total: terminalDebugCount,
+            buffered: terminalDebugBuffer.length,
+            returning: slice.length,
+          });
+          slice.forEach((entry) => {
+            console.debug(`[terminal-debug] ${entry.label}`, entry.payload || {});
+          });
+        }
+        if (options.clear) {
+          terminalDebugBuffer.length = 0;
+        }
+        return slice;
+      };
+
+      function debugTerminal(label, payload) {
+        if (!debugTerminalEnabled) return;
+        terminalDebugCount += 1;
+        terminalDebugBuffer.push({
+          ts: Date.now(),
+          label,
+          payload: payload || null,
+        });
+        if (terminalDebugBuffer.length > TERMINAL_DEBUG_BUFFER_LIMIT) {
+          terminalDebugBuffer.splice(
+            0,
+            terminalDebugBuffer.length - TERMINAL_DEBUG_BUFFER_LIMIT
+          );
+        }
+      }
+
+      function visualizeText(raw, limit = 120) {
+        if (!raw) return '';
+        let out = '';
+        for (const ch of raw) {
+          const code = ch.charCodeAt(0);
+          if (ch === '\r') {
+            out += '\\r';
+          } else if (ch === '\n') {
+            out += '\\n';
+          } else if (ch === '\t') {
+            out += '\\t';
+          } else if (code < 0x20) {
+            out += `\\x${code.toString(16).padStart(2, '0')}`;
+          } else {
+            out += ch;
+          }
+          if (out.length >= limit) {
+            out += '...';
+            break;
+          }
+        }
+        return out;
+      }
+
+      function normalizeScrollback(value) {
+        const lines = Number(value);
+        if (!Number.isFinite(lines)) return DEFAULT_SCROLLBACK_LINES;
+        return Math.max(1, Math.floor(lines));
+      }
+
+      function getInvoke() {
+        if (!window.__TAURI__) return null;
+        return window.__TAURI__.core && window.__TAURI__.core.invoke
+          ? window.__TAURI__.core.invoke
+          : window.__TAURI__.invoke || null;
+      }
+
+      function getEventListen() {
+        if (!window.__TAURI__) return null;
+        return window.__TAURI__.event && window.__TAURI__.event.listen
+          ? window.__TAURI__.event.listen
+          : null;
+      }
+
+      async function ensureIpcSession() {
+        if (ipcSessionId) return ipcSessionId;
+        let invoke = getInvoke();
+        if (!invoke) {
+          for (let i = 0; i < 20; i += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            invoke = getInvoke();
+            if (invoke) break;
+          }
+        }
+        if (!invoke) return null;
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+          try {
+            const snapshot = await invoke('ipc_session_open', { clientEpoch: Date.now() });
+            const sessionId = snapshot && snapshot.sessionId ? snapshot.sessionId : null;
+            if (!sessionId) {
+              return null;
+            }
+            ipcSessionId = sessionId;
+            window.__ipcSessionId = sessionId;
+            return sessionId;
+          } catch {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+          }
+        }
+        return null;
+      }
+
+      async function invokeWithSession(command, payload) {
+        const invoke = getInvoke();
+        if (!invoke) return null;
+        const sessionId = await ensureIpcSession();
+        if (!sessionId) return null;
+        const args = payload ? { ...payload, ipcSessionId: sessionId } : { ipcSessionId: sessionId };
+        return invoke(command, args);
+      }
+
+      function applyView(view) {
+        if (!view) return;
+        if (view === 'terminal') {
+          document.body.classList.add('terminal-only');
+          document.documentElement.classList.add('terminal-only');
+        } else {
+          document.body.classList.remove('terminal-only');
+          document.documentElement.classList.remove('terminal-only');
+        }
+        if (modeSubtitle) {
+          modeSubtitle.textContent = `${view} mode`;
+        }
+        if (view === 'settings') {
+          chatMain.classList.add('hidden');
+          chatToolbar.classList.add('hidden');
+          runBoard.classList.add('hidden');
+          if (terminalBoard) {
+            terminalBoard.classList.add('hidden');
+          }
+          settingsBoard.classList.remove('hidden');
+          if (modeSwitch) {
+            modeSwitch.classList.add('hidden');
+          }
+          return;
+        }
+        settingsBoard.classList.add('hidden');
+        if (modeSwitch) {
+          modeSwitch.classList.remove('hidden');
+        }
+        if (terminalBoard) {
+          terminalBoard.classList.add('hidden');
+        }
+        if (view === 'run') {
+          chatMain.classList.add('hidden');
+          chatToolbar.classList.add('hidden');
+          runBoard.classList.remove('hidden');
+        } else if (view === 'terminal') {
+          chatMain.classList.add('hidden');
+          chatToolbar.classList.add('hidden');
+          runBoard.classList.add('hidden');
+          if (terminalBoard) {
+            terminalBoard.classList.remove('hidden');
+          }
+        } else {
+          chatMain.classList.remove('hidden');
+          chatToolbar.classList.remove('hidden');
+          runBoard.classList.add('hidden');
+        }
+
+        if (view === 'terminal' && modeSwitch) {
+          modeSwitch.classList.add('hidden');
+        }
+
+        if (view === 'terminal') {
+          if (!terminalInitialized) {
+            setTimeout(() => initTerminal(), 0);
+          } else {
+            setTimeout(() => {
+              if (!fitAddon || !terminal) return;
+              fitAddon.fit();
+              resizeTerminal();
+            }, 0);
+          }
+        }
+
+        if (modeChips.length) {
+          modeChips.forEach((item) => item.classList.remove('active'));
+          const next = Array.from(modeChips).find((chip) => chip.dataset.mode === view);
+          if (next) {
+            next.classList.add('active');
+          }
+        }
+      }
+
+      function setFollow(enabled) {
+        followEnabled = enabled;
+        followState.textContent = enabled ? 'on' : 'off';
+      }
+
+      async function arrangeWindows() {
+        try {
+          await invokeWithSession('arrange_terminal_windows');
+        } catch {
+          return;
+        }
+      }
+
+      async function ensureTerminalWindow(sessionId) {
+        if (!sessionId) return;
+        try {
+          await invokeWithSession('open_terminal_window', { sessionId });
+          await invokeWithSession('pickup_terminal_window', { sessionId });
+        } catch {
+          return;
+        }
+      }
+
+      async function pickupTerminalWindowByIndex(index) {
+        try {
+          await invokeWithSession('pickup_terminal_window_by_index', { index });
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
+      async function focusNextTerminal(direction) {
+        try {
+          await invokeWithSession('focus_next_terminal_window', { direction });
+        } catch {
+          return;
+        }
+      }
+
+      function terminalThemePalette(theme) {
+        if (theme === 'light') {
+          return {
+            background: '#f8f5ef',
+            foreground: '#1f2429',
+            cursor: '#1f7a8c',
+            selection: 'rgba(31, 122, 140, 0.25)',
+          };
+        }
+        return {
+          background: '#0d1117',
+          foreground: '#e6edf3',
+          cursor: '#f6d28b',
+          selection: 'rgba(246, 210, 139, 0.3)',
+        };
+      }
+
+      function applyTerminalSettings() {
+        if (!terminal) return;
+        terminal.options.fontFamily = settingsState.terminal_font_family;
+        terminal.options.fontSize = settingsState.terminal_font_size;
+        terminal.options.theme = terminalThemePalette(settingsState.terminal_theme);
+        terminal.options.scrollback = normalizeScrollback(settingsState.terminal_scrollback_lines);
+        terminalCopyOnSelect = settingsState.terminal_copy_on_select;
+      }
+
+      async function startTerminalSession() {
+        if (!terminal) return;
+        try {
+          console.debug('[terminal] start_session', {
+            sessionId: terminalSessionId,
+            cols: terminal.cols,
+            rows: terminal.rows,
+          });
+          await invokeWithSession('start_terminal_session', {
+            sessionId: terminalSessionId,
+            cols: terminal.cols,
+            rows: terminal.rows,
+          });
+        } catch {
+          return;
+        }
+      }
+
+      async function registerTerminalSession() {
+        try {
+          console.debug('[terminal] register_session', { sessionId: terminalSessionId });
+          await invokeWithSession('register_terminal_session', { sessionId: terminalSessionId });
+        } catch {
+          return;
+        }
+      }
+
+      function enqueueSend(text) {
+        if (!text) return;
+        sendQueue += text;
+      }
+
+      async function drainSendQueue() {
+        if (sendInFlight) return;
+        if (!sendQueue) return;
+        sendInFlight = true;
+        try {
+          const chunk = sendQueue;
+          sendQueue = '';
+          debugTerminal('send-input', { size: chunk.length, preview: visualizeText(chunk) });
+          const sendStart = performance.now();
+          await invokeWithSession('terminal_send_input', { sessionId: terminalSessionId, text: chunk });
+          const sendElapsed = performance.now() - sendStart;
+          if (sendElapsed > 24) {
+            controlInputFlushMs = CONTROL_INPUT_FLUSH_MAX;
+          } else if (sendElapsed > 16) {
+            controlInputFlushMs = Math.min(
+              CONTROL_INPUT_FLUSH_MAX,
+              Math.max(CONTROL_INPUT_FLUSH_MIN, controlInputFlushMs + 4)
+            );
+          } else if (sendElapsed < 8) {
+            controlInputFlushMs = Math.max(CONTROL_INPUT_FLUSH_MIN, controlInputFlushMs - 1);
+          }
+          if (sendQueue) {
+            if (typeof queueMicrotask === 'function') {
+              queueMicrotask(drainSendQueue);
+            } else {
+              setTimeout(drainSendQueue, 0);
+            }
+          }
+        } finally {
+          sendInFlight = false;
+        }
+      }
+
+      function sendTerminalInput(text) {
+        enqueueSend(text);
+      }
+
+      function isControlish(text) {
+        return (
+          text.includes('\x7f') ||
+          text.includes('\b') ||
+          text.includes('\r') ||
+          text.startsWith('\x1b')
+        );
+      }
+
+      function flushNow() {
+        if (!rawInputQueue) return;
+        enqueueSend(rawInputQueue);
+        rawInputQueue = '';
+        if (controlFlushTimer) {
+          clearTimeout(controlFlushTimer);
+          controlFlushTimer = null;
+        }
+        if (!sendInFlight) {
+          if (typeof queueMicrotask === 'function') {
+            queueMicrotask(drainSendQueue);
+          } else {
+            setTimeout(drainSendQueue, 0);
+          }
+        }
+      }
+
+      function flushOnRaf() {
+        if (rafScheduled) return;
+        rafScheduled = true;
+        requestAnimationFrame(() => {
+          rafScheduled = false;
+          flushNow();
+        });
+      }
+
+      function ingestInput(text) {
+        if (!text) return;
+        const controlInput = isControlish(text);
+        if (controlInput) {
+          forceDrainOutputNow();
+        }
+        rawInputQueue += text;
+        if (controlInput) {
+          if (controlFlushTimer) return;
+          controlFlushTimer = setTimeout(() => {
+            controlFlushTimer = null;
+            flushNow();
+          }, controlInputFlushMs);
+        } else {
+          flushOnRaf();
+        }
+      }
+
+      function enqueueTerminalOutput(chunk) {
+        if (!chunk) return;
+        outputChunks.push(chunk);
+        outputBytes += chunk.length;
+        while (outputBytes > MAX_TERMINAL_OUTPUT_BUFFER && outputHead < outputChunks.length) {
+          const dropped = outputChunks[outputHead];
+          if (!dropped) break;
+          outputBytes -= dropped.length;
+          outputHead += 1;
+        }
+        if (outputHead > 128 && outputHead * 2 > outputChunks.length) {
+          outputChunks.splice(0, outputHead);
+          outputHead = 0;
+        }
+        if (outputScheduled || outputWriting) return;
+        outputScheduled = true;
+        requestAnimationFrame(() => {
+          outputScheduled = false;
+          drainTerminalOutput();
+        });
+      }
+
+      function drainTerminalOutput() {
+        if (!terminal) return;
+        if (outputWriting) return;
+        if (outputHead >= outputChunks.length) return;
+        const drainBudgetChars = terminalOutputDrainMax;
+        const parts = [];
+        let consumedChars = 0;
+        while (
+          outputHead < outputChunks.length &&
+          consumedChars < drainBudgetChars &&
+          parts.length < TERMINAL_OUTPUT_DRAIN_MAX_PARTS
+        ) {
+          const current = outputChunks[outputHead];
+          if (!current) {
+            outputHead += 1;
+            continue;
+          }
+          const remaining = drainBudgetChars - consumedChars;
+          if (current.length <= remaining) {
+            parts.push(current);
+            consumedChars += current.length;
+            outputBytes -= current.length;
+            outputHead += 1;
+            continue;
+          }
+          if (remaining > 0) {
+            parts.push(current.slice(0, remaining));
+            outputChunks[outputHead] = current.slice(remaining);
+            consumedChars += remaining;
+            outputBytes -= remaining;
+          }
+          break;
+        }
+        if (!parts.length) return;
+        if (outputHead > 128 && outputHead * 2 > outputChunks.length) {
+          outputChunks.splice(0, outputHead);
+          outputHead = 0;
+        }
+        if (outputHead >= outputChunks.length) {
+          outputChunks.length = 0;
+          outputHead = 0;
+          outputBytes = 0;
+        }
+        const chunk = parts.join('');
+        outputWriting = true;
+        const writeStart = performance.now();
+        terminal.write(chunk, () => {
+          const dt = performance.now() - writeStart;
+          terminalOutputLastWriteMs = dt;
+          if (dt > 16 && terminalOutputDrainMax > TERMINAL_OUTPUT_DRAIN_MIN) {
+            terminalOutputDrainMax = Math.max(
+              TERMINAL_OUTPUT_DRAIN_MIN,
+              Math.floor(terminalOutputDrainMax / 2)
+            );
+          } else if (dt < 8 && terminalOutputDrainMax < TERMINAL_OUTPUT_DRAIN_MAX_CAP) {
+            terminalOutputDrainMax = Math.min(
+              TERMINAL_OUTPUT_DRAIN_MAX_CAP,
+              terminalOutputDrainMax + 4096
+            );
+          }
+          outputWriting = false;
+          if (outputHead < outputChunks.length) {
+            requestAnimationFrame(drainTerminalOutput);
+          }
+        });
+      }
+
+      function forceDrainOutputNow() {
+        if (!terminal) return;
+        if (outputWriting) return;
+        if (outputHead >= outputChunks.length) return;
+        drainTerminalOutput();
+      }
+
+      function appendPendingEcho(text) {
+        if (!text) return;
+        pendingEcho += text;
+        if (pendingEcho.length > MAX_PENDING_ECHO) {
+          debugTerminal('pending-echo-overflow', { max: MAX_PENDING_ECHO });
+          pendingEcho = '';
+        }
+        if (pendingEchoTimer) {
+          clearTimeout(pendingEchoTimer);
+        }
+        pendingEchoTimer = setTimeout(() => {
+          debugTerminal('pending-echo-expired');
+          pendingEcho = '';
+          pendingEchoTimer = null;
+        }, PENDING_ECHO_TTL_MS);
+        debugTerminal('pending-echo-append', {
+          len: pendingEcho.length,
+          preview: visualizeText(pendingEcho),
+        });
+      }
+
+      function clearPendingEcho(reason) {
+        debugTerminal('pending-echo-clear', { reason: reason || 'unknown' });
+        pendingEcho = '';
+        if (pendingEchoTimer) {
+          clearTimeout(pendingEchoTimer);
+          pendingEchoTimer = null;
+        }
+      }
+
+      function isAsciiPrintable(char) {
+        const code = char.charCodeAt(0);
+        return code >= 0x20 && code <= 0x7e;
+      }
+
+      function buildLocalEcho(data) {
+        let echoText = '';
+        let pendingText = '';
+        for (const char of data) {
+          if (char === '\r' || char === '\n') {
+            echoText += '\r\n';
+            pendingText += '\r\n';
+            continue;
+          }
+          if (char === '\t') {
+            echoText += '\t';
+            pendingText += '\t';
+            continue;
+          }
+          if (isAsciiPrintable(char)) {
+            echoText += char;
+            pendingText += char;
+          }
+        }
+        return { echoText, pendingText };
+      }
+
+      function splitAnsiParts(input) {
+        const parts = [];
+        let i = 0;
+        while (i < input.length) {
+          const ch = input[i];
+          if (ch === '\x1b') {
+            const next = input[i + 1];
+            if (next === '[') {
+              let j = i + 2;
+              while (j < input.length) {
+                const code = input.charCodeAt(j);
+                if (code >= 0x40 && code <= 0x7e) {
+                  j += 1;
+                  break;
+                }
+                j += 1;
+              }
+              parts.push({ type: 'ansi', value: input.slice(i, j) });
+              i = j;
+              continue;
+            }
+            if (next === ']') {
+              let j = i + 2;
+              while (j < input.length) {
+                if (input[j] === '\x07') {
+                  j += 1;
+                  break;
+                }
+                if (input[j] === '\x1b' && input[j + 1] === '\\') {
+                  j += 2;
+                  break;
+                }
+                j += 1;
+              }
+              parts.push({ type: 'ansi', value: input.slice(i, j) });
+              i = j;
+              continue;
+            }
+            const j = Math.min(i + 2, input.length);
+            parts.push({ type: 'ansi', value: input.slice(i, j) });
+            i = j;
+            continue;
+          }
+          let j = i;
+          while (j < input.length && input[j] !== '\x1b') {
+            j += 1;
+          }
+          parts.push({ type: 'text', value: input.slice(i, j) });
+          i = j;
+        }
+        return parts;
+      }
+
+      function stripEchoFromText(text) {
+        if (!pendingEcho || !text) return text;
+        if (text.startsWith(pendingEcho)) {
+          const nextText = text.slice(pendingEcho.length);
+          debugTerminal('suppress-drop-prefix', {
+            pendingLen: pendingEcho.length,
+            textLen: text.length,
+            nextLen: nextText.length,
+          });
+          pendingEcho = '';
+          return nextText;
+        }
+        if (pendingEcho.startsWith(text)) {
+          debugTerminal('suppress-drop-chunk', {
+            pendingLen: pendingEcho.length,
+            textLen: text.length,
+          });
+          pendingEcho = pendingEcho.slice(text.length);
+          return '';
+        }
+        debugTerminal('suppress-miss', {
+          pendingLen: pendingEcho.length,
+          textLen: text.length,
+          pendingPreview: visualizeText(pendingEcho),
+          textPreview: visualizeText(text),
+        });
+        return text;
+      }
+
+      function suppressEcho(chunk) {
+        if (!suppressEchoActive) return chunk;
+        if (!pendingEcho || !chunk) return chunk;
+        const parts = splitAnsiParts(chunk);
+        let output = '';
+        for (const part of parts) {
+          if (part.type === 'ansi') {
+            output += part.value;
+          } else {
+            output += stripEchoFromText(part.value);
+          }
+        }
+        return output;
+      }
+
+      function enqueueTerminalInput(text) {
+        if (!text) return;
+        debugTerminal('input-data', {
+          size: text.length,
+          preview: visualizeText(text),
+          composing: false,
+        });
+        const hasEscape = text.includes('\x1b');
+        const hasBackspace = text.includes('\x7f') || text.includes('\b');
+        if (hasBackspace || hasEscape) {
+          debugTerminal('control-input', { hasBackspace, hasEscape });
+          suppressEchoActive = false;
+          clearPendingEcho('control-input');
+        }
+        // Local echo disabled for correctness / 繝ｭ繝ｼ繧ｫ繝ｫ繧ｨ繧ｳ繝ｼ縺ｯ豁｣遒ｺ諤ｧ蜆ｪ蜈医〒辟｡蜉ｹ蛹・
+        ingestInput(text);
+      }
+
+      async function resizeTerminal() {
+        if (!terminal) return;
+        try {
+          console.debug('[terminal] resize', {
+            sessionId: terminalSessionId,
+            cols: terminal.cols,
+            rows: terminal.rows,
+          });
+          await invokeWithSession('terminal_resize', {
+            sessionId: terminalSessionId,
+            cols: terminal.cols,
+            rows: terminal.rows,
+          });
+        } catch {
+          return;
+        }
+      }
+
+      function setupTerminalEvents() {
+        if (!terminal) return;
+        terminal.onData((data) => {
+          if (!data) return;
+          enqueueTerminalInput(data);
+        });
+        terminal.onSelectionChange(() => {
+          if (!terminalCopyOnSelect) return;
+          const selection = terminal.getSelection();
+          if (!selection) return;
+          navigator.clipboard.writeText(selection).catch(() => {});
+        });
+        if (terminalContainer) {
+          terminalContainer.addEventListener('paste', (event) => {
+            const text = event.clipboardData && event.clipboardData.getData('text');
+            if (!text) return;
+            event.preventDefault();
+            ingestInput(text);
+          });
+        }
+        window.addEventListener('beforeunload', () => {
+          invokeWithSession('stop_terminal_session', { sessionId: terminalSessionId }).catch(
+            () => {}
+          );
+        });
+      }
+
+      function initTerminal() {
+        if (terminalInitialized || !terminalContainer || !window.Terminal || !window.FitAddon) {
+          return;
+        }
+        terminalInitialized = true;
+        console.debug('[terminal] init', { sessionId: terminalSessionId });
+        terminal = new window.Terminal({
+          fontFamily: settingsState.terminal_font_family,
+          fontSize: settingsState.terminal_font_size,
+          theme: terminalThemePalette(settingsState.terminal_theme),
+          scrollback: settingsState.terminal_scrollback_lines,
+          allowProposedApi: true,
+        });
+        fitAddon = new window.FitAddon.FitAddon();
+        terminal.loadAddon(fitAddon);
+        terminal.open(terminalContainer);
+        try {
+          const WebglAddonCtor =
+            window.WebglAddon &&
+            (window.WebglAddon.WebglAddon || window.WebglAddon.default || window.WebglAddon);
+          if (WebglAddonCtor) {
+            webglAddon = new WebglAddonCtor();
+            terminal.loadAddon(webglAddon);
+            debugTerminal('webgl-addon', { enabled: true });
+          }
+        } catch (err) {
+          debugTerminal('webgl-addon', { enabled: false, error: String(err) });
+          webglAddon = null;
+        }
+        fitAddon.fit();
+        lastResizeCols = terminal.cols;
+        lastResizeRows = terminal.rows;
+        terminal.focus();
+        applyTerminalSettings();
+        setupTerminalEvents();
+        registerTerminalSession().finally(() => {
+          startTerminalSession();
+          resizeTerminal();
+        });
+
+        if (resizeObserver) {
+          resizeObserver.disconnect();
+        }
+        resizeObserver = new ResizeObserver(() => {
+          if (!fitAddon || !terminal) return;
+          if (resizeDebounceTimer) {
+            clearTimeout(resizeDebounceTimer);
+          }
+          resizeDebounceTimer = setTimeout(() => {
+            resizeDebounceTimer = null;
+            if (!fitAddon || !terminal) return;
+            const beforeCols = terminal.cols;
+            const beforeRows = terminal.rows;
+            fitAddon.fit();
+            if (terminal.cols === beforeCols && terminal.rows === beforeRows) return;
+            if (terminal.cols === lastResizeCols && terminal.rows === lastResizeRows) return;
+            lastResizeCols = terminal.cols;
+            lastResizeRows = terminal.rows;
+            resizeTerminal();
+          }, 75);
+        });
+        resizeObserver.observe(terminalContainer);
+
+        terminalContainer.addEventListener('mousedown', () => {
+          terminal.focus();
+        });
+
+        const listen = getEventListen();
+        if (!listen) {
+          console.debug('[terminal] listen unavailable');
+        } else {
+          console.debug('[terminal] listen registered', { sessionId: terminalSessionId });
+          listen('terminal-output', (event) => {
+            const payload = event && event.payload;
+            if (!payload) {
+              console.debug('[terminal] output ignored', { reason: 'missing payload' });
+              return;
+            }
+          if (payload.session_id !== terminalSessionId) {
+            console.debug('[terminal] output ignored', {
+              sessionId: terminalSessionId,
+              payloadSessionId: payload.session_id,
+            });
+            return;
+          }
+          if (debugTerminalEnabled) {
+            console.debug('[terminal] output', {
+              sessionId: payload.session_id,
+              size: (payload.chunk || '').length,
+              stream: payload.stream,
+            });
+          }
+          debugTerminal('output-chunk', {
+            size: (payload.chunk || '').length,
+            preview: visualizeText(payload.chunk || ''),
+            pendingLen: pendingEcho.length,
+            suppressActive: suppressEchoActive,
+          });
+          const nextChunk = payload.chunk || '';
+          if (nextChunk) {
+            enqueueTerminalOutput(nextChunk);
+          }
+        });
+          listen('terminal-output-broadcast', (event) => {
+            const payload = event && event.payload;
+            if (!payload) {
+              if (debugTerminalEnabled) {
+                console.debug('[terminal] output broadcast ignored', { reason: 'missing payload' });
+              }
+              return;
+            }
+            if (debugTerminalEnabled) {
+              console.debug('[terminal] output broadcast', {
+                sessionId: payload.session_id,
+                size: (payload.chunk || '').length,
+                stream: payload.stream,
+              });
+            }
+          });
+          listen('terminal-exit', (event) => {
+            const payload = event && event.payload;
+            if (!payload) {
+              console.debug('[terminal] exit ignored', { reason: 'missing payload' });
+              return;
+            }
+            if (payload.session_id !== terminalSessionId) {
+              console.debug('[terminal] exit ignored', {
+                sessionId: terminalSessionId,
+                payloadSessionId: payload.session_id,
+              });
+              return;
+            }
+            console.debug('[terminal] exit', {
+              sessionId: payload.session_id,
+              code: payload.exit_code,
+            });
+            enqueueTerminalOutput(`\r\n[exit ${payload.exit_code}]\r\n`);
+          });
+          listen('terminal-error', (event) => {
+            const payload = event && event.payload;
+            if (!payload) {
+              console.debug('[terminal] error ignored', { reason: 'missing payload' });
+              return;
+            }
+            if (payload.session_id !== terminalSessionId) {
+              console.debug('[terminal] error ignored', {
+                sessionId: terminalSessionId,
+                payloadSessionId: payload.session_id,
+              });
+              return;
+            }
+            console.debug('[terminal] error', {
+              sessionId: payload.session_id,
+              message: payload.message,
+            });
+            enqueueTerminalOutput(`\r\n[error ${payload.message}]\r\n`);
+          });
+        }
+      }
+
+      function appendLine(text, kind) {
+        const line = document.createElement('div');
+        line.className = `output-line ${kind}`;
+        line.textContent = text;
+        output.appendChild(line);
+        if (followEnabled) {
+          output.scrollTop = output.scrollHeight;
+        }
+      }
+
+      output.addEventListener('scroll', () => {
+        const atBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 8;
+        if (!atBottom && followEnabled) {
+          setFollow(false);
+        }
+        if (atBottom && !followEnabled) {
+          setFollow(true);
+        }
+      });
+
+      followToggle.addEventListener('click', () => {
+        setFollow(!followEnabled);
+        if (followEnabled) {
+          output.scrollTop = output.scrollHeight;
+        }
+      });
+
+      sendBtn.addEventListener('click', () => {
+        const text = input.value.trim();
+        if (!text) return;
+        appendLine(`[you] ${text}`, 'user');
+        input.value = '';
+      });
+
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault();
+          sendBtn.click();
+        }
+      });
+
+      tiles.forEach((tile, index) => {
+        tile.addEventListener('click', async () => {
+          const alreadyFocused = tile.classList.contains('focused');
+          tiles.forEach((item) => item.classList.remove('focused'));
+          if (!alreadyFocused) {
+            tile.classList.add('focused');
+          }
+          const picked = await pickupTerminalWindowByIndex(index);
+          if (!picked) {
+            ensureTerminalWindow(tile.dataset.session);
+          }
+        });
+      });
+
+      const runArrange = document.querySelector('[data-role="run-arrange"]');
+      if (runArrange) {
+        runArrange.addEventListener('click', () => {
+          arrangeWindows();
+        });
+      }
+
+      if (isTerminalView) {
+        window.addEventListener('keydown', (event) => {
+          if (!event.ctrlKey && !event.metaKey) return;
+          if (!event.shiftKey) return;
+          if (event.key.toLowerCase() === 'j') {
+            event.preventDefault();
+            focusNextTerminal('next');
+          }
+          if (event.key.toLowerCase() === 'k') {
+            event.preventDefault();
+            focusNextTerminal('prev');
+          }
+        });
+      }
+      window.addEventListener('keydown', (event) => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        if (!event.shiftKey) return;
+        if (event.key.toLowerCase() !== 'y') return;
+        event.preventDefault();
+        arrangeWindows();
+      });
+
+      phaseButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          phaseLabel.textContent = button.dataset.phase || 'idle';
+        });
+      });
+
+      modeChips.forEach((chip) => {
+        chip.addEventListener('click', () => {
+          modeChips.forEach((item) => item.classList.remove('active'));
+          chip.classList.add('active');
+          const mode = chip.dataset.mode;
+          applyView(mode || 'chat');
+        });
+      });
+
+      function setToggleState(enabled, label) {
+        label.textContent = enabled ? 'on' : 'off';
+      }
+
+      function refreshCharacterList() {
+        if (!characterList) return;
+        characterList.innerHTML = '';
+        Array.from(characterBundles.values()).forEach((name) => {
+          const card = document.createElement('div');
+          card.className = 'character-card';
+          card.textContent = name;
+          characterList.appendChild(card);
+        });
+      }
+
+      function applySettings(next) {
+        if (!next) return;
+        Object.assign(settingsState, next);
+        settingsState.terminal_scrollback_lines = normalizeScrollback(
+          settingsState.terminal_scrollback_lines
+        );
+        notifyEnabled = settingsState.notifications_enabled;
+        audioEnabled = settingsState.audio_enabled;
+        llmEnabled = settingsState.llm_enabled;
+        terminalCopyOnSelect = settingsState.terminal_copy_on_select;
+        if (notifyState) setToggleState(notifyEnabled, notifyState);
+        if (audioState) setToggleState(audioEnabled, audioState);
+        if (llmState) setToggleState(llmEnabled, llmState);
+        if (volumeSlider) volumeSlider.value = settingsState.volume;
+        if (silenceInput) silenceInput.value = settingsState.silence_timeout_ms;
+        if (llmTool) llmTool.value = settingsState.llm_tool;
+        if (characterUploaded) characterUploaded.textContent = settingsState.character_id;
+        if (terminalTheme) terminalTheme.value = settingsState.terminal_theme;
+        if (terminalFont) terminalFont.value = settingsState.terminal_font_family;
+        if (terminalFontSize) terminalFontSize.value = settingsState.terminal_font_size;
+        if (terminalScrollback) terminalScrollback.value = settingsState.terminal_scrollback_lines;
+        if (terminalCopyState) setToggleState(terminalCopyOnSelect, terminalCopyState);
+        if (settingsState.character_id) {
+          characterBundles.add(settingsState.character_id);
+        }
+        refreshCharacterList();
+        const retention = document.querySelector('[data-role="settings-log-retention"]');
+        if (settingsState.log_retention_lines && retention) {
+          retention.value = settingsState.log_retention_lines;
+        }
+      }
+
+      async function loadSettingsFromBackend() {
+        try {
+          return await invokeWithSession('load_settings');
+        } catch {
+          return null;
+        }
+      }
+
+      async function saveSettingsToBackend() {
+        try {
+          await invokeWithSession('save_settings', { settings: settingsState });
+        } catch {
+          return;
+        }
+      }
+
+      if (notifyToggle) {
+        setToggleState(notifyEnabled, notifyState);
+        notifyToggle.addEventListener('click', () => {
+          notifyEnabled = !notifyEnabled;
+          setToggleState(notifyEnabled, notifyState);
+          settingsState.notifications_enabled = notifyEnabled;
+          saveSettingsToBackend();
+        });
+      }
+
+      if (audioToggle) {
+        setToggleState(audioEnabled, audioState);
+        audioToggle.addEventListener('click', () => {
+          audioEnabled = !audioEnabled;
+          setToggleState(audioEnabled, audioState);
+          settingsState.audio_enabled = audioEnabled;
+          saveSettingsToBackend();
+        });
+      }
+
+      if (llmToggle) {
+        setToggleState(llmEnabled, llmState);
+        llmToggle.addEventListener('click', () => {
+          llmEnabled = !llmEnabled;
+          setToggleState(llmEnabled, llmState);
+          settingsState.llm_enabled = llmEnabled;
+          saveSettingsToBackend();
+        });
+      }
+
+      if (volumeSlider) {
+        volumeSlider.addEventListener('input', () => {
+          settingsState.volume = Number(volumeSlider.value);
+          saveSettingsToBackend();
+        });
+      }
+
+      if (silenceInput) {
+        silenceInput.addEventListener('change', () => {
+          settingsState.silence_timeout_ms = Number(silenceInput.value);
+          saveSettingsToBackend();
+        });
+      }
+
+      if (llmTool) {
+        llmTool.addEventListener('change', () => {
+          settingsState.llm_tool = llmTool.value;
+          saveSettingsToBackend();
+        });
+      }
+
+      const logRetentionInput = document.querySelector('[data-role="settings-log-retention"]');
+      if (logRetentionInput) {
+        logRetentionInput.addEventListener('change', () => {
+          settingsState.log_retention_lines = Number(logRetentionInput.value);
+          saveSettingsToBackend();
+        });
+      }
+
+      if (characterUpload) {
+        characterUpload.addEventListener('change', () => {
+          const file = characterUpload.files && characterUpload.files[0];
+          if (!file) {
+            characterUploaded.textContent = 'no upload';
+            return;
+          }
+          characterUploaded.textContent = file.name;
+          const name = file.name.replace(/\.zip$/i, '');
+          settingsState.character_id = name;
+          if (characterList) {
+            characterBundles.add(name);
+            refreshCharacterList();
+          }
+          saveSettingsToBackend();
+        });
+      }
+
+      if (terminalTheme) {
+        terminalTheme.addEventListener('change', () => {
+          settingsState.terminal_theme = terminalTheme.value;
+          applyTerminalSettings();
+          saveSettingsToBackend();
+        });
+      }
+
+      if (terminalFont) {
+        terminalFont.addEventListener('change', () => {
+          settingsState.terminal_font_family = terminalFont.value.trim() || 'JetBrains Mono';
+          applyTerminalSettings();
+          saveSettingsToBackend();
+        });
+      }
+
+      if (terminalFontSize) {
+        terminalFontSize.addEventListener('change', () => {
+          settingsState.terminal_font_size = Number(terminalFontSize.value) || 13;
+          applyTerminalSettings();
+          saveSettingsToBackend();
+        });
+      }
+
+      if (terminalScrollback) {
+        terminalScrollback.addEventListener('change', () => {
+          settingsState.terminal_scrollback_lines = normalizeScrollback(terminalScrollback.value);
+          terminalScrollback.value = settingsState.terminal_scrollback_lines;
+          applyTerminalSettings();
+          saveSettingsToBackend();
+        });
+      }
+
+      if (terminalCopyToggle) {
+        terminalCopyToggle.addEventListener('click', () => {
+          terminalCopyOnSelect = !terminalCopyOnSelect;
+          settingsState.terminal_copy_on_select = terminalCopyOnSelect;
+          if (terminalCopyState) setToggleState(terminalCopyOnSelect, terminalCopyState);
+          saveSettingsToBackend();
+        });
+      }
+
+      const initialView = new URLSearchParams(window.location.search).get('view') || 'chat';
+      loadSettingsFromBackend().then((loaded) => {
+        if (loaded) {
+          applySettings(loaded);
+        } else {
+          applySettings(settingsState);
+        }
+      });
+      applyView(initialView);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,41 @@
+{
+  "productName": "yurutsuku",
+  "version": "0.0.0",
+  "identifier": "com.kitfactory.yurutsuku",
+  "build": {
+    "beforeBuildCommand": "",
+    "beforeDevCommand": "",
+    "devUrl": null,
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "capabilities": ["default"]
+    },
+    "windows": [
+      {
+        "label": "chat",
+        "title": "Chat",
+        "width": 1200,
+        "height": 800
+      },
+      {
+        "label": "run",
+        "title": "Run",
+        "width": 1200,
+        "height": 800
+      },
+      {
+        "label": "settings",
+        "title": "Settings",
+        "width": 900,
+        "height": 700
+      }
+    ]
+  },
+  "bundle": {
+    "active": false,
+    "icon": ["icons/icon.ico"]
+  }
+}

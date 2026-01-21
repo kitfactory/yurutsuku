@@ -1,0 +1,13 @@
+[package]
+name = "yurutsuku-worker"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+portable-pty = "0.8"
+yurutsuku-protocol = { path = "../protocol" }
+
+[[bin]]
+name = "yurutsuku-worker"
+path = "src/main.rs"

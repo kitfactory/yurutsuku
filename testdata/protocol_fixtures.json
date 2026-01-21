@@ -1,0 +1,43 @@
+[
+  {
+    "type": "start_session",
+    "session_id": "9f4a10d2-3d86-4e2a-9e02-1f2c72c33f1d",
+    "cmd": "cmd.exe",
+    "cwd": null,
+    "env": {"KEY": "VALUE"},
+    "cols": 120,
+    "rows": 30
+  },
+  {
+    "type": "send_input",
+    "session_id": "9f4a10d2-3d86-4e2a-9e02-1f2c72c33f1d",
+    "text": "dir"
+  },
+  {
+    "type": "resize",
+    "session_id": "9f4a10d2-3d86-4e2a-9e02-1f2c72c33f1d",
+    "cols": 100,
+    "rows": 40
+  },
+  {
+    "type": "stop_session",
+    "session_id": "9f4a10d2-3d86-4e2a-9e02-1f2c72c33f1d"
+  },
+  {
+    "type": "output",
+    "session_id": "9f4a10d2-3d86-4e2a-9e02-1f2c72c33f1d",
+    "stream": "stdout",
+    "chunk": "hello"
+  },
+  {
+    "type": "exit",
+    "session_id": "9f4a10d2-3d86-4e2a-9e02-1f2c72c33f1d",
+    "exit_code": 0
+  },
+  {
+    "type": "error",
+    "session_id": "9f4a10d2-3d86-4e2a-9e02-1f2c72c33f1d",
+    "message": "something went wrong",
+    "recoverable": true
+  }
+]

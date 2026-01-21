@@ -1,0 +1,24 @@
+[package]
+name = "yurutsuku-orchestrator"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+regex = "1.10"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tauri = { version = "2.5.3", features = ["tray-icon", "test"] }
+tauri-plugin-global-shortcut = "2.0.0"
+tauri-plugin-notification = "2.0.0"
+yurutsuku-protocol = { path = "../../../crates/protocol" }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_System_Diagnostics_Debug", "Win32_UI_WindowsAndMessaging"] }
+
+[build-dependencies]
+tauri-build = "2.5.3"
+
+[dev-dependencies]
+fantoccini = "0.19"
+tokio = { version = "1.38", features = ["macros", "rt-multi-thread", "time"] }

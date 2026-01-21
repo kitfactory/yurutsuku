@@ -1,0 +1,13 @@
+{
+  "name": "@kitfactory/yurutsuku",
+  "private": true,
+  "version": "0.0.0",
+  "bin": {
+    "yuru": "src/index.js",
+    "yurutsuku": "src/index.js"
+  },
+  "scripts": {
+    "dev": "node src/index.js",
+    "test": "echo TODO: test"
+  }
+}

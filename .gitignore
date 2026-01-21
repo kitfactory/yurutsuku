@@ -1,0 +1,10 @@
+node_modules/
+dist/
+target/
+.DS_Store
+.vscode/
+.env
+/msedgedriver.log
+/screen*.png
+/terminal-screen.png
+/plan.md
