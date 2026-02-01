@@ -3,11 +3,12 @@ const fs = require("node:fs");
 const { spawn, spawnSync } = require("node:child_process");
 const http = require("node:http");
 const { Builder, By, Capabilities, until } = require("selenium-webdriver");
+const { ensureDriversOnPath } = require("./driver_paths");
 
 const repoRoot = path.join(__dirname, "..", "..", "..");
 
 function appPath() {
-  const base = path.join(repoRoot, "target", "debug", "yurutsuku-orchestrator");
+  const base = path.join(repoRoot, "target", "debug", "nagomi-orchestrator");
   return process.platform === "win32" ? `${base}.exe` : base;
 }
 
@@ -28,18 +29,6 @@ function isWindowsProcessRunning(imageName) {
     encoding: "utf8",
   });
   return result.stdout && result.stdout.toLowerCase().includes(imageName.toLowerCase());
-}
-
-function resolveTauriDriverPath() {
-  if (process.platform !== "win32") {
-    return null;
-  }
-  const result = spawnSync("where", ["tauri-driver"], { encoding: "utf8" });
-  if (result.status !== 0) {
-    return null;
-  }
-  const line = (result.stdout || "").trim().split(/\r?\n/)[0];
-  return line || null;
 }
 
 async function waitForDriver(port, timeoutMs) {
@@ -65,19 +54,22 @@ async function main() {
   if (!exists(targetApp)) {
     throw new Error(`app binary not found: ${targetApp}`);
   }
-  const tauriDriverPath = resolveTauriDriverPath();
-  if (process.platform === "win32" && !tauriDriverPath) {
-    throw new Error("tauri-driver not found in PATH");
+  const { tauriPath, edgePath } = ensureDriversOnPath();
+  if (process.platform === "win32" && !tauriPath) {
+    throw new Error("tauri-driver not found (set NAGOMI_TAURI_DRIVER or update PATH)");
   }
-  if (process.platform === "win32" && isWindowsProcessRunning("yurutsuku-orchestrator.exe")) {
-    throw new Error("yurutsuku-orchestrator already running");
+  if (process.platform === "win32" && !edgePath) {
+    throw new Error("msedgedriver not found (set NAGOMI_EDGE_DRIVER or update PATH)");
   }
-  if (process.platform === "win32" && isWindowsProcessRunning("yurutsuku-worker.exe")) {
-    throw new Error("yurutsuku-worker already running");
+  if (process.platform === "win32" && isWindowsProcessRunning("nagomi-orchestrator.exe")) {
+    throw new Error("nagomi-orchestrator already running");
+  }
+  if (process.platform === "win32" && isWindowsProcessRunning("nagomi-worker.exe")) {
+    throw new Error("nagomi-worker already running");
   }
 
   const driverPort = 4450;
-  const driver = spawn(tauriDriverPath, ["--port", String(driverPort)], { stdio: "inherit" });
+  const driver = spawn(tauriPath, ["--port", String(driverPort)], { stdio: "inherit" });
   let client;
   try {
     await waitForDriver(driverPort, 10000);
@@ -97,30 +89,63 @@ async function main() {
     await client.manage().setTimeouts({ script: 40000, implicit: 0, pageLoad: 30000 });
     await client.wait(until.elementLocated(By.css("[data-role='chat-main']")), 30000);
 
-    const result = await client.executeAsyncScript(function (done) {
-      const invoke =
-        (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) ||
-        (window.__TAURI__ && window.__TAURI__.invoke);
-      if (!invoke) {
-        done({ error: "invoke not available" });
+    await client.executeScript("applyView('terminal'); if (typeof initTerminal==='function') initTerminal();");
+    await client.wait(until.elementLocated(By.css("#terminal-container")), 10000);
+
+    const ready = await client.executeAsyncScript(function (done) {
+      const listen =
+        window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen
+          ? window.__TAURI__.event.listen
+          : null;
+      if (!listen) {
+        done({ error: "event.listen not available" });
         return;
       }
-      invoke("ipc_session_open", { clientEpoch: Date.now() })
-        .then((snapshot) => {
-          const sessionId = snapshot && snapshot.sessionId ? snapshot.sessionId : null;
-          if (!sessionId) {
-            throw new Error("ipc_session_open returned no session");
-          }
-          return invoke("terminal_smoke", { ipcSessionId: sessionId, timeoutMs: 30000 });
-        })
-        .then(() => done({ ok: true }))
-        .catch((err) => done({ error: String(err) }));
+      if (!window.nagomiTest || !window.nagomiTest.getTerminalSessionId) {
+        done({ error: "nagomiTest hook not available" });
+        return;
+      }
+      const sessionId = window.nagomiTest.getTerminalSessionId();
+      window.__e2eTerminalEvents = [];
+      listen("terminal-output", (event) => {
+        if (event && event.payload && event.payload.session_id === sessionId) {
+          window.__e2eTerminalEvents.push(event.payload.chunk || "");
+        }
+      });
+      done({ ok: true });
     });
 
-    if (!result || result.error) {
-      throw new Error(result && result.error ? result.error : "terminal_smoke failed");
+    if (!ready || ready.error) {
+      throw new Error(ready && ready.error ? ready.error : "terminal listener setup failed");
     }
-    console.log("[e2e] terminal_smoke ok");
+
+    await client.executeScript(
+      "return window.nagomiTest.sendTerminalInput(arguments[0]);",
+      process.platform === "win32" ? "echo ok\r\n" : "echo ok\n"
+    );
+
+    const outputOk = await client.executeAsyncScript(function (done) {
+      const deadline = Date.now() + 15000;
+      const tick = () => {
+        const chunks = window.__e2eTerminalEvents || [];
+        const joined = chunks.join("");
+        if (joined.toLowerCase().includes("ok")) {
+          done({ ok: true });
+          return;
+        }
+        if (Date.now() > deadline) {
+          done({ error: "timeout waiting for output" });
+          return;
+        }
+        setTimeout(tick, 200);
+      };
+      tick();
+    });
+
+    if (!outputOk || outputOk.error) {
+      throw new Error(outputOk && outputOk.error ? outputOk.error : "terminal output missing");
+    }
+    console.log("[e2e] terminal output ok");
   } finally {
     if (client) {
       await client.quit();

@@ -101,7 +101,7 @@ pub fn notify_flow<T: ToastSink, A: AudioSink>(
     summary: &str,
     settings: &NotifySettings,
 ) -> Result<bool> {
-    if !matches!(state, JudgeState::Failure | JudgeState::Attention) {
+    if !matches!(state, JudgeState::Failure | JudgeState::NeedInput) {
         return Ok(false);
     }
     if !cooldown.should_notify(now) {
@@ -110,8 +110,8 @@ pub fn notify_flow<T: ToastSink, A: AudioSink>(
 
     let title = match state {
         JudgeState::Failure => "failure",
-        JudgeState::Attention => "attention",
         JudgeState::Success => "success",
+        JudgeState::NeedInput => "need_input",
     };
     let body = if summary.is_empty() { "no summary" } else { summary };
 
@@ -233,7 +233,7 @@ mod tests {
             &audio,
             &cooldown,
             SystemTime::UNIX_EPOCH + Duration::from_millis(2000),
-            JudgeState::Attention,
+            JudgeState::NeedInput,
             "summary",
             &settings,
         )

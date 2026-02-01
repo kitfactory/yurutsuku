@@ -1,13 +1,10 @@
 /* eslint-disable no-var */
 // Terminal observation utilities (P0).
-// ターミナル観測ユーティリティ（P0）。
-//
-// Goals / 目的:
+// ターミナル観測ユーチE��リチE���E�E0�E�、E//
+// Goals / 目皁E
 // - Keep the core logic pure & testable in Node.
-//   コアロジックを純粋関数にして Node でテストできるようにする。
-// - Provide a browser-friendly global (`window.TerminalObserver`) without bundlers.
-//   バンドラ無しでも使えるように `window.TerminalObserver` を提供する。
-
+//   コアロジチE��を純粋関数にして Node でチE��トできるようにする、E// - Provide a browser-friendly global (`window.TerminalObserver`) without bundlers.
+//   バンドラ無しでも使えるように `window.TerminalObserver` を提供する、E
 (function factory(root, init) {
   if (typeof module === 'object' && module && typeof module.exports === 'object') {
     module.exports = init();
@@ -18,19 +15,16 @@
   'use strict';
 
   var ObservationState = Object.freeze({
+    idle: 'idle',
     running: 'running',
     needInput: 'need-input',
-    stalled: 'stalled',
     success: 'success',
     fail: 'fail',
   });
 
   // P0 defaults (hard-coded OK for now).
-  // P0 既定値（当面ハードコードでOK）。
   var DEFAULT_THRESHOLDS_MS = Object.freeze({
     observeTickMs: 1000,
-    needInputMs: 15 * 1000,
-    stalledMs: 60 * 1000,
   });
 
   function tailForObservation(text, maxChars) {
@@ -40,11 +34,18 @@
     return normalized.slice(Math.max(0, normalized.length - limit));
   }
 
+  function stripAnsi(text) {
+    if (!text) return '';
+    return String(text)
+      .replace(/\x1b\][^\x07]*(\x07|\x1b\\)/g, '')
+      .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
+      .replace(/\x1b./g, '');
+  }
+
   function looksLikeNeedInput(tail) {
     if (!tail) return false;
     // Heuristic prompt detection (limited to avoid false positives).
-    // 限定的なプロンプト検知（誤爆回避優先）。
-    var needle = String(tail).toLowerCase();
+    var needle = stripAnsi(tail).toLowerCase();
     return (
       needle.includes('press enter') ||
       needle.includes('press return') ||
@@ -57,25 +58,35 @@
     );
   }
 
-  /**
-   * Compute observed state.
-   * 観測状態を計算する。
-   *
-   * @param {object} input
-   * @param {number} input.nowMs - current time (ms)
-   * @param {number} input.lastOutputAtMs - last output time (ms)
-   * @param {string} input.lastTail - tail text (recent output)
-   * @param {number|null} input.exitCode - exit code or null when alive
-   * @param {object} [input.thresholdsMs] - override thresholds
-   * @returns {{state:string, reason:string, idleMs:number}}
-   */
+  function looksLikeShellPrompt(tail) {
+    if (!tail) return false;
+    var cleaned = stripAnsi(tail);
+    var trimmedAll = cleaned.replace(/\s+$/g, '');
+    if (!trimmedAll) return false;
+    var lines = cleaned.split('\n');
+    var last = lines[lines.length - 1] || '';
+    var trimmed = last.trim();
+    if (trimmed) {
+      if (/^PS\s+.+>\s*$/.test(trimmed)) return true;
+      if (/^[A-Za-z]:[\\/].*>\s*$/.test(trimmed)) return true;
+      if (/^[^@\s]+@[^\s]+:.*[#$]\s*$/.test(trimmed)) return true;
+      if (/[^\s][#$]\s*$/.test(trimmed)) return true;
+    }
+    if (/PS\s+.+>\s*$/.test(trimmedAll)) return true;
+    if (/[A-Za-z]:[\\/][^\r\n]*>\s*$/.test(trimmedAll)) return true;
+    if (/[^@\s]+@[^\s]+:[^\r\n]*[#$]\s*$/.test(trimmedAll)) return true;
+    return false;
+  }
+
   function computeState(input) {
     var nowMs = input && typeof input.nowMs === 'number' ? input.nowMs : Date.now();
     var lastOutputAtMs =
       input && typeof input.lastOutputAtMs === 'number' ? input.lastOutputAtMs : nowMs;
     var lastTail = (input && input.lastTail) || '';
     var exitCode = input && Object.prototype.hasOwnProperty.call(input, 'exitCode') ? input.exitCode : null;
-    var thresholds = (input && input.thresholdsMs) || DEFAULT_THRESHOLDS_MS;
+    var commandActive = input && Object.prototype.hasOwnProperty.call(input, 'commandActive')
+      ? Boolean(input.commandActive)
+      : true;
 
     if (exitCode !== null && exitCode !== undefined) {
       if (exitCode === 0) {
@@ -85,27 +96,32 @@
     }
 
     var idleMs = Math.max(0, nowMs - lastOutputAtMs);
-    if (idleMs >= thresholds.needInputMs && looksLikeNeedInput(lastTail)) {
-      return { state: ObservationState.needInput, reason: 'prompt-like tail + idle', idleMs: idleMs };
+    if (looksLikeNeedInput(lastTail)) {
+      return { state: ObservationState.needInput, reason: 'prompt-like tail', idleMs: idleMs };
     }
-    if (idleMs >= thresholds.stalledMs) {
-      return { state: ObservationState.stalled, reason: 'idle', idleMs: idleMs };
+    if (!commandActive) {
+      return { state: ObservationState.idle, reason: 'idle', idleMs: idleMs };
     }
-    return { state: ObservationState.running, reason: 'recent output', idleMs: idleMs };
+    if (looksLikeShellPrompt(lastTail)) {
+      return { state: ObservationState.success, reason: 'shell prompt', idleMs: idleMs };
+    }
+    return { state: ObservationState.running, reason: 'running', idleMs: idleMs };
   }
 
   function assetPathForState(state) {
     switch (state) {
       case ObservationState.success:
-        return 'assets/watcher/nagomisan_success.png';
+        return 'assets/watcher/nagomisan_full_idle.png';
       case ObservationState.fail:
-        return 'assets/watcher/nagomisan_fail.png';
+        return 'assets/watcher/nagomisan_full_fail.png';
       case ObservationState.needInput:
-        return 'assets/watcher/nagomisan_need-input.png';
-      case ObservationState.stalled:
-        return 'assets/watcher/nagomisan_stalled.png';
+        return 'assets/watcher/nagomisan_full_need-input.png';
+      case ObservationState.running:
+        return 'assets/watcher/nagomisan_full_running.png';
+      case ObservationState.idle:
+        return 'assets/watcher/nagomisan_full_idle.png';
       default:
-        return 'assets/watcher/nagomisan_running.png';
+        return 'assets/watcher/nagomisan_full_idle.png';
     }
   }
 
@@ -114,7 +130,13 @@
     DEFAULT_THRESHOLDS_MS: DEFAULT_THRESHOLDS_MS,
     tailForObservation: tailForObservation,
     looksLikeNeedInput: looksLikeNeedInput,
+    looksLikeShellPrompt: looksLikeShellPrompt,
     computeState: computeState,
+    TerminalStateDetector: Object.freeze({
+      computeState: computeState,
+      tailForObservation: tailForObservation,
+      looksLikeNeedInput: looksLikeNeedInput,
+    }),
     assetPathForState: assetPathForState,
   });
 });

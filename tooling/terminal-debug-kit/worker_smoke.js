@@ -5,7 +5,7 @@ const { spawn, spawnSync } = require("node:child_process");
 const { parseLine, serializeMessage } = require("../../packages/protocol/src/index.js");
 
 function resolveWorkerPath() {
-  const exeName = process.platform === "win32" ? "yurutsuku-worker.exe" : "yurutsuku-worker";
+  const exeName = process.platform === "win32" ? "nagomi-worker.exe" : "nagomi-worker";
   const repoRoot = path.join(__dirname, "..", "..");
   const candidate = path.join(repoRoot, "target", "debug", exeName);
   return fs.existsSync(candidate) ? candidate : null;
@@ -41,7 +41,7 @@ function ensureWorkerBinary(workerPath, shouldBuild) {
     throw new Error("worker binary not found; run with --build or build manually");
   }
   const repoRoot = path.join(__dirname, "..", "..");
-  const build = spawnSync("cargo", ["build", "-p", "yurutsuku-worker"], {
+  const build = spawnSync("cargo", ["build", "-p", "nagomi-worker"], {
     cwd: repoRoot,
     stdio: "inherit",
   });

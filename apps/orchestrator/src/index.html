@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>yurutsuku</title>
+    <title>nagomi</title>
     <script>
       (() => {
         try {
@@ -21,16 +21,63 @@
 
       :root {
         color-scheme: light;
-        --bg: #f6f1e6;
-        --bg-2: #efe5d5;
+        --bg: #f0ede7;
+        --bg-2: #e7e1d7;
         --ink: #1f2429;
         --ink-soft: #4a4f55;
+        --muted: #7a7f85;
         --accent: #1f7a8c;
         --accent-2: #f26a3d;
-        --panel: #ffffff;
-        --panel-border: #e1d6c6;
-        --shadow: 0 20px 40px rgba(27, 25, 22, 0.14);
+        --bg-accent-1: rgba(31, 122, 140, 0.07);
+        --bg-accent-2: rgba(242, 106, 61, 0.06);
+        --panel: #f7f3ed;
+        --panel-border: #d8d0c5;
+        --shadow: 0 18px 36px rgba(27, 25, 22, 0.12);
+        --settings-panel: #f7f3ed;
+        --settings-card: #fbf6ee;
+        --settings-border: #d8d0c5;
+        --settings-ink: #1f2429;
+        --settings-ink-soft: #4a4f55;
+        --settings-note: #7a7f85;
+        --settings-shadow: 0 16px 28px rgba(27, 25, 22, 0.14);
+        --settings-accent: #1f7a8c;
+        --settings-accent-border: rgba(31, 122, 140, 0.55);
+        --settings-accent-bg: rgba(31, 122, 140, 0.08);
+        --toggle-track-off: rgba(0, 0, 0, 0.12);
+        --toggle-thumb: #ffffff;
         --radius: 18px;
+        --terminal-state-running: 66, 133, 244;
+        --terminal-state-need-input: 242, 166, 66;
+        --terminal-state-success: 72, 187, 120;
+        --terminal-state-fail: 220, 80, 80;
+      }
+
+      html[data-theme='dark'] {
+        color-scheme: dark;
+        --bg: #0c1116;
+        --bg-2: #121a22;
+        --ink: #e7ecf2;
+        --ink-soft: #b0bac6;
+        --muted: #8b96a4;
+        --accent: #4db3c7;
+        --accent-2: #f28a63;
+        --bg-accent-1: rgba(77, 179, 199, 0.16);
+        --bg-accent-2: rgba(242, 138, 99, 0.12);
+        --panel: #151c24;
+        --panel-border: #2b3440;
+        --shadow: 0 22px 40px rgba(0, 0, 0, 0.5);
+        --settings-panel: #11161b;
+        --settings-card: #181f27;
+        --settings-border: #2b3440;
+        --settings-ink: #e7ecf2;
+        --settings-ink-soft: #b0bac6;
+        --settings-note: #8b96a4;
+        --settings-shadow: 0 22px 36px rgba(0, 0, 0, 0.45);
+        --settings-accent: #4db3c7;
+        --settings-accent-border: rgba(77, 179, 199, 0.55);
+        --settings-accent-bg: rgba(77, 179, 199, 0.14);
+        --toggle-track-off: rgba(255, 255, 255, 0.18);
+        --toggle-thumb: #f6f1e6;
       }
 
       * {
@@ -41,8 +88,8 @@
         margin: 0;
         font-family: 'Space Grotesk', sans-serif;
         color: var(--ink);
-        background: radial-gradient(circle at 10% 20%, #fff7ea, var(--bg)) fixed,
-          linear-gradient(135deg, rgba(31, 122, 140, 0.08), rgba(242, 106, 61, 0.08));
+        background: radial-gradient(circle at 10% 20%, var(--bg-2), var(--bg)) fixed,
+          linear-gradient(135deg, var(--bg-accent-1), var(--bg-accent-2));
         min-height: 100vh;
       }
 
@@ -68,7 +115,7 @@
 
       .mode-chip {
         border: 1px solid var(--panel-border);
-        background: #fffaf2;
+        background: var(--panel);
         color: var(--ink);
         padding: 6px 12px;
         border-radius: 999px;
@@ -216,7 +263,8 @@
         border: 1px solid var(--panel-border);
         font-family: 'Space Grotesk', sans-serif;
         font-size: 14px;
-        background: #faf7f0;
+        background: var(--panel);
+        color: var(--ink);
       }
 
       .input-area button {
@@ -346,52 +394,182 @@
         inset: 0;
         background: transparent;
         pointer-events: none;
+        z-index: 2;
         transition: background 140ms ease;
       }
 
       .terminal-shell.state-running::after {
-        background: rgba(140, 170, 165, 0.08);
+        background: rgba(var(--terminal-state-running), 0.45);
       }
 
       .terminal-shell.state-need-input::after {
-        background: rgba(140, 160, 190, 0.08);
-      }
-
-      .terminal-shell.state-stalled::after {
-        background: rgba(190, 170, 140, 0.08);
+        background: rgba(var(--terminal-state-need-input), 0.55);
       }
 
       .terminal-shell.state-success::after {
-        background: rgba(150, 190, 160, 0.1);
+        background: rgba(var(--terminal-state-success), 0.35);
       }
 
       .terminal-shell.state-fail::after {
-        background: rgba(200, 140, 140, 0.1);
+        background: rgba(var(--terminal-state-fail), 0.6);
+      }
+
+      .terminal-shell.state-running,
+      .terminal-shell.state-need-input,
+      .terminal-shell.state-success,
+      .terminal-shell.state-fail {
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
+      }
+
+      .terminal-shell.state-running {
+        box-shadow: 0 0 0 2px rgba(var(--terminal-state-running), 0.9);
+      }
+
+      .terminal-shell.state-need-input {
+        box-shadow: 0 0 0 2px rgba(var(--terminal-state-need-input), 0.9);
+      }
+
+      .terminal-shell.state-success {
+        box-shadow: 0 0 0 2px rgba(var(--terminal-state-success), 0.9);
+      }
+
+      .terminal-shell.state-fail {
+        box-shadow: 0 0 0 2px rgba(var(--terminal-state-fail), 0.9);
       }
 
       .terminal-watcher {
         position: absolute;
         right: 18px;
         bottom: 18px;
-        width: 84px;
-        height: 84px;
-        border-radius: 30px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(15, 23, 42, 0.62);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
+        width: 96px;
+        height: 192px;
+        display: none;
+        background: transparent;
+        border: none;
+        box-shadow: none;
         z-index: 4;
         user-select: none;
-        backdrop-filter: blur(8px);
+        pointer-events: none;
       }
 
       .terminal-watcher img {
-        width: 78px;
-        height: 78px;
+        width: 96px;
+        height: 192px;
         display: block;
         image-rendering: auto;
+      }
+
+      html.watcher-only,
+      body.watcher-only {
+        background: transparent;
+      }
+
+      body.watcher-only {
+        overflow: hidden;
+      }
+
+      body.watcher-only .app {
+        background: transparent;
+      }
+
+      body.watcher-only header,
+      body.watcher-only .chat-main,
+      body.watcher-only .chat-toolbar,
+      body.watcher-only .run-board,
+      body.watcher-only .settings-board,
+      body.watcher-only .mode-switch,
+      body.watcher-only #terminal-container,
+      body.watcher-only .terminal-debug-badge,
+      body.watcher-only .terminal-debug-action,
+      body.watcher-only h2 {
+        display: none !important;
+      }
+
+      body.watcher-only .terminal-board {
+        display: block !important;
+        background: transparent;
+      }
+
+      body.watcher-only .terminal-shell {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+      }
+
+      body.watcher-only .terminal-watcher {
+        display: block;
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+      }
+
+      .terminal-debug-badge {
+        position: absolute;
+        left: 18px;
+        right: 140px;
+        bottom: 18px;
+        padding: 6px 8px;
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #e2e8f0;
+        font-size: 10px;
+        font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          'Liberation Mono', 'Courier New', monospace;
+        max-width: calc(100% - 180px);
+        z-index: 5;
+        pointer-events: none;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .terminal-debug-action {
+        position: absolute;
+        left: 18px;
+        top: 18px;
+        padding: 6px 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(15, 23, 42, 0.7);
+        color: #e2e8f0;
+        font-size: 11px;
+        font-family: 'Space Grotesk', sans-serif;
+        cursor: pointer;
+        z-index: 5;
+      }
+
+      .terminal-debug-action[data-role='terminal-debug-screenshot'] {
+        top: 52px;
+      }
+
+      .terminal-debug-action:active {
+        transform: translateY(1px);
+      }
+
+      .terminal-debug-toggle {
+        position: absolute;
+        right: 18px;
+        top: 18px;
+        z-index: 8;
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 11px;
+        font-weight: 600;
+        border: 1px solid rgba(142, 138, 120, 0.6);
+        background: rgba(25, 26, 24, 0.78);
+        color: #f7f2e6;
+        cursor: pointer;
+        letter-spacing: 0.01em;
+      }
+
+      .terminal-debug-toggle:hover {
+        background: rgba(36, 38, 33, 0.92);
+      }
+
+      .terminal-shell.debug-ui-hidden .terminal-debug-badge,
+      .terminal-shell.debug-ui-hidden .terminal-debug-action {
+        display: none;
       }
 
       #terminal-container {
@@ -401,6 +579,8 @@
 
       .terminal-shell .xterm {
         height: 100%;
+        position: relative;
+        z-index: 1;
       }
 
       .panel {
@@ -412,14 +592,18 @@
       }
 
       .settings-board {
-        background: var(--panel);
+        background: var(--settings-panel);
         border-radius: var(--radius);
-        border: 1px solid var(--panel-border);
+        border: 1px solid var(--settings-border);
         padding: 22px 24px;
-        box-shadow: var(--shadow);
+        box-shadow: var(--settings-shadow);
         display: flex;
         flex-direction: column;
         gap: 16px;
+        color: var(--settings-ink);
+        accent-color: var(--settings-accent);
+        max-width: 1040px;
+        margin: 0 auto;
       }
 
       .settings-grid {
@@ -429,13 +613,34 @@
       }
 
       .settings-card {
-        background: #fffaf2;
-        border: 1px solid var(--panel-border);
+        background: var(--settings-card);
+        border: 1px solid var(--settings-border);
         border-radius: 16px;
         padding: 16px;
         display: flex;
         flex-direction: column;
         gap: 12px;
+      }
+
+      .settings-card--agent {
+        border-color: var(--settings-accent-border);
+        background: linear-gradient(
+            135deg,
+            var(--settings-accent-bg),
+            transparent 55%
+          ),
+          var(--settings-card);
+      }
+
+      .settings-card--appearance {
+        border-color: var(--settings-accent-border);
+        background: linear-gradient(
+            135deg,
+            var(--settings-accent-bg),
+            transparent 55%
+          ),
+          var(--settings-card);
+        grid-column: 1 / -1;
       }
 
       .settings-card h3 {
@@ -449,15 +654,52 @@
         justify-content: space-between;
         gap: 8px;
         font-size: 13px;
-        color: var(--ink-soft);
+        color: var(--settings-ink-soft);
+      }
+
+      .settings-board .settings-row {
+        justify-content: flex-start;
+        gap: 12px;
+      }
+
+      .settings-board .settings-row > span {
+        min-width: 140px;
+      }
+
+      .settings-row--single {
+        justify-content: flex-start;
+      }
+
+      .settings-note {
+        margin: 0;
+        font-size: 12px;
+        color: var(--settings-note);
+      }
+
+      .settings-note-line {
+        display: block;
+        margin-top: 4px;
+      }
+
+      .settings-note-line:first-child {
+        margin-top: 0;
       }
 
       .settings-row strong {
-        color: var(--ink);
+        color: var(--settings-ink);
       }
 
       .settings-row select,
       .settings-row input[type="number"],
+      .settings-row input[type="text"] {
+        width: 140px;
+        border: 1px solid var(--settings-border);
+        border-radius: 8px;
+        padding: 4px 6px;
+        background: var(--settings-panel);
+        color: var(--settings-ink);
+      }
+
       .settings-row input[type="range"] {
         width: 140px;
       }
@@ -467,7 +709,7 @@
         flex-direction: column;
         gap: 8px;
         font-size: 13px;
-        color: var(--ink-soft);
+        color: var(--settings-ink-soft);
       }
 
       .settings-upload input[type="file"] {
@@ -481,12 +723,12 @@
       }
 
       .character-card {
-        border: 1px dashed var(--panel-border);
+        border: 1px dashed var(--settings-border);
         border-radius: 12px;
         padding: 10px;
-        background: #fff;
+        background: var(--settings-panel);
         font-size: 12px;
-        color: var(--ink-soft);
+        color: var(--settings-ink-soft);
       }
 
       .character {
@@ -525,7 +767,7 @@
 
       .phase-controls button {
         border: 1px solid var(--panel-border);
-        background: #fffaf2;
+        background: var(--panel);
         color: var(--ink);
         padding: 6px 10px;
         border-radius: 999px;
@@ -535,12 +777,75 @@
 
       .toggle {
         border: 1px solid var(--panel-border);
-        background: #faf7f0;
+        background: var(--panel);
         color: var(--ink);
         padding: 8px 12px;
         border-radius: 10px;
         font-size: 12px;
         cursor: pointer;
+      }
+
+      .toggle-switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        font-weight: 600;
+      }
+
+      .toggle-switch .toggle-state {
+        font-size: 11px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        min-width: 28px;
+        text-align: left;
+        color: var(--settings-ink);
+      }
+
+      .toggle-switch .toggle-track {
+        width: 36px;
+        height: 18px;
+        border-radius: 999px;
+        background: var(--toggle-track-off);
+        border: 1px solid var(--panel-border);
+        position: relative;
+        transition: background 160ms ease, border-color 160ms ease;
+      }
+
+      .toggle-switch .toggle-thumb {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--toggle-thumb);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        position: absolute;
+        top: 50%;
+        left: 2px;
+        transform: translateY(-50%);
+        transition: left 160ms ease;
+      }
+
+      .toggle-switch[data-state='on'] .toggle-track {
+        background: var(--settings-accent);
+        border-color: var(--settings-accent-border);
+      }
+
+      .toggle-switch[data-state='on'] .toggle-thumb {
+        left: calc(100% - 16px);
+      }
+
+      .toggle-switch[data-state='off'] .toggle-state {
+        color: var(--settings-ink-soft);
+      }
+
+      .settings-board .toggle {
+        border-color: var(--settings-border);
+        background: var(--settings-panel);
+        color: var(--settings-ink);
+      }
+
+      html[data-theme='dark'] .settings-board {
+        color-scheme: dark;
       }
 
       @media (max-width: 980px) {
@@ -631,24 +936,36 @@
         <div class="brand">
           <div class="brand-mark" aria-hidden="true"></div>
           <div>
-            <h1>yurutsuku</h1>
-            <span data-role="mode-subtitle">chat mode</span>
+            <h1>nagomi</h1>
+            <span data-role="mode-subtitle" data-i18n="mode.chat">chat mode</span>
           </div>
         </div>
         <nav data-role="mode-switch">
-          <button class="mode-chip active" data-role="mode-chip" data-mode="chat" type="button">
+          <button
+            class="mode-chip active"
+            data-role="mode-chip"
+            data-mode="chat"
+            data-i18n="nav.chat"
+            type="button"
+          >
             chat
           </button>
-          <button class="mode-chip" data-role="mode-chip" data-mode="run" type="button">
+          <button
+            class="mode-chip"
+            data-role="mode-chip"
+            data-mode="run"
+            data-i18n="nav.run"
+            type="button"
+          >
             run
           </button>
         </nav>
         <div class="toolbar" data-role="chat-toolbar">
           <div class="pill">
-            follow
+            <span data-i18n="toolbar.follow">follow</span>
             <strong id="follow-state">on</strong>
           </div>
-          <button class="toggle" data-role="follow-toggle" type="button">
+          <button class="toggle" data-role="follow-toggle" data-i18n="toolbar.follow_toggle" type="button">
             toggle follow
           </button>
         </div>
@@ -657,136 +974,320 @@
       <div class="main" data-role="chat-main">
         <section class="lane">
           <div class="lane-header">
-            <h2>conversation lane</h2>
-            <span class="pill">session: draft</span>
+            <h2 data-i18n="chat.lane_title">conversation lane</h2>
+            <span class="pill" data-i18n="chat.session_draft">session: draft</span>
           </div>
           <div class="lane-body">
             <div class="output" data-role="chat-lane" id="output">
-              <div class="output-line system">[system] lane ready</div>
-              <div class="output-line user">[you] type a command to continue</div>
+              <div class="output-line system" data-i18n="chat.system_ready">
+                [system] lane ready
+              </div>
+              <div class="output-line user" data-i18n="chat.user_hint">
+                [you] type a command to continue
+              </div>
             </div>
             <div class="input-area">
               <textarea
                 id="chat-input"
                 data-role="chat-input"
+                data-i18n-placeholder="chat.input_placeholder"
                 placeholder="type here and press send"
               ></textarea>
-              <button id="send-btn" type="button">send</button>
+              <button id="send-btn" type="button" data-i18n="chat.send">
+                send
+              </button>
             </div>
           </div>
         </section>
 
         <aside class="sidebar">
           <div class="panel">
-            <h3>status</h3>
-            <p class="status-line">phase: idle</p>
-            <p class="status-line">silence timeout: 3.5s</p>
+            <h3 data-i18n="status.title">status</h3>
+            <p class="status-line" data-i18n="status.phase_idle">phase: idle</p>
+            <p class="status-line" data-i18n="status.silence_timeout">
+              silence timeout: 30s
+            </p>
           </div>
           <div class="panel character">
-            <div class="avatar">character</div>
+            <div class="avatar" data-i18n="character.title">character</div>
             <p class="status-line">
-              expression: <strong data-role="character-phase">idle</strong>
+              <span data-i18n="character.expression">expression:</span>
+              <strong data-role="character-phase">idle</strong>
             </p>
             <div class="phase-controls" data-role="phase-controls">
-              <button type="button" data-role="phase-button" data-phase="idle">idle</button>
-              <button type="button" data-role="phase-button" data-phase="thinking">thinking</button>
-              <button type="button" data-role="phase-button" data-phase="success">success</button>
-              <button type="button" data-role="phase-button" data-phase="error">error</button>
-              <button type="button" data-role="phase-button" data-phase="attention">attention</button>
+              <button type="button" data-role="phase-button" data-phase="idle" data-i18n="phase.idle">
+                idle
+              </button>
+              <button type="button" data-role="phase-button" data-phase="thinking" data-i18n="phase.thinking">
+                thinking
+              </button>
+              <button type="button" data-role="phase-button" data-phase="success" data-i18n="phase.success">
+                success
+              </button>
+              <button type="button" data-role="phase-button" data-phase="error" data-i18n="phase.error">
+                error
+              </button>
+              <button type="button" data-role="phase-button" data-phase="need_input" data-i18n="phase.need_input">
+                need input
+              </button>
             </div>
           </div>
         </aside>
       </div>
 
       <section class="run-board hidden" data-role="run-board">
-        <h2>session board</h2>
+        <h2 data-i18n="run.title">session board</h2>
         <div class="settings-row" style="justify-content: flex-start; gap: 12px; margin-bottom: 12px;">
-          <button class="toggle" data-role="run-arrange" type="button">arrange windows</button>
-          <span class="status-line">tile layout: 1 row / 2 rows (5+) / 3 rows (9+)</span>
+          <button class="toggle" data-role="run-arrange" data-i18n="run.arrange" type="button">
+            arrange windows
+          </button>
+          <span class="status-line" data-i18n="run.layout_hint">
+            tile layout: 1 row / 2 rows (5+) / 3 rows (9+)
+          </span>
         </div>
         <div class="tiles" data-role="run-tiles">
           <div class="tile" data-role="run-tile" data-session="session-01">
             <div class="tile-header">
-              <small>session 01</small>
-              <span class="tile-status">running</span>
+              <small data-i18n="run.session_01">session 01</small>
+              <span class="tile-status" data-i18n="status.running">running</span>
             </div>
             <div class="tile-header">
-              <strong>build</strong>
+              <strong data-i18n="run.sample.build">build</strong>
               <span class="tile-face" data-role="run-tile-face">:)</span>
             </div>
-            <div class="tile-output">[log] cargo build ...</div>
+            <div class="tile-output" data-i18n="run.sample.build_log">[log] cargo build ...</div>
           </div>
           <div class="tile" data-role="run-tile" data-session="session-02">
             <div class="tile-header">
-              <small>session 02</small>
-              <span class="tile-status">idle</span>
+              <small data-i18n="run.session_02">session 02</small>
+              <span class="tile-status" data-i18n="status.idle">idle</span>
             </div>
             <div class="tile-header">
-              <strong>lint</strong>
+              <strong data-i18n="run.sample.lint">lint</strong>
               <span class="tile-face" data-role="run-tile-face">:|</span>
             </div>
-            <div class="tile-output">[log] waiting ...</div>
+            <div class="tile-output" data-i18n="run.sample.lint_log">[log] waiting ...</div>
           </div>
           <div class="tile" data-role="run-tile" data-session="session-03">
             <div class="tile-header">
-              <small>session 03</small>
-              <span class="tile-status">success</span>
+              <small data-i18n="run.session_03">session 03</small>
+              <span class="tile-status" data-i18n="status.success">success</span>
             </div>
             <div class="tile-header">
-              <strong>test</strong>
+              <strong data-i18n="run.sample.test">test</strong>
               <span class="tile-face" data-role="run-tile-face">:D</span>
             </div>
-            <div class="tile-output">[log] ok 124 passed</div>
+            <div class="tile-output" data-i18n="run.sample.test_log">[log] ok 124 passed</div>
           </div>
           <div class="tile" data-role="run-tile" data-session="session-04">
             <div class="tile-header">
-              <small>session 04</small>
-              <span class="tile-status">error</span>
+              <small data-i18n="run.session_04">session 04</small>
+              <span class="tile-status" data-i18n="status.error">error</span>
             </div>
             <div class="tile-header">
-              <strong>ship</strong>
+              <strong data-i18n="run.sample.ship">ship</strong>
               <span class="tile-face" data-role="run-tile-face">:(</span>
             </div>
-            <div class="tile-output">[log] failed: auth</div>
+            <div class="tile-output" data-i18n="run.sample.ship_log">[log] failed: auth</div>
           </div>
         </div>
       </section>
 
       <section class="terminal-board hidden" data-role="terminal-board">
-        <h2>terminal</h2>
+        <h2 data-i18n="terminal.title">terminal</h2>
         <div class="terminal-shell">
           <div id="terminal-container" data-role="terminal-container"></div>
           <div class="terminal-watcher" data-role="terminal-watcher" title="running">
             <img
               data-role="terminal-watcher-image"
               alt="watcher"
-              src="assets/watcher/nagomisan_running.png"
-              width="78"
-              height="78"
+              src="assets/watcher/nagomisan_full_idle.png"
+              width="96"
+              height="192"
             />
           </div>
+          <div class="terminal-debug-badge" data-role="terminal-debug-badge">state=idle</div>
+          <button
+            class="terminal-debug-action"
+            data-role="terminal-debug-save"
+            data-i18n="debug.save_snapshot"
+            type="button"
+          >
+            save debug snapshot
+          </button>
+          <button
+            class="terminal-debug-action"
+            data-role="terminal-debug-screenshot"
+            data-i18n="debug.save_screenshot"
+            type="button"
+          >
+            save debug screenshot
+          </button>
+          <button
+            class="terminal-debug-toggle"
+            data-role="terminal-debug-toggle"
+            data-i18n="debug.ui_on"
+            type="button"
+          >
+            debug ui: on
+          </button>
         </div>
       </section>
 
       <section class="settings-board hidden" data-role="settings-board">
-        <h2>settings</h2>
+        <h2 data-i18n="settings.title">Settings</h2>
         <div class="settings-grid">
+          <div class="settings-card settings-card--appearance">
+            <h3 data-i18n="settings.appearance.title">appearance</h3>
+            <div class="settings-row">
+              <span data-i18n="settings.appearance.theme">theme</span>
+              <select data-role="settings-terminal-theme">
+                <option value="dark" data-i18n="settings.theme.dark">dark</option>
+                <option value="light" data-i18n="settings.theme.light">light</option>
+              </select>
+            </div>
+            <div class="settings-row">
+              <span data-i18n="settings.appearance.font_family">font family</span>
+              <select data-role="settings-terminal-font">
+                <option
+                  value="ui-monospace, 'Cascadia Mono', Consolas, 'SFMono-Regular', Menlo, Monaco, 'Liberation Mono', 'DejaVu Sans Mono', monospace"
+                  data-i18n="settings.font.system_default"
+                >
+                  system default
+                </option>
+                <option
+                  value="'Cascadia Mono', 'Cascadia Code', Consolas, monospace"
+                  data-i18n="settings.font.cascadia"
+                >
+                  Cascadia Mono
+                </option>
+                <option
+                  value="Consolas, 'Cascadia Mono', 'SFMono-Regular', Menlo, Monaco, monospace"
+                  data-i18n="settings.font.consolas"
+                >
+                  Consolas
+                </option>
+              </select>
+            </div>
+            <div class="settings-row settings-row--single">
+              <button
+                class="toggle"
+                data-role="settings-terminal-font-refresh"
+                data-i18n="settings.font.load_os"
+                type="button"
+              >
+                OSからフォントを取得
+              </button>
+            </div>
+            <p
+              class="settings-note"
+              data-role="settings-terminal-font-status"
+              data-i18n="settings.font.status_idle"
+            >
+              未読み込み
+            </p>
+            <div class="settings-row">
+              <span data-i18n="settings.appearance.font_size">font size</span>
+              <input
+                type="number"
+                min="10"
+                max="24"
+                step="1"
+                value="18"
+                data-role="settings-terminal-font-size"
+              />
+            </div>
+            <div class="settings-row">
+              <span data-i18n="settings.appearance.scrollback">scrollback</span>
+              <input
+                type="number"
+                min="1000"
+                step="1000"
+                value="5000"
+                data-role="settings-terminal-scrollback"
+              />
+            </div>
+            <div class="settings-row">
+              <span data-i18n="settings.appearance.copy_on_select">copy on select</span>
+              <button
+                class="toggle toggle-switch"
+                data-role="settings-terminal-copy"
+                type="button"
+              >
+                <span class="toggle-state" data-role="settings-terminal-copy-state">on</span>
+                <span class="toggle-track" aria-hidden="true">
+                  <span class="toggle-thumb"></span>
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div class="settings-card settings-card--agent">
+            <h3 data-i18n="settings.ai.title">AI Coding Agent</h3>
+            <div class="settings-row">
+              <span data-i18n="settings.ai.tool">使用ツール</span>
+              <select data-role="settings-llm-tool">
+                <option value="codex">codex</option>
+                <option value="claude">claudecode</option>
+                <option value="opencode">opencode</option>
+              </select>
+            </div>
+            <div class="settings-row">
+              <span data-i18n="settings.ai.judge">AIターミナル状態判定</span>
+              <button
+                class="toggle toggle-switch"
+                data-role="settings-llm-toggle"
+                type="button"
+              >
+                <span class="toggle-state" data-role="settings-llm-state">off</span>
+                <span class="toggle-track" aria-hidden="true">
+                  <span class="toggle-thumb"></span>
+                </span>
+              </button>
+            </div>
+            <p class="settings-note">
+              <span class="settings-note-line" data-i18n="settings.ai.note_tool">
+                選択したAIツールはターミナルの起動コマンド判別に使われます。
+              </span>
+              <span class="settings-note-line" data-i18n="settings.ai.note_judge_on">
+                AI判定ONの場合は完了/入力待ちの通知と判定結果で状態検出します。
+              </span>
+              <span class="settings-note-line" data-i18n="settings.ai.note_judge_off">
+                AI判定OFFの場合は端末出力のみで状態を判定します。
+              </span>
+            </p>
+          </div>
+
           <div class="settings-card">
-            <h3>notifications</h3>
+            <h3 data-i18n="settings.notifications.title">notifications</h3>
             <div class="settings-row">
-              <span>OS toast</span>
-              <button class="toggle" data-role="settings-notify-toggle" type="button">
-                <strong data-role="settings-notify-state">on</strong>
+              <span data-i18n="settings.notifications.toast">OS toast</span>
+              <button
+                class="toggle toggle-switch"
+                data-role="settings-notify-toggle"
+                type="button"
+              >
+                <span class="toggle-state" data-role="settings-notify-state">on</span>
+                <span class="toggle-track" aria-hidden="true">
+                  <span class="toggle-thumb"></span>
+                </span>
               </button>
             </div>
             <div class="settings-row">
-              <span>audio</span>
-              <button class="toggle" data-role="settings-audio-toggle" type="button">
-                <strong data-role="settings-audio-state">on</strong>
+              <span data-i18n="settings.notifications.audio">audio</span>
+              <button
+                class="toggle toggle-switch"
+                data-role="settings-audio-toggle"
+                type="button"
+              >
+                <span class="toggle-state" data-role="settings-audio-state">on</span>
+                <span class="toggle-track" aria-hidden="true">
+                  <span class="toggle-thumb"></span>
+                </span>
               </button>
             </div>
             <div class="settings-row">
-              <span>volume</span>
+              <span data-i18n="settings.notifications.volume">volume</span>
               <input
                 type="range"
                 min="0"
@@ -797,7 +1298,7 @@
               />
             </div>
             <div class="settings-row">
-              <span>silence (ms)</span>
+              <span data-i18n="settings.notifications.silence">silence (ms)</span>
               <input
                 type="number"
                 min="500"
@@ -809,32 +1310,29 @@
           </div>
 
           <div class="settings-card">
-            <h3>LLM judge</h3>
+            <h3 data-i18n="settings.character.title">character</h3>
             <div class="settings-row">
-              <span>enabled</span>
-              <button class="toggle" data-role="settings-llm-toggle" type="button">
-                <strong data-role="settings-llm-state">off</strong>
+              <span data-i18n="settings.character.watcher">terminal character</span>
+              <button
+                class="toggle toggle-switch"
+                data-role="settings-character-watcher"
+                type="button"
+              >
+                <span class="toggle-state" data-role="settings-character-watcher-state">off</span>
+                <span class="toggle-track" aria-hidden="true">
+                  <span class="toggle-thumb"></span>
+                </span>
               </button>
             </div>
-            <div class="settings-row">
-              <span>tool</span>
-              <select data-role="settings-llm-tool">
-                <option value="codex">codex</option>
-                <option value="claude">claude</option>
-                <option value="opencode">opencode</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <h3>character</h3>
             <div class="settings-upload">
-              <span>upload bundle (.zip)</span>
+              <span data-i18n="settings.character.upload">upload bundle (.zip)</span>
               <input type="file" accept=".zip" data-role="settings-character-upload" />
-              <span data-role="settings-character-uploaded">no upload</span>
+              <span data-role="settings-character-uploaded" data-i18n="settings.character.no_upload">
+                no upload
+              </span>
             </div>
             <div class="settings-row">
-              <span>log retention (lines)</span>
+              <span data-i18n="settings.character.log_retention">log retention (lines)</span>
               <input
                 type="number"
                 min="1000"
@@ -844,53 +1342,7 @@
               />
             </div>
             <div class="character-list" data-role="settings-character-list">
-              <div class="character-card">default</div>
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <h3>terminal</h3>
-            <div class="settings-row">
-              <span>theme</span>
-              <select data-role="settings-terminal-theme">
-                <option value="dark">dark</option>
-                <option value="light">light</option>
-              </select>
-            </div>
-            <div class="settings-row">
-              <span>font family</span>
-              <input
-                type="text"
-                value="ui-monospace, 'Cascadia Mono', Consolas, monospace"
-                data-role="settings-terminal-font"
-              />
-            </div>
-            <div class="settings-row">
-              <span>font size</span>
-              <input
-                type="number"
-                min="10"
-                max="24"
-                step="1"
-                  value="18"
-                  data-role="settings-terminal-font-size"
-                />
-            </div>
-            <div class="settings-row">
-              <span>scrollback</span>
-              <input
-                type="number"
-                min="1000"
-                step="1000"
-                value="5000"
-                data-role="settings-terminal-scrollback"
-              />
-            </div>
-            <div class="settings-row">
-              <span>copy on select</span>
-              <button class="toggle" data-role="settings-terminal-copy" type="button">
-                <strong data-role="settings-terminal-copy-state">on</strong>
-              </button>
+              <div class="character-card" data-i18n="settings.character.default">default</div>
             </div>
           </div>
         </div>
@@ -901,7 +1353,226 @@
     <script src="vendor/xterm/xterm-addon-fit.js"></script>
     <script src="vendor/xterm/xterm-addon-webgl.js"></script>
     <script src="terminal_observer.js"></script>
+    <script src="agent_event_observer.js"></script>
+    <script src="state_integrator.js"></script>
     <script>
+      const I18N_RESOURCES = {
+        ja: {
+          'nav.chat': 'チャット',
+          'nav.run': 'ラン',
+          'mode.chat': 'チャットモード',
+          'mode.run': 'ランモード',
+          'mode.terminal': 'ターミナルモード',
+          'toolbar.follow': '追従',
+          'toolbar.follow_toggle': '追従切替',
+          'chat.lane_title': '会話レーン',
+          'chat.session_draft': 'セッション: draft',
+          'chat.system_ready': '[system] レーン準備完了',
+          'chat.user_hint': '[you] コマンドを入力してください',
+          'chat.input_placeholder': 'ここに入力して送信',
+          'chat.send': '送信',
+          'status.title': 'ステータス',
+          'status.phase_idle': 'フェーズ: idle',
+          'status.silence_timeout': '無音タイムアウト: 30s',
+          'status.running': '稼働中',
+          'status.idle': '待機',
+          'status.success': '成功',
+          'status.error': 'エラー',
+          'character.title': 'キャラクター',
+          'character.expression': '表情:',
+          'phase.idle': 'idle',
+          'phase.thinking': 'thinking',
+          'phase.success': 'success',
+          'phase.error': 'error',
+          'phase.need_input': 'need input',
+          'run.title': 'セッションボード',
+          'run.arrange': 'ウィンドウ整列',
+          'run.layout_hint': 'タイル配置: 1行 / 2行 (5+) / 3行 (9+)',
+          'run.session_01': 'セッション 01',
+          'run.session_02': 'セッション 02',
+          'run.session_03': 'セッション 03',
+          'run.session_04': 'セッション 04',
+          'run.sample.build': 'build',
+          'run.sample.build_log': '[log] cargo build ...',
+          'run.sample.lint': 'lint',
+          'run.sample.lint_log': '[log] waiting ...',
+          'run.sample.test': 'test',
+          'run.sample.test_log': '[log] ok 124 passed',
+          'run.sample.ship': 'ship',
+          'run.sample.ship_log': '[log] failed: auth',
+          'terminal.title': 'ターミナル',
+          'debug.save_snapshot': 'デバッグスナップショット保存',
+          'debug.save_screenshot': 'デバッグスクショ保存',
+          'debug.ui_on': 'debug ui: on',
+          'debug.ui_off': 'debug ui: off',
+          'debug.status.saving': '保存中...',
+          'debug.status.saved': '保存済み',
+          'debug.status.failed': '失敗',
+          'settings.title': '設定',
+          'settings.appearance.title': '外観',
+          'settings.appearance.theme': 'テーマ',
+          'settings.appearance.font_family': 'フォント',
+          'settings.appearance.font_size': 'フォントサイズ',
+          'settings.appearance.scrollback': 'スクロールバック',
+          'settings.appearance.copy_on_select': '選択コピー',
+          'settings.theme.dark': 'ダーク',
+          'settings.theme.light': 'ライト',
+          'settings.font.system_default': 'システム既定',
+          'settings.font.cascadia': 'Cascadia Mono',
+          'settings.font.consolas': 'Consolas',
+          'settings.font.os_label': 'OSフォント',
+          'settings.font.load_os': 'OSからフォントを取得',
+          'settings.font.status_idle': '未読み込み',
+          'settings.font.status_loading': '読み込み中...',
+          'settings.font.status_loaded': 'OSフォント取得済み',
+          'settings.font.status_unavailable': 'OSフォント取得は未対応',
+          'settings.font.status_failed': 'OSフォント取得に失敗',
+          'settings.ai.title': 'AI Coding Agent',
+          'settings.ai.tool': '使用ツール',
+          'settings.ai.judge': 'AIターミナル状態判定',
+          'settings.ai.note_tool': '選択したAIツールはターミナルの起動コマンド判別に使われます。',
+          'settings.ai.note_judge_on':
+            'AIターミナル状態判定ONの場合は完了/入力待ちの通知と判定結果で状態検出します。',
+          'settings.ai.note_judge_off':
+            'AIターミナル状態判定OFFの場合は端末出力のみで状態を判定します。',
+          'settings.notifications.title': '通知',
+          'settings.notifications.toast': 'OS通知',
+          'settings.notifications.audio': '音声',
+          'settings.notifications.volume': '音量',
+          'settings.notifications.silence': '無音 (ms)',
+          'settings.character.title': 'キャラクター',
+          'settings.character.watcher': 'ターミナルキャラクター表示',
+          'settings.character.upload': 'バンドルアップロード (.zip)',
+          'settings.character.no_upload': '未アップロード',
+          'settings.character.log_retention': 'ログ保持 (行)',
+          'settings.character.default': 'デフォルト',
+          'toggle.on': 'ON',
+          'toggle.off': 'OFF',
+        },
+        en: {
+          'nav.chat': 'chat',
+          'nav.run': 'run',
+          'mode.chat': 'chat mode',
+          'mode.run': 'run mode',
+          'mode.terminal': 'terminal mode',
+          'toolbar.follow': 'follow',
+          'toolbar.follow_toggle': 'toggle follow',
+          'chat.lane_title': 'conversation lane',
+          'chat.session_draft': 'session: draft',
+          'chat.system_ready': '[system] lane ready',
+          'chat.user_hint': '[you] type a command to continue',
+          'chat.input_placeholder': 'type here and press send',
+          'chat.send': 'send',
+          'status.title': 'status',
+          'status.phase_idle': 'phase: idle',
+          'status.silence_timeout': 'silence timeout: 30s',
+          'status.running': 'running',
+          'status.idle': 'idle',
+          'status.success': 'success',
+          'status.error': 'error',
+          'character.title': 'character',
+          'character.expression': 'expression:',
+          'phase.idle': 'idle',
+          'phase.thinking': 'thinking',
+          'phase.success': 'success',
+          'phase.error': 'error',
+          'phase.need_input': 'need input',
+          'run.title': 'session board',
+          'run.arrange': 'arrange windows',
+          'run.layout_hint': 'tile layout: 1 row / 2 rows (5+) / 3 rows (9+)',
+          'run.session_01': 'session 01',
+          'run.session_02': 'session 02',
+          'run.session_03': 'session 03',
+          'run.session_04': 'session 04',
+          'run.sample.build': 'build',
+          'run.sample.build_log': '[log] cargo build ...',
+          'run.sample.lint': 'lint',
+          'run.sample.lint_log': '[log] waiting ...',
+          'run.sample.test': 'test',
+          'run.sample.test_log': '[log] ok 124 passed',
+          'run.sample.ship': 'ship',
+          'run.sample.ship_log': '[log] failed: auth',
+          'terminal.title': 'terminal',
+          'debug.save_snapshot': 'save debug snapshot',
+          'debug.save_screenshot': 'save debug screenshot',
+          'debug.ui_on': 'debug ui: on',
+          'debug.ui_off': 'debug ui: off',
+          'debug.status.saving': 'saving...',
+          'debug.status.saved': 'saved',
+          'debug.status.failed': 'failed',
+          'settings.title': 'Settings',
+          'settings.appearance.title': 'appearance',
+          'settings.appearance.theme': 'theme',
+          'settings.appearance.font_family': 'font family',
+          'settings.appearance.font_size': 'font size',
+          'settings.appearance.scrollback': 'scrollback',
+          'settings.appearance.copy_on_select': 'copy on select',
+          'settings.theme.dark': 'dark',
+          'settings.theme.light': 'light',
+          'settings.font.system_default': 'system default',
+          'settings.font.cascadia': 'Cascadia Mono',
+          'settings.font.consolas': 'Consolas',
+          'settings.font.os_label': 'OS fonts',
+          'settings.font.load_os': 'OSからフォントを取得',
+          'settings.font.status_idle': 'not loaded',
+          'settings.font.status_loading': 'loading...',
+          'settings.font.status_loaded': 'OS fonts loaded',
+          'settings.font.status_unavailable': 'OS font query not supported',
+          'settings.font.status_failed': 'OS font query failed',
+          'settings.ai.title': 'AI Coding Agent',
+          'settings.ai.tool': 'tool',
+          'settings.ai.judge': 'AI terminal state judge',
+          'settings.ai.note_tool': 'Selected tool is used to detect agent launch commands.',
+          'settings.ai.note_judge_on':
+            'When enabled, state detection uses AI notifications and judge results.',
+          'settings.ai.note_judge_off': 'When disabled, state detection uses terminal output only.',
+          'settings.notifications.title': 'notifications',
+          'settings.notifications.toast': 'OS toast',
+          'settings.notifications.audio': 'audio',
+          'settings.notifications.volume': 'volume',
+          'settings.notifications.silence': 'silence (ms)',
+          'settings.character.title': 'character',
+          'settings.character.watcher': 'terminal character',
+          'settings.character.upload': 'upload bundle (.zip)',
+          'settings.character.no_upload': 'no upload',
+          'settings.character.log_retention': 'log retention (lines)',
+          'settings.character.default': 'default',
+          'toggle.on': 'ON',
+          'toggle.off': 'OFF',
+        },
+      };
+
+      const FALLBACK_LOCALE = 'ja';
+      const localeCandidate = (navigator.language || '').toLowerCase();
+      let currentLocale = localeCandidate.startsWith('ja') ? 'ja' : 'en';
+
+      function t(key) {
+        if (!key) return '';
+        return (
+          (I18N_RESOURCES[currentLocale] && I18N_RESOURCES[currentLocale][key]) ||
+          (I18N_RESOURCES[FALLBACK_LOCALE] && I18N_RESOURCES[FALLBACK_LOCALE][key]) ||
+          key
+        );
+      }
+
+      function applyI18n() {
+        document.querySelectorAll('[data-i18n]').forEach((node) => {
+          const key = node.dataset.i18n;
+          if (!key) return;
+          node.textContent = t(key);
+        });
+        document.querySelectorAll('[data-i18n-placeholder]').forEach((node) => {
+          const key = node.dataset.i18nPlaceholder;
+          if (!key) return;
+          node.setAttribute('placeholder', t(key));
+        });
+        document.querySelectorAll('[data-i18n-value]').forEach((node) => {
+          const key = node.dataset.i18nValue;
+          if (!key) return;
+          node.setAttribute('value', t(key));
+        });
+      }
+
       const output = document.getElementById('output');
       const input = document.getElementById('chat-input');
       const sendBtn = document.getElementById('send-btn');
@@ -921,6 +1592,13 @@
       const terminalContainer = document.querySelector('[data-role="terminal-container"]');
       const terminalWatcher = document.querySelector('[data-role="terminal-watcher"]');
       const terminalWatcherImage = document.querySelector('[data-role="terminal-watcher-image"]');
+      const terminalShell = document.querySelector('.terminal-shell');
+      const terminalDebugBadge = document.querySelector('[data-role="terminal-debug-badge"]');
+      const terminalDebugSave = document.querySelector('[data-role="terminal-debug-save"]');
+      const terminalDebugScreenshot = document.querySelector(
+        '[data-role="terminal-debug-screenshot"]'
+      );
+      const terminalDebugToggle = document.querySelector('[data-role="terminal-debug-toggle"]');
 
       const notifyToggle = document.querySelector('[data-role="settings-notify-toggle"]');
       const notifyState = document.querySelector('[data-role="settings-notify-state"]');
@@ -931,24 +1609,50 @@
       const llmToggle = document.querySelector('[data-role="settings-llm-toggle"]');
       const llmState = document.querySelector('[data-role="settings-llm-state"]');
       const llmTool = document.querySelector('[data-role="settings-llm-tool"]');
+      const codexHookButton = document.querySelector('[data-role="settings-codex-hook"]');
+      const codexHookStatus = document.querySelector('[data-role="settings-codex-hook-status"]');
       const characterUpload = document.querySelector('[data-role="settings-character-upload"]');
       const characterUploaded = document.querySelector(
         '[data-role="settings-character-uploaded"]'
       );
       const characterList = document.querySelector('[data-role="settings-character-list"]');
+      const characterWatcherToggle = document.querySelector(
+        '[data-role="settings-character-watcher"]'
+      );
+      const characterWatcherState = document.querySelector(
+        '[data-role="settings-character-watcher-state"]'
+      );
       const terminalTheme = document.querySelector('[data-role="settings-terminal-theme"]');
       const terminalFont = document.querySelector('[data-role="settings-terminal-font"]');
+      const terminalFontRefresh = document.querySelector(
+        '[data-role="settings-terminal-font-refresh"]'
+      );
+      const terminalFontStatus = document.querySelector(
+        '[data-role="settings-terminal-font-status"]'
+      );
       const terminalFontSize = document.querySelector('[data-role="settings-terminal-font-size"]');
       const terminalScrollback = document.querySelector('[data-role="settings-terminal-scrollback"]');
       const terminalCopyToggle = document.querySelector('[data-role="settings-terminal-copy"]');
       const terminalCopyState = document.querySelector('[data-role="settings-terminal-copy-state"]');
+
+      applyI18n();
+
+      const baseFontOptions = terminalFont
+        ? Array.from(terminalFont.options).map((option) => ({
+            value: option.value,
+            label: option.textContent || option.value,
+          }))
+        : [];
 
       let followEnabled = true;
       let notifyEnabled = true;
       let audioEnabled = true;
       let llmEnabled = false;
       let terminalCopyOnSelect = true;
-      const isTerminalView = new URLSearchParams(window.location.search).get('view') === 'terminal';
+      let terminalWatcherEnabled = false;
+      const viewParam = new URLSearchParams(window.location.search).get('view');
+      const isTerminalView = viewParam === 'terminal';
+      const isWatcherView = viewParam === 'watcher';
       const terminalSessionId =
         new URLSearchParams(window.location.search).get('session_id') || `session-${Date.now()}`;
       let terminal;
@@ -959,6 +1663,8 @@
       let resizeDebounceTimer = null;
       let lastResizeCols = null;
       let lastResizeRows = null;
+      let focusTransitionToken = null;
+      let focusTransitionActive = false;
 
       const terminalSettingsDefaults = {
         // Prefer widely-available monospace fonts on Windows first. / Windowsで入手性が高い等幅フォントを優先
@@ -987,44 +1693,329 @@
         },
       };
 
-      const terminalObserver =
-        window.TerminalObserver || /** @type {any} */ ({ DEFAULT_THRESHOLDS_MS: {} });
-      const TerminalObservation =
-        terminalObserver.ObservationState ||
-        Object.freeze({
+      function stripAnsiText(text) {
+        if (!text) return '';
+        return String(text)
+          .replace(/\x1b\][^\x07]*(\x07|\x1b\\)/g, '')
+          .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
+          .replace(/\x1b./g, '');
+      }
+
+      function fallbackLooksLikeNeedInput(tail) {
+        if (!tail) return false;
+        const needle = stripAnsiText(tail).toLowerCase();
+        return (
+          needle.includes('press enter') ||
+          needle.includes('press return') ||
+          needle.includes('[y/n]') ||
+          needle.includes('(y/n)') ||
+          needle.includes('continue?') ||
+          needle.includes('password:') ||
+          needle.includes('are you sure') ||
+          /\b(y\/n)\b/i.test(needle)
+        );
+      }
+
+      function fallbackLooksLikeShellPrompt(tail) {
+        if (!tail) return false;
+        const cleaned = stripAnsiText(tail);
+        const trimmedAll = cleaned.replace(/\s+$/g, '');
+        if (!trimmedAll) return false;
+        const lines = cleaned.split('\n');
+        const last = lines[lines.length - 1] || '';
+        const trimmed = last.trim();
+        if (trimmed) {
+          if (/^PS\s+.+>\s*$/.test(trimmed)) return true;
+          if (/^[A-Za-z]:[\\/].*>\s*$/.test(trimmed)) return true;
+          if (/^[^@\s]+@[^\s]+:.*[#$]\s*$/.test(trimmed)) return true;
+          if (/[^\s][#$]\s*$/.test(trimmed)) return true;
+        }
+        if (/PS\s+.+>\s*$/.test(trimmedAll)) return true;
+        if (/[A-Za-z]:[\\/][^\r\n]*>\s*$/.test(trimmedAll)) return true;
+        if (/[^@\s]+@[^\s]+:[^\r\n]*[#$]\s*$/.test(trimmedAll)) return true;
+        return false;
+      }
+
+      function fallbackComputeState(input) {
+        const nowMs = input && typeof input.nowMs === 'number' ? input.nowMs : Date.now();
+        const lastOutputAtMs =
+          input && typeof input.lastOutputAtMs === 'number' ? input.lastOutputAtMs : nowMs;
+        const lastTail = (input && input.lastTail) || '';
+        const exitCode =
+          input && Object.prototype.hasOwnProperty.call(input, 'exitCode') ? input.exitCode : null;
+        const commandActive =
+          input && Object.prototype.hasOwnProperty.call(input, 'commandActive')
+            ? Boolean(input.commandActive)
+            : true;
+
+        if (exitCode !== null && exitCode !== undefined) {
+          if (exitCode === 0) {
+            return { state: TerminalObservation.success, reason: 'exit 0', idleMs: 0 };
+          }
+          return { state: TerminalObservation.fail, reason: 'exit non-zero', idleMs: 0 };
+        }
+
+        const idleMs = Math.max(0, nowMs - lastOutputAtMs);
+        if (fallbackLooksLikeNeedInput(lastTail)) {
+          return { state: TerminalObservation.needInput, reason: 'prompt-like tail', idleMs };
+        }
+        if (!commandActive) {
+          return { state: TerminalObservation.idle, reason: 'idle', idleMs };
+        }
+        if (fallbackLooksLikeShellPrompt(lastTail)) {
+          return { state: TerminalObservation.success, reason: 'shell prompt', idleMs };
+        }
+        return { state: TerminalObservation.running, reason: 'running', idleMs };
+      }
+
+      const fallbackTerminalObserver = {
+        ObservationState: {
+          idle: 'idle',
           running: 'running',
           needInput: 'need-input',
-          stalled: 'stalled',
           success: 'success',
           fail: 'fail',
-        });
-      const terminalObserverThresholdsMs =
-        terminalObserver.DEFAULT_THRESHOLDS_MS || Object.freeze({ observeTickMs: 1000 });
+        },
+        TerminalStateDetector: {
+          computeState: fallbackComputeState,
+          tailForObservation: (text, maxChars) => {
+            if (!text) return '';
+            const limit = typeof maxChars === 'number' ? maxChars : 400;
+            const normalized = String(text).replace(/\r\n/g, '\n');
+            return normalized.slice(Math.max(0, normalized.length - limit));
+          },
+          looksLikeNeedInput: fallbackLooksLikeNeedInput,
+          looksLikeShellPrompt: fallbackLooksLikeShellPrompt,
+        },
+      };
 
-      let terminalObservedState = TerminalObservation.running;
+      const terminalObserver = window.TerminalObserver || /** @type {any} */ (fallbackTerminalObserver);
+      const TerminalObservation = Object.freeze({
+        idle: 'idle',
+        running: 'running',
+        needInput: 'need-input',
+        success: 'success',
+        fail: 'fail',
+        ...(terminalObserver.ObservationState || {}),
+      });
+      const JUDGE_TAIL_MAX_CHARS = 1500;
+      const JUDGE_TAIL_MAX_LINES = 50;
+      const DEFAULT_IDLE_TIMEOUT_MS = 30000;
+      const terminalStateDetector =
+        terminalObserver.TerminalStateDetector || terminalObserver || /** @type {any} */ ({});
+      const agentObserver = window.AgentEventObserver || /** @type {any} */ ({});
+      const stateIntegrator =
+        window.StateIntegrator ||
+        Object.freeze({
+          merge: (terminal, agent) => {
+            if (agent && agent.state) {
+              return { state: agent.state, reason: agent.reason || 'agent' };
+            }
+            if (terminal && terminal.state) {
+              return { state: terminal.state, reason: terminal.reason || 'terminal' };
+            }
+            return { state: TerminalObservation.idle, reason: 'default' };
+          },
+        });
+
+      let terminalObserved = { state: TerminalObservation.idle, reason: 'init' };
+      let terminalStickyObserved = { state: TerminalObservation.idle, reason: 'idle' };
+      let agentObserved = null;
+      let mergedObserved = { state: TerminalObservation.idle, reason: 'init' };
+      let latchedObserved = null;
+      let lastReportedObservationState = null;
       let terminalLastOutputAt = Date.now();
+      let terminalLastActivityAt = Date.now();
       let terminalLastChunkTail = '';
       let terminalExitCode = null;
-      let terminalObserveTimer = null;
+      let outputTailBuffer = '';
+      let idleJudgeTimer = null;
+      let judgeInFlight = false;
+      let lastJudgeAtMs = 0;
+      let lastJudgeReason = '';
+      let agentSessionActive = false;
+      let agentSessionSource = null;
+      let terminalCommandActive = false;
+      let terminalHasUserCommand = false;
+      let inputLineBuffer = '';
+      let inputSawCarriage = false;
+      let lastTerminalEvent = { type: 'init', detail: '' };
+      let lastInputLine = '';
+      let inputCaptureMode = 'auto';
+      const captureInputLinesFromSendQueue = true;
+      let keyInputBuffer = '';
+      let skipNextCarriage = false;
+      let lastKeyLabel = '';
+      const inputChunkHistory = [];
+      const INPUT_CHUNK_HISTORY_LIMIT = 10;
+      let dataInputSeenAt = 0;
+      let dataInputLineActive = false;
+
+      function truncateDebugText(value, limit = 48) {
+        if (!value) return '';
+        const text = String(value);
+        if (text.length <= limit) return text;
+        return `${text.slice(0, limit)}…`;
+      }
+
+      function setLastTerminalEvent(type, detail) {
+        lastTerminalEvent = { type: type || 'event', detail: detail || '' };
+        updateTerminalDebugBadge();
+      }
+
+      function updateTerminalDebugBadge() {
+        if (!terminalDebugBadge) return;
+        const toolName = normalizeToolName(settingsState.llm_tool || 'codex') || '-';
+        const stateLabel = mergedObserved && mergedObserved.state ? mergedObserved.state : 'idle';
+        const eventType = lastTerminalEvent.type || '-';
+        const eventDetail = truncateDebugText(lastTerminalEvent.detail || '');
+        const linePreview = truncateDebugText(lastInputLine || '');
+        const keyPreview = truncateDebugText(lastKeyLabel || '');
+        const lastChunk =
+          inputChunkHistory.length > 0
+            ? truncateDebugText(inputChunkHistory[inputChunkHistory.length - 1].preview || '')
+            : '';
+        terminalDebugBadge.textContent = `state=${stateLabel} | agent=${agentSessionActive ? 'on' : 'off'} | tool=${toolName} | cap=${inputCaptureMode} | data=${dataInputLineActive ? 'on' : 'off'} | buf=${inputLineBuffer.length}/${keyInputBuffer.length} | key=${keyPreview} | chunk=${lastChunk} | event=${eventType} ${eventDetail} | line=${linePreview}`;
+      }
+
+      function applyTerminalWatcherVisibility() {
+        if (!terminalWatcher) return;
+        terminalWatcher.style.display = isWatcherView ? 'block' : 'none';
+      }
+
+      function reportTerminalObservation(state) {
+        if (!isTerminalView) return;
+        if (!state) return;
+        if (state === lastReportedObservationState) return;
+        lastReportedObservationState = state;
+        invokeWithSession('report_terminal_observation', {
+          sessionId: terminalSessionId,
+          state,
+        }).catch(() => {});
+      }
+
+        function setTerminalStickyObserved(state, reason) {
+          const nextState = state || TerminalObservation.idle;
+          terminalStickyObserved = { state: nextState, reason: reason || nextState || 'idle' };
+        }
+
+        function isFinalObservedState(state) {
+          return (
+            state === TerminalObservation.needInput ||
+            state === TerminalObservation.success ||
+            state === TerminalObservation.fail
+          );
+        }
+
+        function latchObservedState(next) {
+          if (latchedObserved) return;
+          if (!next || !next.state) return;
+          if (!isFinalObservedState(next.state)) return;
+          latchedObserved = { state: next.state, reason: next.reason || next.state };
+        }
+
+        function clearLatchedObserved() {
+          if (!latchedObserved) return;
+          latchedObserved = null;
+        }
+
+        function resetTerminalToIdle(reason) {
+          terminalCommandActive = false;
+          setTerminalStickyObserved(TerminalObservation.idle, reason || 'idle');
+        }
+
+        function startTerminalCommand(reason) {
+          terminalCommandActive = true;
+          terminalHasUserCommand = true;
+          terminalLastActivityAt = Date.now();
+          terminalLastOutputAt = terminalLastActivityAt;
+          terminalLastChunkTail = '';
+          resetAgentOutputTail();
+          clearLatchedObserved();
+          setLastTerminalEvent('command', reason || 'command');
+          updateTerminalObservedState();
+        }
+
+      function finishTerminalCommand(state, reason) {
+        terminalCommandActive = false;
+        setTerminalStickyObserved(state, reason || state);
+      }
+
+      async function appendDebugSnapshot() {
+        if (!terminalDebugSave) return;
+        const payload = {
+          session_id: terminalSessionId || null,
+          state: mergedObserved ? mergedObserved.state : null,
+          agent_active: agentSessionActive,
+          tool: normalizeToolName(settingsState.llm_tool || 'codex') || null,
+          capture: inputCaptureMode,
+          buffer_data_len: inputLineBuffer.length,
+          buffer_key_len: keyInputBuffer.length,
+          buffer_data: truncateDebugText(inputLineBuffer || '', 120),
+          buffer_key: truncateDebugText(keyInputBuffer || '', 120),
+          last_key: lastKeyLabel || '',
+          input_chunks: inputChunkHistory.slice(-INPUT_CHUNK_HISTORY_LIMIT),
+          line: lastInputLine,
+          event_type: lastTerminalEvent.type,
+          event_detail: lastTerminalEvent.detail,
+          badge: terminalDebugBadge ? terminalDebugBadge.textContent : '',
+        };
+        const originalLabel = terminalDebugSave.textContent;
+        terminalDebugSave.textContent = t('debug.status.saving');
+        try {
+          await invokeWithSession('append_terminal_debug_snapshot', { payload });
+          terminalDebugSave.textContent = t('debug.status.saved');
+          setTimeout(() => {
+            if (terminalDebugSave) terminalDebugSave.textContent = originalLabel;
+          }, 900);
+        } catch {
+          terminalDebugSave.textContent = t('debug.status.failed');
+          setTimeout(() => {
+            if (terminalDebugSave) terminalDebugSave.textContent = originalLabel;
+          }, 1200);
+        }
+      }
+
+      async function saveDebugScreenshot() {
+        if (!terminalDebugScreenshot) return;
+        const originalLabel = terminalDebugScreenshot.textContent;
+        terminalDebugScreenshot.textContent = t('debug.status.saving');
+        try {
+          const path = await invokeWithSession('save_debug_screenshot', {});
+          if (path) {
+            console.debug('[terminal-debug] screenshot saved', { path });
+          }
+          terminalDebugScreenshot.textContent = t('debug.status.saved');
+          setTimeout(() => {
+            if (terminalDebugScreenshot) terminalDebugScreenshot.textContent = originalLabel;
+          }, 1200);
+        } catch {
+          terminalDebugScreenshot.textContent = t('debug.status.failed');
+          setTimeout(() => {
+            if (terminalDebugScreenshot) terminalDebugScreenshot.textContent = originalLabel;
+          }, 1400);
+        }
+      }
 
       function terminalWatcherFaceForState(state) {
         if (terminalObserver.assetPathForState) return terminalObserver.assetPathForState(state);
         switch (state) {
           case TerminalObservation.success:
-            return 'assets/watcher/nagomisan_success.png';
+            return 'assets/watcher/nagomisan_full_idle.png';
           case TerminalObservation.fail:
-            return 'assets/watcher/nagomisan_fail.png';
+            return 'assets/watcher/nagomisan_full_fail.png';
           case TerminalObservation.needInput:
-            return 'assets/watcher/nagomisan_need-input.png';
-          case TerminalObservation.stalled:
-            return 'assets/watcher/nagomisan_stalled.png';
+            return 'assets/watcher/nagomisan_full_need-input.png';
+          case TerminalObservation.running:
+            return 'assets/watcher/nagomisan_full_running.png';
+          case TerminalObservation.idle:
+            return 'assets/watcher/nagomisan_full_idle.png';
           default:
-            return 'assets/watcher/nagomisan_running.png';
+            return 'assets/watcher/nagomisan_full_idle.png';
         }
       }
 
-      function setTerminalObservedState(state, title) {
-        terminalObservedState = state;
+      function applyTerminalObservedState(state, title) {
         if (terminalWatcherImage) {
           terminalWatcherImage.src = terminalWatcherFaceForState(state);
         }
@@ -1038,38 +2029,413 @@
           shell.classList.remove(
             'state-running',
             'state-need-input',
-            'state-stalled',
             'state-success',
             'state-fail'
           );
-          shell.classList.add(`state-${state}`);
+          let appliedState = null;
+          if (state === TerminalObservation.needInput) {
+            appliedState = 'need-input';
+          } else if (state === TerminalObservation.fail) {
+            appliedState = 'fail';
+          } else if (state === TerminalObservation.running) {
+            appliedState = 'running';
+          }
+          if (appliedState) {
+            shell.classList.add(`state-${appliedState}`);
+          }
+        }
+        updateTerminalDebugBadge();
+      }
+
+        function updateMergedObservedState(title) {
+          let nextObserved = null;
+          if (stateIntegrator && typeof stateIntegrator.merge === 'function') {
+            nextObserved = stateIntegrator.merge(terminalObserved, agentObserved);
+          } else if (terminalObserved && terminalObserved.state) {
+            nextObserved = { state: terminalObserved.state, reason: terminalObserved.reason };
+          } else {
+            nextObserved = { state: TerminalObservation.idle, reason: 'default' };
+          }
+          if (nextObserved && nextObserved.state === TerminalObservation.running) {
+            clearLatchedObserved();
+          }
+          latchObservedState(nextObserved);
+          mergedObserved = latchedObserved || nextObserved;
+          reportTerminalObservation(mergedObserved.state);
+          const nextTitle = title || mergedObserved.reason || mergedObserved.state;
+          applyTerminalObservedState(mergedObserved.state, nextTitle);
+        }
+
+      function updateTerminalObservedState() {
+        if (!terminalHasUserCommand) {
+          terminalObserved = { state: terminalStickyObserved.state, reason: terminalStickyObserved.reason };
+          updateMergedObservedState(agentObserved ? null : terminalObserved.reason);
+          return;
+        }
+        if (!terminalStateDetector || typeof terminalStateDetector.computeState !== 'function') {
+          terminalObserved = { state: terminalStickyObserved.state, reason: terminalStickyObserved.reason };
+          updateMergedObservedState(agentObserved ? null : terminalObserved.reason);
+          return;
+        }
+        if (terminalExitCode !== null && terminalExitCode !== undefined) {
+          terminalCommandActive = false;
+          const exitState =
+            terminalExitCode === 0 ? TerminalObservation.success : TerminalObservation.fail;
+          terminalObserved = { state: exitState, reason: `exit ${terminalExitCode}` };
+          setTerminalStickyObserved(exitState, terminalObserved.reason);
+          updateMergedObservedState(agentObserved ? null : terminalObserved.reason);
+          return;
+        }
+
+        if (!terminalCommandActive) {
+          terminalObserved = { state: terminalStickyObserved.state, reason: terminalStickyObserved.reason };
+          updateMergedObservedState(agentObserved ? null : terminalObserved.reason);
+          return;
+        }
+
+        const result = terminalStateDetector.computeState({
+          nowMs: Date.now(),
+          lastOutputAtMs: terminalLastOutputAt,
+          lastTail: terminalLastChunkTail,
+          exitCode: terminalExitCode,
+          commandActive: terminalCommandActive,
+        });
+        terminalObserved = { state: result.state, reason: result.reason };
+        if (
+          terminalCommandActive &&
+          (result.state === TerminalObservation.success || result.state === TerminalObservation.fail)
+        ) {
+          finishTerminalCommand(result.state, result.reason);
+        }
+        updateMergedObservedState(agentObserved ? null : result.reason);
+      }
+
+      function setAgentObservedState(next) {
+        agentObserved = next;
+        updateMergedObservedState(next && next.reason);
+      }
+
+      function clearAgentObservedState(reason) {
+        if (!agentObserved) return;
+        agentObserved = null;
+        updateMergedObservedState(reason || 'terminal');
+      }
+
+      function applyAgentObservationFromHook(payload) {
+        if (!payload || !payload.judge_state) return null;
+        if (!agentObserver || typeof agentObserver.observeHookPayload !== 'function') return null;
+        const observed = agentObserver.observeHookPayload(payload);
+        if (!observed) return null;
+        setAgentObservedState(observed);
+        return observed;
+      }
+
+      function normalizeToolName(value) {
+        if (!value) return '';
+        const trimmed = String(value).trim();
+        if (!trimmed) return '';
+        const parts = trimmed.split(/[/\\]/);
+        const last = parts[parts.length - 1] || '';
+        return last.replace(/\.(exe|cmd|ps1)$/i, '').toLowerCase();
+      }
+
+      function isToolCommand(line, toolName) {
+        const trimmed = String(line || '').trim();
+        if (!trimmed) return false;
+        const head = trimmed.split(/\s+/)[0] || '';
+        return normalizeToolName(head) === toolName;
+      }
+
+        function markAgentRunning(reason) {
+          agentSessionActive = true;
+          terminalHasUserCommand = true;
+          if (!agentSessionSource) {
+            agentSessionSource = normalizeToolName(settingsState.llm_tool || 'codex');
+          }
+          clearLatchedObserved();
+          setAgentObservedState({ state: TerminalObservation.running, reason: reason || 'agent' });
+          setLastTerminalEvent('input', reason || 'agent');
+          terminalLastActivityAt = Date.now();
+          scheduleIdleJudge('agent-input');
+        }
+
+        function resetAgentSession(reason) {
+          agentSessionActive = false;
+          agentSessionSource = null;
+          agentObserved = null;
+          if (idleJudgeTimer) {
+            clearTimeout(idleJudgeTimer);
+            idleJudgeTimer = null;
+          }
+          resetTerminalToIdle(reason || 'agent quit');
+          clearLatchedObserved();
+          updateTerminalObservedState();
+        }
+
+      function resetAgentOutputTail() {
+        outputTailBuffer = '';
+      }
+
+      function appendOutputTail(chunk) {
+        if (!chunk) return;
+        const normalized = String(chunk).replace(/\r\n/g, '\n');
+        outputTailBuffer += normalized;
+        if (outputTailBuffer.length > JUDGE_TAIL_MAX_CHARS) {
+          outputTailBuffer = outputTailBuffer.slice(
+            Math.max(0, outputTailBuffer.length - JUDGE_TAIL_MAX_CHARS)
+          );
         }
       }
 
-      function startTerminalObservationLoop() {
-        if (terminalObserveTimer) return;
-        terminalObserveTimer = setInterval(() => {
-          if (terminalExitCode !== null) return;
-          if (!terminalObserver.computeState) return;
-          const now = Date.now();
-          const result = terminalObserver.computeState({
-            nowMs: now,
-            lastOutputAtMs: terminalLastOutputAt,
-            lastTail: terminalLastChunkTail,
-            exitCode: null,
-            thresholdsMs: terminalObserverThresholdsMs,
+      function buildJudgeTail() {
+        if (!outputTailBuffer) return '';
+        const lines = outputTailBuffer.split('\n');
+        if (lines.length <= JUDGE_TAIL_MAX_LINES) {
+          return lines.join('\n');
+        }
+        return lines.slice(-JUDGE_TAIL_MAX_LINES).join('\n');
+      }
+
+      function getIdleTimeoutMs() {
+        const value = Number(settingsState && settingsState.silence_timeout_ms);
+        if (!Number.isFinite(value) || value <= 0) {
+          return DEFAULT_IDLE_TIMEOUT_MS;
+        }
+        return value;
+      }
+
+      function scheduleIdleJudge(reason) {
+        if (idleJudgeTimer) {
+          clearTimeout(idleJudgeTimer);
+        }
+        const timeoutMs = getIdleTimeoutMs();
+        idleJudgeTimer = setTimeout(() => {
+          idleJudgeTimer = null;
+          if (!agentSessionActive) return;
+          if (terminalExitCode !== null && terminalExitCode !== undefined) return;
+          const idleMs = Date.now() - terminalLastActivityAt;
+          if (idleMs < timeoutMs - 20) return;
+          triggerJudge(reason || 'idle', null);
+        }, timeoutMs);
+      }
+
+      function normalizeJudgeState(value) {
+        const raw = String(value || '').trim().toLowerCase();
+        if (raw === 'success') return TerminalObservation.success;
+        if (raw === 'failure' || raw === 'fail' || raw === 'error') return TerminalObservation.fail;
+        if (raw === 'need_input' || raw === 'need-input' || raw === 'waiting_input') {
+          return TerminalObservation.needInput;
+        }
+        return null;
+      }
+
+      function applyJudgeResult(result, reason) {
+        if (!result) return;
+        const normalized = normalizeJudgeState(result.state);
+        if (!normalized) return;
+        const summary = result.summary || '';
+        const title = summary || reason || 'judge';
+        setAgentObservedState({ state: normalized, reason: title });
+        if (!isTerminalView) {
+          if (normalized === TerminalObservation.success) setCharacterPhase('success');
+          if (normalized === TerminalObservation.fail) setCharacterPhase('error');
+          if (normalized === TerminalObservation.needInput) setCharacterPhase('need_input');
+        }
+      }
+
+      function applyFallbackJudge(reason, hookKind) {
+        if (hookKind === 'error') {
+          setAgentObservedState({ state: TerminalObservation.fail, reason: reason || 'hook error' });
+          if (!isTerminalView) setCharacterPhase('error');
+          return;
+        }
+        if (hookKind === 'completed') {
+          setAgentObservedState({
+            state: TerminalObservation.success,
+            reason: reason || 'hook completed',
           });
-          const idleSeconds = (result.idleMs / 1000).toFixed(0);
-          if (result.state === TerminalObservation.needInput) {
-            setTerminalObservedState(TerminalObservation.needInput, `need input (idle ${idleSeconds}s)`);
+          if (!isTerminalView) setCharacterPhase('success');
+          return;
+        }
+        if (hookKind === 'need_input') {
+          setAgentObservedState({
+            state: TerminalObservation.needInput,
+            reason: reason || 'hook need_input',
+          });
+          if (!isTerminalView) setCharacterPhase('need_input');
+          return;
+        }
+        setAgentObservedState({ state: TerminalObservation.needInput, reason: reason || 'idle' });
+        if (!isTerminalView) setCharacterPhase('need_input');
+      }
+
+      async function triggerJudge(reason, hookKind) {
+        if (!agentSessionActive) return;
+        if (terminalExitCode !== null && terminalExitCode !== undefined) return;
+        const now = Date.now();
+        if (judgeInFlight) return;
+        if (now - lastJudgeAtMs < 800) return;
+        lastJudgeAtMs = now;
+        lastJudgeReason = reason || '';
+
+        if (!llmEnabled) {
+          applyFallbackJudge(reason, hookKind);
+          return;
+        }
+
+        judgeInFlight = true;
+        try {
+          const tail = buildJudgeTail();
+          const result = await invokeWithSession('tool_judge', {
+            tool: settingsState.llm_tool || 'codex',
+            tail,
+          });
+          applyJudgeResult(result, reason);
+        } catch {
+          applyFallbackJudge(reason, hookKind);
+        } finally {
+          judgeInFlight = false;
+        }
+      }
+
+      function handleHookEvent(payload) {
+        if (!payload) return null;
+        const hasSessionId = Boolean(payload.source_session_id);
+        if (hasSessionId && payload.source_session_id !== terminalSessionId) return null;
+        if (!hasSessionId && !agentSessionActive) return null;
+        setLastTerminalEvent('hook', payload.kind || payload.judge_state || 'unknown');
+        if (payload.source && !agentSessionSource) {
+          agentSessionSource = payload.source;
+        }
+        if (!agentSessionActive) {
+          agentSessionActive = true;
+        }
+        const observed = applyAgentObservationFromHook(payload);
+        if (observed) return observed;
+        const hookKind = payload.kind || null;
+        if (llmEnabled) {
+          triggerJudge('hook', hookKind);
+          return null;
+        }
+        applyFallbackJudge('hook', hookKind);
+        return null;
+      }
+
+      function handleTerminalLine(line) {
+        const toolName = normalizeToolName(settingsState.llm_tool || 'codex');
+        const trimmed = String(line || '').trim();
+        lastInputLine = trimmed;
+        updateTerminalDebugBadge();
+        if (agentSessionActive && toolName && trimmed && isToolCommand(trimmed, toolName)) {
+          setLastTerminalEvent('tool', 'start');
+          updateTerminalObservedState();
+          return;
+        }
+        if (agentSessionActive) {
+          if (trimmed.toLowerCase() === '/quit') {
+            setLastTerminalEvent('agent', 'quit');
+            resetAgentSession('agent quit');
             return;
           }
-          if (result.state === TerminalObservation.stalled) {
-            setTerminalObservedState(TerminalObservation.stalled, `stalled (idle ${idleSeconds}s)`);
-            return;
+          if (trimmed) {
+            terminalHasUserCommand = true;
           }
-          setTerminalObservedState(TerminalObservation.running, `running (last output ${idleSeconds}s ago)`);
-        }, terminalObserverThresholdsMs.observeTickMs || 1000);
+          resetAgentOutputTail();
+          markAgentRunning(trimmed ? 'agent input' : 'agent enter');
+          return;
+        }
+        if (toolName && trimmed && isToolCommand(trimmed, toolName)) {
+          terminalHasUserCommand = true;
+          agentSessionActive = true;
+          agentSessionSource = toolName;
+          resetAgentOutputTail();
+          setLastTerminalEvent('tool', 'start');
+          updateTerminalObservedState();
+          return;
+        }
+        if (!trimmed) return;
+        terminalHasUserCommand = true;
+        const reason = terminalCommandActive ? 'command input' : 'command start';
+        startTerminalCommand(reason);
+      }
+
+      function ingestInputLines(text) {
+        if (!text) return;
+        if (inputCaptureMode === 'textarea') return;
+        terminalLastActivityAt = Date.now();
+        const dataFresh = Date.now() - dataInputSeenAt < 1000;
+        if (dataFresh && keyInputBuffer) {
+          keyInputBuffer = '';
+        }
+        for (let i = 0; i < text.length; i += 1) {
+          const ch = text[i];
+          if (ch === '\x1b') {
+            const next = text[i + 1];
+            if (next === '[') {
+              let j = i + 2;
+              while (j < text.length) {
+                const code = text.charCodeAt(j);
+                if (code >= 0x40 && code <= 0x7e) {
+                  j += 1;
+                  break;
+                }
+                j += 1;
+              }
+              i = j - 1;
+              continue;
+            }
+            if (next) {
+              i += 1;
+            }
+            continue;
+          }
+          if (ch === '\r') {
+            if (skipNextCarriage) {
+              skipNextCarriage = false;
+              inputSawCarriage = true;
+              continue;
+            }
+            const candidate = inputLineBuffer || keyInputBuffer;
+            handleTerminalLine(candidate);
+            keyInputBuffer = '';
+            inputLineBuffer = '';
+            dataInputLineActive = false;
+            inputSawCarriage = true;
+            continue;
+          }
+          if (ch === '\n') {
+            if (inputSawCarriage) {
+              inputSawCarriage = false;
+              continue;
+            }
+            const candidate = inputLineBuffer || keyInputBuffer;
+            handleTerminalLine(candidate);
+            keyInputBuffer = '';
+            inputLineBuffer = '';
+            dataInputLineActive = false;
+            continue;
+          }
+          if (ch === '\x7f' || ch === '\b') {
+            if (inputLineBuffer.length > 0) {
+              inputLineBuffer = inputLineBuffer.slice(0, -1);
+            }
+            dataInputLineActive = inputLineBuffer.length > 0;
+            continue;
+          }
+          inputSawCarriage = false;
+          if (inputCaptureMode !== 'textarea' && isPrintableInputChar(ch)) {
+            inputCaptureMode = 'data';
+          }
+          if (isPrintableInputChar(ch)) {
+            inputLineBuffer += ch;
+            dataInputLineActive = true;
+          }
+        }
+      }
+
+      function setCharacterPhase(phase) {
+        if (!phaseLabel) return;
+        phaseLabel.textContent = phase;
       }
       let rawInputQueue = '';
       let rafScheduled = false;
@@ -1101,11 +2467,12 @@
         notifications_enabled: true,
         audio_enabled: true,
         volume: 0.8,
-        silence_timeout_ms: 3500,
+        silence_timeout_ms: 30000,
         llm_enabled: false,
         llm_tool: 'codex',
         character_id: 'default',
         log_retention_lines: 20000,
+        terminal_watcher_enabled: false,
         terminal_font_family: terminalSettingsDefaults.fontFamily,
         terminal_font_size: terminalSettingsDefaults.fontSize,
         terminal_theme: terminalSettingsDefaults.theme,
@@ -1117,6 +2484,8 @@
       let ipcSessionId = null;
       let debugTerminalEnabled =
         new URLSearchParams(window.location.search).get('debug_terminal') === '1';
+      const TERMINAL_DEBUG_UI_STORAGE_KEY = 'nagomi_terminal_debug_ui';
+      let terminalDebugUiVisible = true;
       // Terminal debug buffer avoids per-keystroke console spam / ターミナルのデバッグログをバッファして console 連打を避ける
       const TERMINAL_DEBUG_BUFFER_LIMIT = 800;
       const terminalDebugBuffer = [];
@@ -1172,6 +2541,37 @@
         }
       }
 
+      function loadTerminalDebugUiVisible() {
+        try {
+          const raw = localStorage.getItem(TERMINAL_DEBUG_UI_STORAGE_KEY);
+          if (raw === '0' || raw === 'false') return false;
+          if (raw === '1' || raw === 'true') return true;
+        } catch {
+          return true;
+        }
+        return true;
+      }
+
+      function applyTerminalDebugUiVisible(visible) {
+        terminalDebugUiVisible = Boolean(visible);
+        if (terminalShell) {
+          terminalShell.classList.toggle('debug-ui-hidden', !terminalDebugUiVisible);
+        }
+        if (terminalDebugToggle) {
+          terminalDebugToggle.textContent = terminalDebugUiVisible
+            ? t('debug.ui_on')
+            : t('debug.ui_off');
+        }
+        try {
+          localStorage.setItem(
+            TERMINAL_DEBUG_UI_STORAGE_KEY,
+            terminalDebugUiVisible ? '1' : '0'
+          );
+        } catch {
+          return;
+        }
+      }
+
       function visualizeText(raw, limit = 120) {
         if (!raw) return '';
         let out = '';
@@ -1220,7 +2620,7 @@
         if (ipcSessionId) return ipcSessionId;
         let invoke = getInvoke();
         if (!invoke) {
-          for (let i = 0; i < 20; i += 1) {
+          for (let i = 0; i < 60; i += 1) {
             await new Promise((resolve) => setTimeout(resolve, 100));
             invoke = getInvoke();
             if (invoke) break;
@@ -1253,8 +2653,28 @@
         return invoke(command, args);
       }
 
+      function updateModeSubtitle(view) {
+        if (!modeSubtitle) return;
+        if (view === 'settings' || view === 'watcher') {
+          modeSubtitle.textContent = '';
+          return;
+        }
+        let key = '';
+        if (view === 'chat') key = 'mode.chat';
+        if (view === 'run') key = 'mode.run';
+        if (view === 'terminal') key = 'mode.terminal';
+        modeSubtitle.textContent = key ? t(key) : '';
+      }
+
       function applyView(view) {
         if (!view) return;
+        if (view === 'watcher') {
+          document.body.classList.add('watcher-only');
+          document.documentElement.classList.add('watcher-only');
+        } else {
+          document.body.classList.remove('watcher-only');
+          document.documentElement.classList.remove('watcher-only');
+        }
         if (view === 'terminal') {
           document.body.classList.add('terminal-only');
           document.documentElement.classList.add('terminal-only');
@@ -1262,8 +2682,20 @@
           document.body.classList.remove('terminal-only');
           document.documentElement.classList.remove('terminal-only');
         }
-        if (modeSubtitle) {
-          modeSubtitle.textContent = `${view} mode`;
+        updateModeSubtitle(view);
+        if (view === 'watcher') {
+          chatMain.classList.add('hidden');
+          chatToolbar.classList.add('hidden');
+          runBoard.classList.add('hidden');
+          settingsBoard.classList.add('hidden');
+          if (terminalBoard) {
+            terminalBoard.classList.remove('hidden');
+          }
+          if (modeSwitch) {
+            modeSwitch.classList.add('hidden');
+          }
+          applyTerminalWatcherVisibility();
+          return;
         }
         if (view === 'settings') {
           chatMain.classList.add('hidden');
@@ -1329,7 +2761,7 @@
 
       function setFollow(enabled) {
         followEnabled = enabled;
-        followState.textContent = enabled ? 'on' : 'off';
+        followState.textContent = enabled ? t('toggle.on') : t('toggle.off');
       }
 
       async function arrangeWindows() {
@@ -1370,10 +2802,10 @@
       function terminalThemePalette(theme) {
         if (theme === 'light') {
           return {
-            background: '#f8f5ef',
+            background: '#f1ede6',
             foreground: '#1f2429',
             cursor: '#1f7a8c',
-            selection: 'rgba(31, 122, 140, 0.25)',
+            selection: 'rgba(31, 122, 140, 0.2)',
           };
         }
         return {
@@ -1459,6 +2891,9 @@
       }
 
       function sendTerminalInput(text) {
+        if (captureInputLinesFromSendQueue) {
+          ingestInputLines(text);
+        }
         enqueueSend(text);
       }
 
@@ -1473,6 +2908,9 @@
 
       function flushNow() {
         if (!rawInputQueue) return;
+        if (captureInputLinesFromSendQueue) {
+          ingestInputLines(rawInputQueue);
+        }
         enqueueSend(rawInputQueue);
         rawInputQueue = '';
         if (controlFlushTimer) {
@@ -1499,6 +2937,12 @@
 
       function ingestInput(text) {
         if (!text) return;
+        if (agentObserved) {
+          clearAgentObservedState('input sent');
+        }
+        if (!captureInputLinesFromSendQueue) {
+          ingestInputLines(text);
+        }
         const controlInput = isControlish(text);
         if (controlInput) {
           forceDrainOutputNow();
@@ -1646,6 +3090,13 @@
         return code >= 0x20 && code <= 0x7e;
       }
 
+      function isPrintableInputChar(char) {
+        if (!char) return false;
+        if (char === '\x1b' || char === '\x7f') return false;
+        const code = char.charCodeAt(0);
+        return code >= 0x20;
+      }
+
       function buildLocalEcho(data) {
         let echoText = '';
         let pendingText = '';
@@ -1767,6 +3218,26 @@
 
       function enqueueTerminalInput(text) {
         if (!text) return;
+        inputChunkHistory.push({
+          ts: Date.now(),
+          preview: visualizeText(text, 120),
+        });
+        if (inputChunkHistory.length > INPUT_CHUNK_HISTORY_LIMIT) {
+          inputChunkHistory.splice(0, inputChunkHistory.length - INPUT_CHUNK_HISTORY_LIMIT);
+        }
+        dataInputSeenAt = Date.now();
+        let sawPrintable = false;
+        for (const ch of text) {
+          if (isPrintableInputChar(ch)) {
+            sawPrintable = true;
+            break;
+          }
+        }
+        if (sawPrintable && inputCaptureMode !== 'textarea') {
+          inputCaptureMode = 'data';
+          if (keyInputBuffer) keyInputBuffer = '';
+        }
+        setLastTerminalEvent('input-chunk', visualizeText(text, 24));
         debugTerminal('input-data', {
           size: text.length,
           preview: visualizeText(text),
@@ -1781,6 +3252,57 @@
         }
         // Local echo disabled for correctness / 繝ｭ繝ｼ繧ｫ繝ｫ繧ｨ繧ｳ繝ｼ縺ｯ豁｣遒ｺ諤ｧ蜆ｪ蜈医〒辟｡蜉ｹ蛹・
         ingestInput(text);
+        // Fallback: ensure tool-start detection even if input parsing missed it.
+        // フォールバック: 入力解析の取りこぼし時もツール開始検知を拾う。
+        if (!agentSessionActive && text.includes('\r')) {
+          const parts = text.split(/\r\n|\r|\n/);
+          const candidate = parts.length > 1 ? parts[parts.length - 2] : parts[0];
+          handleTerminalLine(candidate);
+        }
+      }
+
+      function registerTestHooks() {
+        // Test hooks for automation / 自動テスト用のフック
+        const api = Object.freeze({
+          getTerminalSessionId() {
+            return terminalSessionId;
+          },
+          getObservedState() {
+            return {
+              merged: mergedObserved ? { ...mergedObserved } : null,
+              terminal: terminalObserved ? { ...terminalObserved } : null,
+              agent: agentObserved ? { ...agentObserved } : null,
+            };
+          },
+          getInternalState() {
+            return {
+              commandActive: terminalCommandActive,
+              hasUserCommand: terminalHasUserCommand,
+              sticky: terminalStickyObserved ? { ...terminalStickyObserved } : null,
+              agentActive: agentSessionActive,
+              agentSource: agentSessionSource,
+              lastTail: terminalLastChunkTail ? terminalLastChunkTail.slice(-160) : '',
+              outputTail: outputTailBuffer ? outputTailBuffer.slice(-160) : '',
+              ipcSessionId,
+              terminalSessionId,
+            };
+          },
+          getWatcherTitle() {
+            return terminalWatcher ? terminalWatcher.title : '';
+          },
+          sendTerminalInput(text) {
+            if (typeof text !== 'string') return false;
+            enqueueTerminalInput(text);
+            return true;
+          },
+          emitHookState(payload) {
+            if (!payload || typeof payload !== 'object') return false;
+            handleHookEvent(payload);
+            return true;
+          },
+        });
+        window.nagomiTest = api;
+        return api;
       }
 
       async function resizeTerminal() {
@@ -1807,6 +3329,145 @@
           if (!data) return;
           enqueueTerminalInput(data);
         });
+        terminal.onKey((event) => {
+          if (captureInputLinesFromSendQueue) return;
+          if (!event || !event.domEvent) return;
+          const domEvent = event.domEvent;
+          if (domEvent.ctrlKey || domEvent.metaKey || domEvent.altKey) return;
+          const key = domEvent.key;
+          const dataFresh = Date.now() - dataInputSeenAt < 1000;
+          terminalLastActivityAt = Date.now();
+          lastKeyLabel = key || '';
+          setLastTerminalEvent('key', key);
+          if (key === 'Enter') {
+            if (!dataInputLineActive && !dataFresh && keyInputBuffer) {
+              handleTerminalLine(keyInputBuffer);
+              keyInputBuffer = '';
+              skipNextCarriage = true;
+            } else {
+              skipNextCarriage = false;
+            }
+            inputSawCarriage = true;
+            return;
+          }
+          if (key === 'Backspace') {
+            if (!dataInputLineActive && !dataFresh) {
+              inputCaptureMode = 'key';
+              keyInputBuffer = keyInputBuffer.slice(0, -1);
+            }
+            return;
+          }
+          if (key && key.length === 1) {
+            if (!dataInputLineActive && !dataFresh) {
+              inputCaptureMode = 'key';
+              keyInputBuffer += key;
+            }
+          }
+        });
+        document.addEventListener(
+          'keydown',
+          (event) => {
+            if (!isTerminalView) return;
+            if (!event || event.defaultPrevented) return;
+            if (captureInputLinesFromSendQueue) return;
+            if (inputCaptureMode === 'key') return;
+            if (event.ctrlKey || event.metaKey || event.altKey) return;
+            const key = event.key;
+            if (!key) return;
+            const dataFresh = Date.now() - dataInputSeenAt < 1000;
+            terminalLastActivityAt = Date.now();
+            lastKeyLabel = key;
+            setLastTerminalEvent('global-key', key);
+            if (key === 'Enter') {
+              if (!dataInputLineActive && !dataFresh) {
+                const candidate = inputLineBuffer || keyInputBuffer;
+                if (candidate) {
+                  handleTerminalLine(candidate);
+                  skipNextCarriage = true;
+                } else {
+                  skipNextCarriage = false;
+                }
+                inputLineBuffer = '';
+                keyInputBuffer = '';
+              } else {
+                skipNextCarriage = false;
+              }
+              inputSawCarriage = true;
+              return;
+            }
+            if (key === 'Backspace') {
+              if (!dataInputLineActive && !dataFresh) {
+                inputLineBuffer = inputLineBuffer.slice(0, -1);
+                keyInputBuffer = keyInputBuffer.slice(0, -1);
+              }
+              return;
+            }
+            if (key.length === 1) {
+              if (!dataInputLineActive && !dataFresh) {
+                if (inputCaptureMode === 'auto') inputCaptureMode = 'global';
+                inputLineBuffer += key;
+                keyInputBuffer += key;
+              }
+            }
+          },
+          true
+        );
+        if (terminal.textarea) {
+          terminal.textarea.addEventListener(
+            'keydown',
+            (event) => {
+              if (!event) return;
+              if (captureInputLinesFromSendQueue) return;
+              if (event.ctrlKey || event.metaKey || event.altKey) return;
+              if (event.key === 'Enter') {
+                const dataFresh = Date.now() - dataInputSeenAt < 1000;
+                if (!dataInputLineActive && !dataFresh) {
+                  if (inputCaptureMode === 'auto') inputCaptureMode = 'textarea';
+                  const candidate = inputLineBuffer || keyInputBuffer;
+                  if (candidate) handleTerminalLine(candidate);
+                  inputLineBuffer = '';
+                  keyInputBuffer = '';
+                  skipNextCarriage = true;
+                } else {
+                  skipNextCarriage = false;
+                }
+                inputSawCarriage = true;
+              }
+            },
+            true
+          );
+          terminal.textarea.addEventListener(
+            'input',
+            (event) => {
+              const data = event && typeof event.data === 'string' ? event.data : '';
+              const text = data || terminal.textarea.value || '';
+              if (!text) return;
+              if (captureInputLinesFromSendQueue) return;
+              if (Date.now() - dataInputSeenAt < 1000) return;
+              if (inputCaptureMode === 'auto') inputCaptureMode = 'textarea';
+              terminalLastActivityAt = Date.now();
+              inputLineBuffer += text;
+              keyInputBuffer += text;
+              setLastTerminalEvent('text', visualizeText(text, 24));
+            },
+            true
+          );
+          terminal.textarea.addEventListener(
+            'compositionend',
+            (event) => {
+              const data = event && typeof event.data === 'string' ? event.data : '';
+              if (!data) return;
+              if (captureInputLinesFromSendQueue) return;
+              if (Date.now() - dataInputSeenAt < 1000) return;
+              if (inputCaptureMode === 'auto') inputCaptureMode = 'textarea';
+              terminalLastActivityAt = Date.now();
+              inputLineBuffer += data;
+              keyInputBuffer += data;
+              setLastTerminalEvent('compose', visualizeText(data, 24));
+            },
+            true
+          );
+        }
 
         // Enable paste shortcuts (Windows-like behavior) / ペーストショートカットを有効化
         // - Ctrl+V: paste (fallback to ^V if clipboard read fails)
@@ -1891,9 +3552,28 @@
         terminal.open(terminalContainer);
         terminalExitCode = null;
         terminalLastOutputAt = Date.now();
+        terminalLastActivityAt = Date.now();
         terminalLastChunkTail = '';
-        setTerminalObservedState(TerminalObservation.running, 'running');
-        startTerminalObservationLoop();
+        outputTailBuffer = '';
+        lastTerminalEvent = { type: 'init', detail: '' };
+        lastInputLine = '';
+        inputCaptureMode = 'auto';
+        keyInputBuffer = '';
+        skipNextCarriage = false;
+        lastKeyLabel = '';
+        inputChunkHistory.length = 0;
+        dataInputSeenAt = 0;
+        dataInputLineActive = false;
+        agentSessionActive = false;
+        agentSessionSource = null;
+        inputLineBuffer = '';
+        inputSawCarriage = false;
+        if (idleJudgeTimer) {
+          clearTimeout(idleJudgeTimer);
+          idleJudgeTimer = null;
+        }
+        agentObserved = null;
+        updateTerminalObservedState();
         try {
           const WebglAddonCtor =
             window.WebglAddon &&
@@ -1934,6 +3614,7 @@
             fitAddon.fit();
             if (terminal.cols === beforeCols && terminal.rows === beforeRows) return;
             if (terminal.cols === lastResizeCols && terminal.rows === lastResizeRows) return;
+            if (focusTransitionActive) return;
             lastResizeCols = terminal.cols;
             lastResizeRows = terminal.rows;
             resizeTerminal();
@@ -1950,6 +3631,25 @@
           console.debug('[terminal] listen unavailable');
         } else {
           console.debug('[terminal] listen registered', { sessionId: terminalSessionId });
+          listen('terminal-focus-transition', (event) => {
+            const payload = event && event.payload;
+            if (!payload) return;
+            if (payload.active) {
+              focusTransitionToken = payload.token;
+              focusTransitionActive = true;
+              return;
+            }
+            if (focusTransitionToken !== payload.token) return;
+            focusTransitionActive = false;
+            focusTransitionToken = null;
+            setTimeout(() => {
+              if (!fitAddon || !terminal) return;
+              fitAddon.fit();
+              lastResizeCols = terminal.cols;
+              lastResizeRows = terminal.rows;
+              resizeTerminal();
+            }, 0);
+          });
           listen('terminal-output', (event) => {
             const payload = event && event.payload;
             if (!payload) {
@@ -1963,6 +3663,7 @@
               });
               return;
             }
+            setLastTerminalEvent('output', terminalLastChunkTail || 'chunk');
             if (debugTerminalEnabled) {
               console.debug('[terminal] output', {
                 sessionId: payload.session_id,
@@ -1978,12 +3679,17 @@
             });
             const nextChunk = payload.chunk || '';
             if (nextChunk) {
-              terminalLastOutputAt = Date.now();
-              if (terminalObserver.tailForObservation) {
-                terminalLastChunkTail = terminalObserver.tailForObservation(nextChunk);
+              const now = Date.now();
+              terminalLastOutputAt = now;
+              terminalLastActivityAt = now;
+              appendOutputTail(nextChunk);
+              if (terminalStateDetector.tailForObservation) {
+                terminalLastChunkTail = terminalStateDetector.tailForObservation(outputTailBuffer);
               } else {
-                terminalLastChunkTail = String(nextChunk);
+                terminalLastChunkTail = outputTailBuffer || String(nextChunk);
               }
+              scheduleIdleJudge('output');
+              updateTerminalObservedState();
               enqueueTerminalOutput(nextChunk);
             }
           });
@@ -2003,11 +3709,11 @@
               });
             }
           });
-          listen('terminal-exit', (event) => {
-            const payload = event && event.payload;
-            if (!payload) {
-              console.debug('[terminal] exit ignored', { reason: 'missing payload' });
-              return;
+            listen('terminal-exit', (event) => {
+              const payload = event && event.payload;
+              if (!payload) {
+                console.debug('[terminal] exit ignored', { reason: 'missing payload' });
+                return;
             }
             if (payload.session_id !== terminalSessionId) {
               console.debug('[terminal] exit ignored', {
@@ -2020,22 +3726,26 @@
               sessionId: payload.session_id,
               code: payload.exit_code,
             });
-            terminalExitCode = payload.exit_code;
-            if (payload.exit_code === 0) {
-              setTerminalObservedState(TerminalObservation.success, 'success');
-            } else {
-              setTerminalObservedState(
-                TerminalObservation.fail,
-                `fail (exit ${payload.exit_code})`
-              );
-            }
-            enqueueTerminalOutput(`\r\n[exit ${payload.exit_code}]\r\n`);
-          });
-          listen('terminal-error', (event) => {
-            const payload = event && event.payload;
-            if (!payload) {
-              console.debug('[terminal] error ignored', { reason: 'missing payload' });
-              return;
+            setLastTerminalEvent('exit', payload.exit_code);
+            const hasExitCode = Number.isFinite(payload.exit_code);
+            terminalExitCode = hasExitCode ? payload.exit_code : 0;
+            agentSessionActive = false;
+            agentSessionSource = null;
+              if (idleJudgeTimer) {
+                clearTimeout(idleJudgeTimer);
+                idleJudgeTimer = null;
+              }
+              clearAgentObservedState('terminal exit');
+              clearLatchedObserved();
+              updateTerminalObservedState();
+              const exitLabel = hasExitCode ? String(payload.exit_code) : 'unknown';
+              enqueueTerminalOutput(`\r\n[exit ${exitLabel}]\r\n`);
+            });
+            listen('terminal-error', (event) => {
+              const payload = event && event.payload;
+              if (!payload) {
+                console.debug('[terminal] error ignored', { reason: 'missing payload' });
+                return;
             }
             if (payload.session_id !== terminalSessionId) {
               console.debug('[terminal] error ignored', {
@@ -2048,8 +3758,38 @@
               sessionId: payload.session_id,
               message: payload.message,
             });
-            setTerminalObservedState(TerminalObservation.fail, 'fail (error)');
-            enqueueTerminalOutput(`\r\n[error ${payload.message}]\r\n`);
+            setLastTerminalEvent('error', payload.message);
+            terminalExitCode = 1;
+            agentSessionActive = false;
+            agentSessionSource = null;
+              if (idleJudgeTimer) {
+                clearTimeout(idleJudgeTimer);
+                idleJudgeTimer = null;
+              }
+              clearAgentObservedState('terminal error');
+              clearLatchedObserved();
+              updateTerminalObservedState();
+              enqueueTerminalOutput(`\r\n[error ${payload.message}]\r\n`);
+            });
+          listen('completion-hook-state', (event) => {
+            const payload = event && event.payload;
+            if (!payload) return;
+            const observed = handleHookEvent(payload);
+            if (isTerminalView) return;
+            if (!observed) return;
+            switch (observed.state) {
+              case TerminalObservation.success:
+                setCharacterPhase('success');
+                break;
+              case TerminalObservation.fail:
+                setCharacterPhase('error');
+                break;
+              case TerminalObservation.needInput:
+                setCharacterPhase('need_input');
+                break;
+              default:
+                break;
+            }
           });
         }
       }
@@ -2073,6 +3813,8 @@
           setFollow(true);
         }
       });
+
+      setFollow(followEnabled);
 
       followToggle.addEventListener('click', () => {
         setFollow(!followEnabled);
@@ -2154,7 +3896,18 @@
       });
 
       function setToggleState(enabled, label) {
-        label.textContent = enabled ? 'on' : 'off';
+        if (!label) return;
+        label.textContent = enabled ? t('toggle.on') : t('toggle.off');
+        const toggle = label.closest('.toggle-switch');
+        if (toggle) {
+          toggle.dataset.state = enabled ? 'on' : 'off';
+          toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+        }
+      }
+
+      function setCodexHookStatus(text) {
+        if (!codexHookStatus) return;
+        codexHookStatus.textContent = text || '';
       }
 
       function refreshCharacterList() {
@@ -2168,6 +3921,106 @@
         });
       }
 
+      function setFontStatus(message) {
+        if (!terminalFontStatus) return;
+        terminalFontStatus.textContent = message || '';
+      }
+
+      const fontMeasureCanvas = document.createElement('canvas');
+      const fontMeasureCtx = fontMeasureCanvas.getContext('2d');
+
+      function formatFontFamilyValue(family) {
+        const safe = String(family || '').replace(/"/g, '\\"');
+        if (!safe) return terminalSettingsDefaults.fontFamily;
+        return `"${safe}", ${terminalSettingsDefaults.fontFamily}`;
+      }
+
+      function formatFontLabel(value) {
+        const text = String(value || '').trim();
+        if (!text) return 'custom';
+        const first = text.split(',')[0].trim();
+        return first.replace(/^["']|["']$/g, '') || 'custom';
+      }
+
+      function looksMonospaceFont(family) {
+        if (!fontMeasureCtx) return true;
+        const safe = String(family || '').replace(/"/g, '\\"');
+        if (!safe) return true;
+        const stack = `"${safe}", ${terminalSettingsDefaults.fontFamily}`;
+        fontMeasureCtx.font = `16px ${stack}`;
+        const samples = ['i', 'W', 'm', '0', '1', '_'];
+        const widths = samples.map((ch) => fontMeasureCtx.measureText(ch).width);
+        const max = Math.max(...widths);
+        const min = Math.min(...widths);
+        return max - min < 0.2;
+      }
+
+      function rebuildFontOptions(fontFamilies) {
+        if (!terminalFont) return;
+        const currentValue =
+          settingsState.terminal_font_family || terminalSettingsDefaults.fontFamily;
+        terminalFont.innerHTML = '';
+        const seen = new Set();
+        baseFontOptions.forEach((base) => {
+          const option = document.createElement('option');
+          option.value = base.value;
+          option.textContent = base.label;
+          terminalFont.appendChild(option);
+          seen.add(base.value);
+        });
+        (fontFamilies || []).forEach((family) => {
+          const value = formatFontFamilyValue(family);
+          if (!value || seen.has(value)) return;
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = family;
+          option.dataset.dynamic = '1';
+          terminalFont.appendChild(option);
+          seen.add(value);
+        });
+        ensureFontOption(currentValue);
+        terminalFont.value = currentValue;
+      }
+
+      async function loadLocalFonts() {
+        if (!terminalFont) return;
+        if (typeof window.queryLocalFonts !== 'function') {
+          setFontStatus(t('settings.font.status_unavailable'));
+          return;
+        }
+        setFontStatus(t('settings.font.status_loading'));
+        try {
+          const fonts = await window.queryLocalFonts();
+          const families = new Set();
+          fonts.forEach((font) => {
+            if (font && font.family) {
+              families.add(font.family);
+            }
+          });
+          const list = Array.from(families)
+            .filter((family) => looksMonospaceFont(family))
+            .sort((a, b) => a.localeCompare(b));
+          rebuildFontOptions(list);
+          setFontStatus(t('settings.font.status_loaded'));
+        } catch (err) {
+          console.warn('[settings] local fonts unavailable', err);
+          setFontStatus(t('settings.font.status_failed'));
+        }
+      }
+
+      function ensureFontOption(value) {
+        if (!terminalFont || !value) return;
+        const exists = Array.from(terminalFont.options).some(
+          (option) => option.value === value
+        );
+        if (exists) return;
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = formatFontLabel(value);
+        option.dataset.dynamic = '1';
+        terminalFont.appendChild(option);
+      }
+
       function applySettings(next) {
         if (!next) return;
         Object.assign(settingsState, next);
@@ -2178,15 +4031,20 @@
         audioEnabled = settingsState.audio_enabled;
         llmEnabled = settingsState.llm_enabled;
         terminalCopyOnSelect = settingsState.terminal_copy_on_select;
+        terminalWatcherEnabled = settingsState.terminal_watcher_enabled;
         if (notifyState) setToggleState(notifyEnabled, notifyState);
         if (audioState) setToggleState(audioEnabled, audioState);
         if (llmState) setToggleState(llmEnabled, llmState);
+        if (characterWatcherState) setToggleState(terminalWatcherEnabled, characterWatcherState);
         if (volumeSlider) volumeSlider.value = settingsState.volume;
         if (silenceInput) silenceInput.value = settingsState.silence_timeout_ms;
         if (llmTool) llmTool.value = settingsState.llm_tool;
         if (characterUploaded) characterUploaded.textContent = settingsState.character_id;
         if (terminalTheme) terminalTheme.value = settingsState.terminal_theme;
-        if (terminalFont) terminalFont.value = settingsState.terminal_font_family;
+        if (terminalFont) {
+          ensureFontOption(settingsState.terminal_font_family);
+          terminalFont.value = settingsState.terminal_font_family;
+        }
         if (terminalFontSize) terminalFontSize.value = settingsState.terminal_font_size;
         if (terminalScrollback) terminalScrollback.value = settingsState.terminal_scrollback_lines;
         if (terminalCopyState) setToggleState(terminalCopyOnSelect, terminalCopyState);
@@ -2198,6 +4056,39 @@
         if (settingsState.log_retention_lines && retention) {
           retention.value = settingsState.log_retention_lines;
         }
+        applySettingsTheme(settingsState.terminal_theme);
+        applyTerminalWatcherVisibility();
+        updateTerminalDebugBadge();
+      }
+
+      function applySettingsTheme(theme) {
+        const normalized = theme === 'dark' ? 'dark' : 'light';
+        document.documentElement.dataset.theme = normalized;
+        if (settingsBoard) {
+          settingsBoard.dataset.theme = normalized;
+        }
+      }
+
+      function registerSettingsListener() {
+        const listen = getEventListen();
+        if (!listen) return;
+        listen('settings-updated', (event) => {
+          const payload = event && event.payload;
+          if (!payload) return;
+          applySettings(payload);
+          applyTerminalSettings();
+        });
+      }
+
+      function registerWatcherListener() {
+        if (!isWatcherView) return;
+        const listen = getEventListen();
+        if (!listen) return;
+        listen('terminal-aggregate-state', (event) => {
+          const payload = event && event.payload;
+          if (!payload || !payload.state) return;
+          applyTerminalObservedState(payload.state, payload.reason || payload.state);
+        });
       }
 
       async function loadSettingsFromBackend() {
@@ -2206,6 +4097,20 @@
         } catch {
           return null;
         }
+      }
+
+      function bootstrapIpcSession(retries) {
+        const remaining = typeof retries === 'number' ? retries : 6;
+        ensureIpcSession()
+          .then((sessionId) => {
+            if (sessionId) return;
+            if (remaining <= 0) return;
+            setTimeout(() => bootstrapIpcSession(remaining - 1), 500);
+          })
+          .catch(() => {
+            if (remaining <= 0) return;
+            setTimeout(() => bootstrapIpcSession(remaining - 1), 500);
+          });
       }
 
       async function saveSettingsToBackend() {
@@ -2243,6 +4148,45 @@
           setToggleState(llmEnabled, llmState);
           settingsState.llm_enabled = llmEnabled;
           saveSettingsToBackend();
+        });
+      }
+
+      if (characterWatcherToggle) {
+        setToggleState(terminalWatcherEnabled, characterWatcherState);
+        characterWatcherToggle.addEventListener('click', () => {
+          terminalWatcherEnabled = !terminalWatcherEnabled;
+          setToggleState(terminalWatcherEnabled, characterWatcherState);
+          settingsState.terminal_watcher_enabled = terminalWatcherEnabled;
+          applyTerminalWatcherVisibility();
+          saveSettingsToBackend();
+        });
+      }
+
+      if (codexHookButton) {
+        codexHookButton.addEventListener('click', async () => {
+          setCodexHookStatus('導入中...');
+          const result = await invokeWithSession('ensure_codex_hook');
+          if (!result) {
+            setCodexHookStatus('失敗');
+            return;
+          }
+          switch (result.status) {
+            case 'installed':
+              setCodexHookStatus('導入済み');
+              break;
+            case 'already_installed':
+              setCodexHookStatus('導入済み');
+              break;
+            case 'skipped_existing_notify':
+              setCodexHookStatus('既存のnotifyを検出（変更なし）');
+              break;
+            case 'migrated_py_to_js':
+              setCodexHookStatus('node版へ移行');
+              break;
+            default:
+              setCodexHookStatus('失敗');
+              break;
+          }
         });
       }
 
@@ -2296,6 +4240,7 @@
       if (terminalTheme) {
         terminalTheme.addEventListener('change', () => {
           settingsState.terminal_theme = terminalTheme.value;
+          applySettingsTheme(settingsState.terminal_theme);
           applyTerminalSettings();
           saveSettingsToBackend();
         });
@@ -2304,9 +4249,15 @@
       if (terminalFont) {
         terminalFont.addEventListener('change', () => {
           settingsState.terminal_font_family =
-            terminalFont.value.trim() || terminalSettingsDefaults.fontFamily;
+            terminalFont.value || terminalSettingsDefaults.fontFamily;
           applyTerminalSettings();
           saveSettingsToBackend();
+        });
+      }
+
+      if (terminalFontRefresh) {
+        terminalFontRefresh.addEventListener('click', () => {
+          loadLocalFonts();
         });
       }
 
@@ -2337,7 +4288,28 @@
         });
       }
 
+      if (terminalDebugSave) {
+        terminalDebugSave.addEventListener('click', () => {
+          appendDebugSnapshot();
+        });
+      }
+      if (terminalDebugScreenshot) {
+        terminalDebugScreenshot.addEventListener('click', () => {
+          saveDebugScreenshot();
+        });
+      }
+      if (terminalDebugToggle) {
+        terminalDebugToggle.addEventListener('click', () => {
+          applyTerminalDebugUiVisible(!terminalDebugUiVisible);
+        });
+      }
+
+      registerTestHooks();
+      registerSettingsListener();
+      registerWatcherListener();
+
       const initialView = new URLSearchParams(window.location.search).get('view') || 'chat';
+      bootstrapIpcSession(6);
       loadSettingsFromBackend().then((loaded) => {
         if (loaded) {
           applySettings(loaded);
@@ -2345,6 +4317,7 @@
           applySettings(settingsState);
         }
       });
+      applyTerminalDebugUiVisible(loadTerminalDebugUiVisible());
       applyView(initialView);
     </script>
   </body>

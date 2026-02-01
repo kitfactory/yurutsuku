@@ -1,5 +1,5 @@
 {
-  "name": "@kitfactory/yurutsuku-protocol",
+  "name": "@kitfactory/nagomi-protocol",
   "private": true,
   "version": "0.0.0",
   "main": "src/index.js",

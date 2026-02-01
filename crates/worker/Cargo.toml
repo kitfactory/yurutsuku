@@ -1,13 +1,13 @@
 [package]
-name = "yurutsuku-worker"
+name = "nagomi-worker"
 version = "0.0.0"
 edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
 portable-pty = "0.8"
-yurutsuku-protocol = { path = "../protocol" }
+nagomi-protocol = { path = "../nagomi-protocol" }
 
 [[bin]]
-name = "yurutsuku-worker"
+name = "nagomi-worker"
 path = "src/main.rs"

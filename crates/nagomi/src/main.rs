@@ -46,9 +46,9 @@ fn workspace_root() -> Option<PathBuf> {
 
 fn orchestrator_exe_name() -> &'static str {
     if cfg!(windows) {
-        "yurutsuku-orchestrator.exe"
+        "nagomi-orchestrator.exe"
     } else {
-        "yurutsuku-orchestrator"
+        "nagomi-orchestrator"
     }
 }
 
@@ -97,7 +97,7 @@ fn wait_health(port: u16, timeout: Duration) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    let port = env_u16("YURUTSUKU_ORCH_HEALTH_PORT", 17707);
+    let port = env_u16("NAGOMI_ORCH_HEALTH_PORT", 17707);
 
     let mut session_id: Option<String> = None;
     let mut args = std::env::args().skip(1);
@@ -105,7 +105,7 @@ fn main() -> Result<()> {
         match arg.as_str() {
             "--session-id" => session_id = args.next(),
             "--help" | "-h" => {
-                println!("yuru: start orchestrator and open a terminal window");
+                println!("nagomi: start orchestrator and open a terminal window");
                 println!("  --session-id <id>  Open terminal with a fixed session id");
                 return Ok(());
             }

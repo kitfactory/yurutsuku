@@ -1,36 +1,84 @@
-# コンセプト
+﻿# concept.md（入口）
 
-入口は `docs/OVERVIEW.md`。ここは最小の方針と用語だけを記載する。
+この文書は `docs/OVERVIEW.md` を前提に、P0 の **最小コンセプト**を整理する。
 
-## 目的
-- Windows P0 で Orchestrator + Worker + PTY の最小ターミナル体験を完成させる
-- Terminal 画面は一般的なターミナルアプリとして動作し、PTY 出力のみを表示する
-- IPC通信セッションを分離し、E2E でハンドシェイクを検証できる状態にする
+---
 
-## フェーズ
-- P0: Windows-only (Orchestrator + Windows Worker)
-- P1: WSL Worker
-- P2: Linux/macOS
+#1. Overview - What/Why/Who/When/Where
+- What: nagomi Terminal で **複数ターミナルの状態（実行/入力待ち/完了/失敗）を観測・統合し、ひと目で分かる**体験を作る
+- Why: 並列作業中に「どれが止まっているか」「どれが入力待ちか」が見えず、待ちや見落としが発生する
+- Who: ローカル開発者（Windows + ターミナル中心）
+- When/Where: nagomi Terminal（Tauri）内。Watcher/Observer を通じて状態表示する
+- Outputs: Pane/Job の状態、Watcher 表情、tint による視覚フィードバック
+- Assumptions: Windows P0、ConPTY、CLI エージェント（codex/claudecode/opencode）のフック取得が可能
 
-## 用語 / UI
-- セッション: PTY/Worker と接続された単位
-- Chat モード: 対話レーン + キャラクター表示
-- Run モード: セッション一覧とウィンドウ整列 UI
-- Terminal 画面: PTY 出力のみを表示するターミナル UI
-- Worker: PTY を起動し入出力を扱うプロセス
-- Orchestrator: UI と Worker をつなぎ、IPC/設定/セッション管理を行う
+#2. Main Pain
+- 複数ターミナルの完了/入力待ちを見落とす
+- AI ツールの完了検知が遅れて作業が止まる
+- 出力量が多く、人間がログを追い切れない
 
-## Spec ID
-- REQ-001: モデル基盤
-- REQ-002: Protocol (JS/Rust)
-- REQ-003: Worker (Rust)
-- REQ-004: Orchestrator (Tauri)
-- REQ-005: Orchestrator ↔ Worker 接続
-- REQ-006: Chat モード UI
-- REQ-007: キャラクター UI
-- REQ-008: Run モード UI
-- REQ-009: Heuristic Judge
-- REQ-010: 通知 (OS + 音声)
-- REQ-011: ログ/マスク/運用
-- REQ-012: Settings
-- REQ-013: P1: WSL Worker
+#3. Target & Assumptions
+- Windows 10/11 + nagomi Terminal
+- PTY の input/output/exit を取得可能
+- フック通知（JSON）を取得可能
+- 30s 無出力を「終了候補」として扱う
+
+#4. 技術/構成（P0）
+- UI: Tauri + HTML/TypeScript + xterm.js
+- Orchestrator: Rust
+- PTY: ConPTY
+- Hook: codex / claudecode / opencode
+- Judge: LLM 判定（JSON 出力）+ heuristic フォールバック
+
+#5. Features
+| ID | 機能 | 解決する Pain | 対応 UC |
+|---|---|---|---|
+| F-1 | TerminalStateDetector（PTY 入出力/終了の観測） | ターミナルの状態が追えない | UC-1 |
+| F-2 | AgentEventObserver（CompletionHook） | AI ツールの完了/入力待ちが分からない | UC-2 |
+| F-3 | StateIntegrator + ToolJudge | 端末/フックを統合して判定できない | UC-3 |
+| F-4 | Workspace/Task Group/Pane | 並列作業の整理ができない | UC-4 |
+
+#6. Use Cases
+| ID | 名前 | 対象 | 前提 | トリガ | 結果 | 備考 |
+|---|---|---|---|---|---|---|
+| UC-1 | ターミナル状態の観測 | PTY | input/output/exit を取得 | 出力/終了/沈黙 | 状態が更新される | exit を優先 | 
+| UC-2 | AI ツール完了の観測 | Hook | フック通知が取得できる | completed/error/need_input | 状態が更新される | tool に依存 | 
+| UC-3 | Stream + Hook 統合判定 | UI | UC-1/UC-2 が有効 | 終了候補 | success/failure/need_input が確定 | Judge を使用 | 
+| UC-4 | 並列作業の整理 | UI | 複数ターミナル | ペイン増加 | グループ化/状態集約 | CWD/タグ利用 | 
+
+#7. Goals
+- G-1: 終了/入力待ちを **30 秒以内**に気づける
+- G-2: Stream/Hook を統合して誤判定を減らす
+- G-3: 状態を最小 UI で明確に伝える
+- G-4: 並列作業を迷子にしない
+
+#8. Layering
+| レイヤー | 役割 | 主なモジュール |
+|---|---|---|
+| UI | 表示と操作 | Terminal / Watcher / Settings |
+| Orchestrator | 状態統合 | Detector / Hook / Judge / Integrator |
+| Worker | PTY 実行 | ConPTY + Process |
+| Protocol | 送受信 | NDJSON |
+| Storage | 設定 | settings.json |
+
+#9. Key Data Classes
+| データ | 主な属性 | 対応 | 
+|---|---|---|
+| Pane | id, state, last_activity_at | UC-1/UC-3 |
+| Job | id, pane_id, tool, state | UC-2/UC-3 |
+| HookEvent | source, kind, ts_ms, source_session_id | UC-2 |
+| JudgeResult | state, summary | UC-3 |
+
+#10. Implementation Order
+1. TerminalStateDetector
+2. CompletionHook / AgentEventObserver
+3. StateIntegrator + ToolJudge
+4. UI tint / Watcher
+5. Overview（Run 相当）
+
+#11. Glossary
+- nagomi: 複数ターミナルの観測と状態表示を行うアプリ
+- Orchestrator: 状態統合の中核
+- Worker: PTY を起動して入出力を扱う
+- HookEvent: フック通知の正規化イベント
+- Judge: 終了候補を success/failure/need_input に判定する機構

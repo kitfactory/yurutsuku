@@ -5,7 +5,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
-use yurutsuku_protocol::{parse_line, serialize_message, Message, Output};
+use nagomi_protocol::{parse_line, serialize_message, Message, Output};
 
 fn spawn_command_with_args(
     command: &str,
@@ -193,7 +193,7 @@ fn send_message(stdout_tx: &mpsc::Sender<String>, message: &Message) -> Result<(
 }
 
 fn send_error(stdout_tx: &mpsc::Sender<String>, session_id: &str, message: &str) -> Result<()> {
-    let error = Message::Error(yurutsuku_protocol::ErrorMessage {
+    let error = Message::Error(nagomi_protocol::ErrorMessage {
         session_id: session_id.to_string(),
         message: message.to_string(),
         recoverable: false,
@@ -217,7 +217,7 @@ fn spawn_from_cmd(
 }
 
 fn start_session(
-    message: &yurutsuku_protocol::StartSession,
+    message: &nagomi_protocol::StartSession,
     stdout_tx: &mpsc::Sender<String>,
 ) -> Result<WorkerSession> {
     let (master, child) = spawn_from_cmd(
@@ -406,7 +406,7 @@ fn watch_exit(
                 if exit_sent.swap(true, Ordering::SeqCst) {
                     break;
                 }
-                let message = Message::Exit(yurutsuku_protocol::Exit {
+                let message = Message::Exit(nagomi_protocol::Exit {
                     session_id: session_id.to_string(),
                     exit_code: status.exit_code() as i32,
                 });
@@ -533,7 +533,7 @@ fn main() {
                             if active.exit_sent.swap(true, Ordering::SeqCst) {
                                 continue;
                             }
-                            let message = Message::Exit(yurutsuku_protocol::Exit {
+                            let message = Message::Exit(nagomi_protocol::Exit {
                                 session_id: message.session_id.clone(),
                                 exit_code: status.exit_code() as i32,
                             });
@@ -709,3 +709,4 @@ mod tests {
         assert!(true);
     }
 }
+

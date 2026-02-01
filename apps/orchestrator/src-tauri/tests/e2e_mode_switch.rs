@@ -10,7 +10,7 @@ fn app_path() -> PathBuf {
         .join("..")
         .join("target")
         .join("debug")
-        .join("yurutsuku-orchestrator")
+        .join("nagomi-orchestrator")
 }
 
 async fn connect() -> Result<Client, fantoccini::error::NewSessionError> {

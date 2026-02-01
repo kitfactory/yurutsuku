@@ -1,7 +1,7 @@
 {
-  "productName": "yurutsuku",
+  "productName": "nagomi",
   "version": "0.0.0",
-  "identifier": "com.kitfactory.yurutsuku",
+  "identifier": "com.kitfactory.nagomi",
   "build": {
     "beforeBuildCommand": "",
     "beforeDevCommand": "",

@@ -8,10 +8,8 @@
 1. **入口は `docs/OVERVIEW.md`**（全体像・現在地・リンク集）。作業前後で必ず確認/更新する。
 2. **正本（Canonical）は `docs/`**。迷ったらまず正本を更新する（フェーズ運用は任意・適用条件あり）。
 3. **レビューゲートで必ず停止**：自己レビュー → 完成と判断できたらユーザー確認 → 合意で次へ。
-4. **`docs/plan.md` は NOW のみ**（いまやるチェックリスト＋リンク）。完了/履歴は別へ逃がす。
-5. **作業を進めるたびに `docs/plan.md` のチェックを更新する**。
-6. **実装したら現物テストを追加し、通ったら `docs/plan.md` を更新してから次へ進む**。
-7. **大きい変更は “提案→合意→適用”**（構成変更、ID変更、大量削除、互換影響など）。
+4. **`docs/plan.md` は current / future / archive で管理**（current はチェックリスト、future は粗い計画、archive は完了）。
+5. **大きい変更は “提案→合意→適用”**（構成変更、ID変更、大量削除、互換影響など）。
 
 ## 設計指示（必須 / 短縮版）
 - **ユーザー向けI/Fは単純に**：引数・型の種類を最小化し、内部都合の型/状態を漏らさない。
@@ -25,7 +23,7 @@
 1) `docs/OVERVIEW.md`：現在フェーズ / 今回スコープ / 参照リンクを確認
 2) `docs/concept.md`：対象 Spec ID と範囲を確認
 3) `docs/spec.md`：該当章へ移動（必要なら分割する）
-4) `docs/plan.md`：NOW チェックリストと詳細リンクを確認
+4) `docs/plan.md`：current チェックリストと詳細リンクを確認
 5) （任意）フェーズ運用時のみ `docs/phases/<PHASE>/` を確認
 
 ## 更新の安全ルール（強すぎない版）
@@ -44,19 +42,9 @@
 - AGENTS.md が日本語の場合、`docs/**` は日本語で作成する
 - ソースコードのコメントは **日本語 + 英語を併記**
 
-## 言語別指針 (Node.js/JavaScript)
-- Node.js: npm workspaces 前提。ルートの `package.json` から `npm run <script>` を実行する。
-- CLI は `packages/cli` の `src/index.js` を基準に扱う。
-- 実行例: `npm run dev` / `npm run build` / `npm run lint` / `npm run test`
-
-## 言語別指針 (Rust)
-- Rust: Cargo workspace 前提。ルートの `Cargo.toml` を正とする。
-- Lint/Format は `cargo clippy` / `cargo fmt` を基本とする。
-- 実行例: `cargo build` / `cargo test` / `cargo clippy` / `cargo fmt`
-
-## 言語別指針 (Tauri)
-- Tauri: `apps/orchestrator/src-tauri` を正とする。
-- 実行例: `cargo run -p yurutsuku-orchestrator` / `cargo build -p yurutsuku-orchestrator`
+## 言語別指針 (Python)
+- Python: `uv` + `.venv` 仮想環境、`pytest`、Lint/Format（`ruff`/`black` など）を推奨。
+- 環境変数/`.env` の必要キーと利用箇所を明示し、`.env.sample` は生成しないでください。
 
 ## 対応エディタ
 - ターゲット: Codex
@@ -68,6 +56,3 @@
 
 ## 詳細は OVERVIEW を正とする
 `docs/OVERVIEW.md` を参照する。
-
-## �ԓ�����
-�񓚂͓��{��ōl���A���{��ŕԓ����邱�ƁB

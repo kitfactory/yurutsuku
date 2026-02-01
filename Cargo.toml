@@ -1,8 +1,8 @@
 [workspace]
 members = [
   "crates/worker",
-  "crates/protocol",
-  "crates/yuru",
+  "crates/nagomi-protocol",
+  "crates/nagomi",
   "apps/orchestrator/src-tauri"
 ]
 resolver = "2"

@@ -1,12 +1,12 @@
 {
-  "name": "yurutsuku-orchestrator",
+  "name": "nagomi-orchestrator",
   "private": true,
   "version": "0.0.0",
   "scripts": {
     "dev": "echo TODO: tauri dev",
     "build": "echo TODO: tauri build",
     "lint": "echo TODO: lint",
-    "test": "node --test",
+    "test": "node --test --test-concurrency=1",
     "e2e": "node e2e/terminal.e2e.js",
     "e2e:stress": "node e2e/terminal.stress.e2e.js",
     "e2e:smoke": "node e2e/terminal.smoke.e2e.js",

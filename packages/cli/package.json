@@ -1,10 +1,9 @@
 {
-  "name": "@kitfactory/yurutsuku",
-  "private": true,
+  "name": "@kitfactory/nagomi",
   "version": "0.0.0",
   "bin": {
-    "yuru": "src/index.js",
-    "yurutsuku": "src/index.js"
+    "nagomi": "src/index.js",
+    "nagomi-codex-notify": "src/nagomi-codex-notify.js"
   },
   "scripts": {
     "dev": "node src/index.js",

@@ -1,11 +1,13 @@
-use anyhow::{Context, Result};
+﻿use anyhow::{Context, Result};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
-use yurutsuku_protocol::{parse_line, serialize_message, Message, Resize, SendInput, StartSession, StopSession};
+use nagomi_protocol::{parse_line, serialize_message, Message, Resize, SendInput, StartSession, StopSession};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 pub struct WorkerProcess {
     child: Child,
@@ -17,6 +19,12 @@ impl WorkerProcess {
     pub fn spawn(worker_path: &Path) -> Result<Self> {
         let mut command = Command::new(worker_path);
         command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit());
+        #[cfg(windows)]
+        {
+            // 余分なコンソールウィンドウを出さない / Hide extra console window.
+            const CREATE_NO_WINDOW_FLAG: u32 = 0x08000000;
+            command.creation_flags(CREATE_NO_WINDOW_FLAG);
+        }
         let mut child = command.spawn().with_context(|| "spawn worker process")?;
         let stdin = child.stdin.take().context("worker stdin")?;
         let stdout = child.stdout.take().context("worker stdout")?;
@@ -93,9 +101,9 @@ fn workspace_root() -> Option<PathBuf> {
 
 fn worker_exe_name() -> &'static str {
     if cfg!(windows) {
-        "yurutsuku-worker.exe"
+        "nagomi-worker.exe"
     } else {
-        "yurutsuku-worker"
+        "nagomi-worker"
     }
 }
 
@@ -125,7 +133,7 @@ mod tests {
     use super::*;
     use std::sync::OnceLock;
     use std::time::{Duration, Instant};
-    use yurutsuku_protocol::Output;
+    use nagomi_protocol::Output;
 
     fn build_worker_binary() -> Result<PathBuf> {
         static WORKER_PATH: OnceLock<PathBuf> = OnceLock::new();
@@ -135,7 +143,7 @@ mod tests {
         let root = workspace_root().context("workspace root")?;
         let target = root.join("target").join("debug").join(worker_exe_name());
         let status = Command::new("cargo")
-            .args(["build", "-p", "yurutsuku-worker"])
+            .args(["build", "-p", "nagomi-worker"])
             .current_dir(&root)
             .status()
             .with_context(|| "build worker binary")?;
@@ -354,3 +362,4 @@ mod tests {
         worker.stop().expect("stop worker");
     }
 }
+

@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime};
 pub enum JudgeState {
     Success,
     Failure,
-    Attention,
+    NeedInput,
 }
 
 pub struct JudgeConfig {
@@ -55,12 +55,12 @@ pub fn evaluate(config: &JudgeConfig, input: &JudgeInput<'_>) -> Option<JudgeSta
     }
 
     if is_silence_timeout(input.last_output_at, input.now, config.silence_timeout_ms) {
-        return Some(JudgeState::Attention);
+        return Some(JudgeState::NeedInput);
     }
 
     let haystack = input.tail_lines.join("\n");
     if !haystack.is_empty() && config.regex_set.is_match(&haystack) {
-        return Some(JudgeState::Attention);
+        return Some(JudgeState::Failure);
     }
 
     None
@@ -137,7 +137,7 @@ mod tests {
             last_output_at: None,
             now,
         };
-        assert_eq!(evaluate(&config, &input), Some(JudgeState::Attention));
+        assert_eq!(evaluate(&config, &input), Some(JudgeState::Failure));
     }
 
     #[test]
@@ -150,7 +150,7 @@ mod tests {
             last_output_at: Some(now - Duration::from_millis(4000)),
             now,
         };
-        assert_eq!(evaluate(&config, &input), Some(JudgeState::Attention));
+        assert_eq!(evaluate(&config, &input), Some(JudgeState::NeedInput));
     }
 
     #[test]

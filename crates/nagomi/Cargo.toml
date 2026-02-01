@@ -1,5 +1,5 @@
 [package]
-name = "yuru"
+name = "nagomi"
 version = "0.0.0"
 edition = "2021"
 
@@ -7,6 +7,5 @@ edition = "2021"
 anyhow = "1.0"
 
 [[bin]]
-name = "yuru"
+name = "nagomi"
 path = "src/main.rs"
-

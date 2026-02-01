@@ -10,12 +10,12 @@ const appRoot = __dirname;
 const repoRoot = path.join(appRoot, "..", "..");
 
 function workerExeName() {
-  return process.platform === "win32" ? "yurutsuku-worker.exe" : "yurutsuku-worker";
+  return process.platform === "win32" ? "nagomi-worker.exe" : "nagomi-worker";
 }
 
 function buildWorkerBinary() {
   const candidate = path.join(repoRoot, "target", "debug", workerExeName());
-  const build = spawnSync("cargo", ["build", "-p", "yurutsuku-worker"], {
+  const build = spawnSync("cargo", ["build", "-p", "nagomi-worker"], {
     cwd: repoRoot,
     stdio: "inherit",
   });
@@ -204,16 +204,21 @@ test("recv_output_exit_error", async () => {
   });
 });
 
-test("session_flow", async () => {
-  await withWorker(async (worker) => {
-    const sessionId = "session-flow";
+  test("session_flow", async () => {
+    await withWorker(async (worker) => {
+      const sessionId = "session-flow";
 
-    worker.send(baseStartSession(sessionId, shellCommand()));
-    worker.send({
-      type: "send_input",
-      session_id: sessionId,
-      text: echoAndExitPayload(),
-    });
+      worker.send(baseStartSession(sessionId, shellCommand()));
+      try {
+        await waitForMessage(worker.queue, (message) => message.type === "output", 2000);
+      } catch {
+        // Prompt/banner may be slow; continue to send input anyway.
+      }
+      worker.send({
+        type: "send_input",
+        session_id: sessionId,
+        text: echoAndExitPayload(),
+      });
 
     await waitForMessage(
       worker.queue,
@@ -280,7 +285,7 @@ test("mode_switch", () => {
 test("notify_flow", () => {
   const run = spawnSync(
     "cargo",
-    ["test", "-p", "yurutsuku-orchestrator", "notify_flow"],
+    ["test", "-p", "nagomi-orchestrator", "notify_flow"],
     {
       cwd: repoRoot,
       stdio: "inherit",

@@ -9,6 +9,7 @@ test('computeState: exit codes map to success/fail', () => {
     lastOutputAtMs: 0,
     lastTail: '',
     exitCode: 0,
+    commandActive: true,
   });
   assert.equal(ok.state, observer.ObservationState.success);
 
@@ -17,6 +18,7 @@ test('computeState: exit codes map to success/fail', () => {
     lastOutputAtMs: 0,
     lastTail: '',
     exitCode: 1,
+    commandActive: true,
   });
   assert.equal(ng.state, observer.ObservationState.fail);
 });
@@ -27,18 +29,18 @@ test('computeState: running when recent output', () => {
     lastOutputAtMs: 9_500,
     lastTail: 'hello',
     exitCode: null,
-    thresholdsMs: { needInputMs: 15_000, stalledMs: 60_000 },
+    commandActive: true,
   });
   assert.equal(r.state, observer.ObservationState.running);
 });
 
-test('computeState: need-input requires prompt-like tail + idle >= needInputMs', () => {
+test('computeState: need-input when tail looks like a prompt', () => {
   const r = observer.computeState({
     nowMs: 20_000,
     lastOutputAtMs: 0,
     lastTail: 'Continue? [y/n]',
     exitCode: null,
-    thresholdsMs: { needInputMs: 15_000, stalledMs: 60_000 },
+    commandActive: true,
   });
   assert.equal(r.state, observer.ObservationState.needInput);
 
@@ -47,19 +49,41 @@ test('computeState: need-input requires prompt-like tail + idle >= needInputMs',
     lastOutputAtMs: 0,
     lastTail: 'running...',
     exitCode: null,
-    thresholdsMs: { needInputMs: 15_000, stalledMs: 60_000 },
+    commandActive: true,
   });
   assert.notEqual(noPrompt.state, observer.ObservationState.needInput);
 });
 
-test('computeState: stalled when idle >= stalledMs (without prompt)', () => {
-  const r = observer.computeState({
-    nowMs: 70_000,
-    lastOutputAtMs: 0,
-    lastTail: 'still...',
+test('computeState: idle when no command is active', () => {
+  const idle = observer.computeState({
+    nowMs: 30_000,
+    lastOutputAtMs: 29_000,
+    lastTail: '',
     exitCode: null,
-    thresholdsMs: { needInputMs: 15_000, stalledMs: 60_000 },
+    commandActive: false,
   });
-  assert.equal(r.state, observer.ObservationState.stalled);
+  assert.equal(idle.state, observer.ObservationState.idle);
 });
 
+test('computeState: shell prompt maps to success', () => {
+  const done = observer.computeState({
+    nowMs: 40_000,
+    lastOutputAtMs: 39_500,
+    lastTail: 'C:\\Users\\kitad> ',
+    exitCode: null,
+    commandActive: true,
+  });
+  assert.equal(done.state, observer.ObservationState.success);
+});
+
+test('computeState: prompt at tail end still maps to success', () => {
+  const done = observer.computeState({
+    nowMs: 50_000,
+    lastOutputAtMs: 49_800,
+    lastTail:
+      'ping stats...\n\x1b[16;1HC:\\Users\\kitad>\x1b]0;C:\\Windows\\system32\\cmd.exe\x07',
+    exitCode: null,
+    commandActive: true,
+  });
+  assert.equal(done.state, observer.ObservationState.success);
+});

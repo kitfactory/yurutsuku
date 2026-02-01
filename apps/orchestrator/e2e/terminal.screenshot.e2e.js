@@ -3,11 +3,12 @@ const fs = require("node:fs");
 const { spawn, spawnSync } = require("node:child_process");
 const http = require("node:http");
 const { Builder, By, Capabilities, until } = require("selenium-webdriver");
+const { ensureDriversOnPath } = require("./driver_paths");
 
 const repoRoot = path.join(__dirname, "..", "..", "..");
 
 function appPath() {
-  const base = path.join(repoRoot, "target", "debug", "yurutsuku-orchestrator");
+  const base = path.join(repoRoot, "target", "debug", "nagomi-orchestrator");
   return process.platform === "win32" ? `${base}.exe` : base;
 }
 
@@ -28,18 +29,6 @@ function isWindowsProcessRunning(imageName) {
     encoding: "utf8",
   });
   return result.stdout && result.stdout.toLowerCase().includes(imageName.toLowerCase());
-}
-
-function resolveTauriDriverPath() {
-  if (process.platform !== "win32") {
-    return null;
-  }
-  const result = spawnSync("where", ["tauri-driver"], { encoding: "utf8" });
-  if (result.status !== 0) {
-    return null;
-  }
-  const line = (result.stdout || "").trim().split(/\r?\n/)[0];
-  return line || null;
 }
 
 async function waitForDriver(port, timeoutMs) {
@@ -75,19 +64,22 @@ async function main() {
   if (!exists(targetApp)) {
     throw new Error(`app binary not found: ${targetApp}`);
   }
-  const tauriDriverPath = resolveTauriDriverPath();
-  if (process.platform === "win32" && !tauriDriverPath) {
-    throw new Error("tauri-driver not found in PATH");
+  const { tauriPath, edgePath } = ensureDriversOnPath();
+  if (process.platform === "win32" && !tauriPath) {
+    throw new Error("tauri-driver not found (set NAGOMI_TAURI_DRIVER or update PATH)");
   }
-  if (process.platform === "win32" && isWindowsProcessRunning("yurutsuku-orchestrator.exe")) {
-    throw new Error("yurutsuku-orchestrator already running");
+  if (process.platform === "win32" && !edgePath) {
+    throw new Error("msedgedriver not found (set NAGOMI_EDGE_DRIVER or update PATH)");
   }
-  if (process.platform === "win32" && isWindowsProcessRunning("yurutsuku-worker.exe")) {
-    throw new Error("yurutsuku-worker already running");
+  if (process.platform === "win32" && isWindowsProcessRunning("nagomi-orchestrator.exe")) {
+    throw new Error("nagomi-orchestrator already running");
+  }
+  if (process.platform === "win32" && isWindowsProcessRunning("nagomi-worker.exe")) {
+    throw new Error("nagomi-worker already running");
   }
 
   const driverPort = 4452;
-  const driver = spawn(tauriDriverPath, ["--port", String(driverPort)], { stdio: "inherit" });
+  const driver = spawn(tauriPath, ["--port", String(driverPort)], { stdio: "inherit" });
   let client;
   try {
     await waitForDriver(driverPort, 10000);
