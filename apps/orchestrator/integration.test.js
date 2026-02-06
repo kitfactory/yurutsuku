@@ -219,13 +219,22 @@ test("recv_output_exit_error", async () => {
         session_id: sessionId,
         text: echoAndExitPayload(),
       });
-
-    await waitForMessage(
-      worker.queue,
-      (message) => message.type === "output" && message.chunk.toLowerCase().includes("ok"),
-      15000
-    );
-    await waitForMessage(worker.queue, (message) => message.type === "exit", 15000);
+      const deadline = Date.now() + 15000;
+      let outputSeen = "";
+      while (Date.now() < deadline) {
+        const remaining = Math.max(50, deadline - Date.now());
+        const message = await worker.queue.next(remaining);
+        if (message.type === "output") {
+          outputSeen += String(message.chunk || "").toLowerCase();
+          if (outputSeen.includes("ok")) {
+            break;
+          }
+        }
+      }
+      if (!outputSeen.includes("ok")) {
+        throw new Error("timeout waiting for output containing ok");
+      }
+      await waitForMessage(worker.queue, (message) => message.type === "exit", 15000);
   });
 });
 
@@ -280,18 +289,6 @@ test("mode_switch", () => {
   assert.ok(html.includes('data-role="chat-main"'));
   assert.ok(html.includes('data-role="run-board"'));
   assert.ok(html.includes("modeChips"));
-});
-
-test("notify_flow", () => {
-  const run = spawnSync(
-    "cargo",
-    ["test", "-p", "nagomi-orchestrator", "notify_flow"],
-    {
-      cwd: repoRoot,
-      stdio: "inherit",
-    }
-  );
-  assert.equal(run.status, 0);
 });
 
 test("settings_notify", () => {

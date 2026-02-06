@@ -22,6 +22,7 @@
 - `NAGOMI_EDGE_DRIVER`: msedgedriver のパス（未指定なら PATH 解決）
 - `NAGOMI_ENABLE_TEST_ENDPOINTS`: `1` のとき `/terminal-send` が有効
 - `NAGOMI_ORCH_HEALTH_PORT`: Orchestrator のヘルスチェックポート（既定 17707）
+- `NAGOMI_E2E_STRICT`: `1` のとき前提不足でも fail する（未指定時は一部を skip 扱い）
 
 ---
 
@@ -40,6 +41,23 @@ node apps/orchestrator/e2e/terminal.screenshot.e2e.js
 node apps/orchestrator/e2e/terminal.stress.e2e.js
 node apps/orchestrator/e2e/codex.hook.e2e.js
 node apps/orchestrator/e2e/terminal.tint.e2e.js
+```
+
+`terminal.tint.e2e.js` は前提不足（例: `msedge` 不在、driver/browser の major 不一致、既存プロセス残存）時に skip を返す。  
+CI などで必ず失敗扱いにしたい場合は `NAGOMI_E2E_STRICT=1` を指定する。
+
+```powershell
+$env:NAGOMI_E2E_STRICT = "1"
+npm run e2e:tint -w apps/orchestrator
+```
+
+---
+
+## Rust 通知テスト（分離実行）
+`notify_flow` は Rust 側単体テストとして分離し、Node 統合テストとは別で実行する。
+
+```powershell
+npm run test:rust:notify -w apps/orchestrator
 ```
 
 ---

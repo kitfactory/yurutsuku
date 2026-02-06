@@ -1908,9 +1908,15 @@
         }
 
         function latchObservedState(next) {
-          if (latchedObserved) return;
           if (!next || !next.state) return;
           if (!isFinalObservedState(next.state)) return;
+          if (
+            latchedObserved &&
+            latchedObserved.state === next.state &&
+            latchedObserved.reason === (next.reason || next.state)
+          ) {
+            return;
+          }
           latchedObserved = { state: next.state, reason: next.reason || next.state };
         }
 
