@@ -39,7 +39,8 @@
 2.24 Given: ターミナルが表示中, When: 観測（Watcher）を表示する, Then: **全ターミナルを代表する状態**を右下のキャラクターで示す（実装参照: `apps/orchestrator/src/assets/watcher/nagomisan_*.png` / 元データ: `apps/orchestrator/src/assets/watcher/nagomi_fullbody_icons_96_v3.zip`）  
 2.24.1 Given: 観測（Watcher）を表示する, When: 表示設定が ON, Then: **別ウィンドウ（透過）**でフルボディ（96x192）を右下に表示する  
 2.24.2 Given: 観測（Watcher）を表示する, When: 表示設定が OFF, Then: 透過ウィンドウを表示しない  
-2.24.3 Given: 観測表示を行う, When: 全体状況で表情を選ぶ, Then: `need_input` は呼びかけ、`running` は作業中、`failure` は困った、`idle/success` は眠い表情として表示する  
+2.24.3 Given: 観測表示を行う, When: 全体状況で表情/モーションを選ぶ, Then: `need_input` は呼びかけ、`running` は作業中、`failure` は困った、`idle/success` は眠い表情として表示する  
+2.24.4 Given: 観測表示を行う, When: 3Dキャラ（VRM）が設定済み, Then: 3D表示を優先する（未設定なら2D画像を表示する）  
 2.25 Given: 観測状態が変化する, When: 状態を適用する, Then: terminal の背景に対して半透明でトーンの揃った tint を重ねて状態を区別する  
 2.25.1 Given: 状態を表示する, When: 表示色を決める, Then: **色は以下で固定**する（黒=idle/success、青=running、赤=need_input/failure）  
 2.25.2 Given: 画面に文言を表示する, When: UI を描画する, Then: 表示文言はリソース管理し **日本語/英語** を用意する  
@@ -48,6 +49,7 @@
 2.27.1 Given: **AI判定** が OFF, When: hook が来る/出力無更新 30s になる, Then: hook 種別（completed/error/need_input）をそのまま state に反映する（idle は `need_input` とみなす）  
 2.27.2 Given: **AI判定** が OFF かつ agent 未検知, When: 末尾がプロンプト風（例: `[y/n]`, `Press Enter`, `password:`）を検出する, Then: 誤爆回避を優先し、強い兆候のときのみ `need_input` に遷移する  
 2.27.3 Given: 観測を実装する, When: P0 を実装する, Then: 観測ロジックは純粋関数として切り出し unit test できる（実装参照: `apps/orchestrator/src/terminal_observer.js`）  
+2.27.4 Given: `idle/success/failure` の状態にある, When: `need_input` 相当のイベント（hook/heuristic）を受ける, Then: **`need_input` へ直行せず一度 `running` を経由してから** `need_input` を確定する  
 
 ## 3. Judge
 3.1 Given: exit_code が 0, When: 判定する, Then: state を success にする  
@@ -89,6 +91,9 @@
 7.3.3 Given: **AI判定** が OFF, When: 状態検出を行う, Then: 端末出力のみで状態を判定する  
 7.4 Given: キャラクター追加を行う, When: zip をアップロードする, Then: サムネ/画像/音声（任意）を含むキャラコンテンツとして扱える  
 7.4.1 Given: ターミナルキャラクター表示を編集する, When: 設定を変更する, Then: ターミナル右下のキャラクター表示を ON/OFF できる  
+7.4.2 Given: 3Dキャラクターを使う, When: VRM を設定する, Then: 3D表示は **VRM** を読み込み、2D画像より優先して表示する  
+7.4.3 Given: 3Dキャラクターで状態ごとのモーションを設定する, When: VRM Animation（`.vrma`）を割り当てる, Then: `idle/success`→`idle`、`running`→`running`、`need_input`→`need_input`、`failure`→`fail` の対応で再生する  
+7.4.4 Given: 状態モーションが未設定, When: 3D表示を行う, Then: `idle` を再生し、`idle` 未設定なら静止にフォールバックする  
 7.5 Given: AI Coding Agent セクションを表示する, When: 設定画面を開く, Then: 「使用ツール」「AIターミナル状態判定」のみを表示する（連携ボタンは表示しない）  
 7.6 Given: AI Coding Agent を使う, When: 設定を保存する, Then: 使用する AI ツールを 1 つ選択できる（codex/claudecode/opencode）  
 7.7 Given: AI Coding Agent を選択する, When: 設定画面を表示する, Then: 「選択したAIツールは起動コマンド判別とAI判定の対象になる」旨を説明する  
@@ -246,6 +251,7 @@ export const NagomiNotify = async ({ $, project, directory }) => {
 12.18 Given: ターミナル状況から状態を判断する, When: PTY/プロセスが生存している, Then: **出力無更新 30s** を終了候補として Judge を起動し、`success/failure/need_input` を決める  
 12.19 Given: ターミナル監視とエージェント監視が両方ある, When: 状態を統合する, Then: エージェントイベントが来ている間は `agent` 側を優先し、`success/failure/need_input` は次の `running`（新しい実行開始）または `/quit` まで維持する（別コマンドが動作中なら `running` を優先）  
 12.20 Given: 最小状態機械を定義する, When: 状態遷移を行う, Then: `idle -> running`（コマンド開始）, `running -> need_input`（終了候補判定）, `running -> success/failure`（exit_code or Judge）, `need_input -> running`（入力送信）, いつでも `disconnected` へ遷移可能とする  
+12.20.1 Given: 状態遷移を実装する, When: `need_input` を扱う, Then: `idle/success/failure -> need_input` の直接遷移は禁止し、`running` 経由を強制する  
 12.21 Given: 実装に落とす, When: 最小データモデルを持つ, Then: 以下の構造で扱える  
 ```json
 {

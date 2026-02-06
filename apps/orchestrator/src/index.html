@@ -1816,6 +1816,29 @@
             }
             return { state: TerminalObservation.idle, reason: 'default' };
           },
+          mergeWithGuard: (previous, terminal, agent) => {
+            const merged =
+              agent && agent.state
+                ? { state: agent.state, reason: agent.reason || 'agent' }
+                : terminal && terminal.state
+                ? { state: terminal.state, reason: terminal.reason || 'terminal' }
+                : { state: TerminalObservation.idle, reason: 'default' };
+            if (
+              previous &&
+              merged.state === TerminalObservation.needInput &&
+              previous.state !== TerminalObservation.running &&
+              previous.state !== TerminalObservation.needInput
+            ) {
+              return {
+                next: {
+                  state: TerminalObservation.running,
+                  reason: 'guard running-before-need-input',
+                },
+                guarded: true,
+              };
+            }
+            return { next: merged, guarded: false };
+          },
         });
 
       let terminalObserved = { state: TerminalObservation.idle, reason: 'init' };
@@ -1837,6 +1860,7 @@
       let agentSessionSource = null;
       let terminalCommandActive = false;
       let terminalHasUserCommand = false;
+      let needInputGuardQueued = false;
       let inputLineBuffer = '';
       let inputSawCarriage = false;
       let lastTerminalEvent = { type: 'init', detail: '' };
@@ -2055,7 +2079,16 @@
 
         function updateMergedObservedState(title) {
           let nextObserved = null;
-          if (stateIntegrator && typeof stateIntegrator.merge === 'function') {
+          let guardApplied = false;
+          if (stateIntegrator && typeof stateIntegrator.mergeWithGuard === 'function') {
+            const mergedWithGuard = stateIntegrator.mergeWithGuard(
+              mergedObserved,
+              terminalObserved,
+              agentObserved
+            );
+            nextObserved = mergedWithGuard && mergedWithGuard.next ? mergedWithGuard.next : null;
+            guardApplied = Boolean(mergedWithGuard && mergedWithGuard.guarded);
+          } else if (stateIntegrator && typeof stateIntegrator.merge === 'function') {
             nextObserved = stateIntegrator.merge(terminalObserved, agentObserved);
           } else if (terminalObserved && terminalObserved.state) {
             nextObserved = { state: terminalObserved.state, reason: terminalObserved.reason };
@@ -2070,6 +2103,13 @@
           reportTerminalObservation(mergedObserved.state);
           const nextTitle = title || mergedObserved.reason || mergedObserved.state;
           applyTerminalObservedState(mergedObserved.state, nextTitle);
+          if (guardApplied && !needInputGuardQueued) {
+            needInputGuardQueued = true;
+            Promise.resolve().then(() => {
+              needInputGuardQueued = false;
+              updateMergedObservedState('guard running-before-need-input');
+            });
+          }
         }
 
       function updateTerminalObservedState() {

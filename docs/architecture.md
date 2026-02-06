@@ -56,6 +56,7 @@
 - 状態は `idle/running/need_input/success/failure/disconnected` を **区別して保持**する
 - UI の色は `idle/success=黒`、`running=青`、`need_input/failure=赤` で固定
 - **処理ルートは状態ごとに分離**する（アイコン/通知/音/ログなどの出し分けは state によって決める）
+- `need_input` は `running` 経由でのみ確定する（`idle/success/failure -> need_input` の直行をガードし、一度 `running` を挟んで再評価する）
 
 ### ToolJudgeRunner
 - 入力: `tool` と `tail`（末尾 1500 字 + 50 行）
