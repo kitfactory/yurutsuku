@@ -14,6 +14,7 @@
 - Debug: デバッグ UI（バッジ/スナップショット/スクショ）+ worker_smoke.log
 - Environment: Windows の User/System 環境変数を統合して PTY に渡す。`NAGOMI_SESSION_ID` を付与する
 - PATH は不足分のみ後ろに追加し、User/System の不足分を補完する
+- Windows 設定画面では terminal 起動方式（`cmd`/`powershell`/`wsl`）を選択可能にし、`wsl` 時は distro を指定できる
 
 #2. concept との対応
 | concept | 実装モジュール | 責務 |
@@ -90,7 +91,15 @@
 #6. Settings
 - `llm_enabled` / `llm_tool` / `silence_timeout_ms`
 - `terminal_*`（font/size/theme/scrollback/copy）
+- `terminal_shell_kind`（`cmd` / `powershell` / `wsl`）
+- `terminal_wsl_distro`（空なら既定 distro）
 - AI Coding Agent 選択（codex/claudecode/opencode）
+
+## 6.1 Windows Terminal 起動コマンド
+- `terminal_shell_kind=cmd` -> `cmd.exe`
+- `terminal_shell_kind=powershell` -> `powershell.exe`
+- `terminal_shell_kind=wsl` かつ `terminal_wsl_distro` 空 -> `wsl.exe`
+- `terminal_shell_kind=wsl` かつ `terminal_wsl_distro` 指定 -> `wsl.exe -d <distro>`
 
 #7. エラー処理
 - 不正な NDJSON type は無視

@@ -208,12 +208,14 @@ fn spawn_from_cmd(
     cwd: Option<&str>,
     env: Option<&std::collections::HashMap<String, String>>,
 ) -> Result<(Box<dyn MasterPty + Send>, Box<dyn Child + Send + Sync>)> {
-    let parts: Vec<&str> = cmd.split_whitespace().collect();
+    let parts = shlex::split(cmd)
+        .unwrap_or_else(|| cmd.split_whitespace().map(ToString::to_string).collect::<Vec<_>>());
     if parts.is_empty() {
         bail!("cmd is empty");
     }
     let (program, args) = parts.split_first().expect("cmd parts");
-    spawn_command_with_args(program, args, cols, rows, cwd, env)
+    let args_ref: Vec<&str> = args.iter().map(|arg| arg.as_str()).collect();
+    spawn_command_with_args(program, &args_ref, cols, rows, cwd, env)
 }
 
 fn start_session(
@@ -707,6 +709,19 @@ mod tests {
     #[test]
     fn cleanup() {
         assert!(true);
+    }
+
+    #[test]
+    fn cmd_parser_supports_quoted_args() {
+        let parts = shlex::split("wsl.exe -d \"Ubuntu 24.04\"").expect("parse cmd");
+        assert_eq!(
+            parts,
+            vec![
+                "wsl.exe".to_string(),
+                "-d".to_string(),
+                "Ubuntu 24.04".to_string()
+            ]
+        );
     }
 }
 

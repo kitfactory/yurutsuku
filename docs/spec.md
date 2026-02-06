@@ -84,6 +84,9 @@
 7.1.2 Given: フォント設定を行う, When: 設定画面を表示する, Then: フォントはリスト選択式で表示する  
 7.1.3 Given: OS のローカルフォント一覧を取得できる, When: ユーザーが読み込み操作を行う, Then: OS フォントを選択肢に追加する（未対応の場合は既定リストのみ）  
 7.1.4 Given: 設定が変更される, When: 設定を保存する, Then: 変更内容を全ウィンドウに通知し、起動済みターミナルの表示にも即時反映する  
+7.1.5 Given: OS が Windows, When: 設定画面を表示する, Then: ターミナル起動方式として `Command Prompt` / `PowerShell` / `WSL` を選択できる  
+7.1.6 Given: 起動方式が `WSL`, When: 設定画面を表示する, Then: インストール済みディストロ一覧（`wsl -l -q`）から対象ディストロを選択できる（未選択は既定ディストロを使う）  
+7.1.7 Given: OS が Windows 以外, When: 設定画面を表示する, Then: Windows 専用の起動方式設定は表示しない  
 7.2 Given: 通知設定を編集する, When: 設定を変更する, Then: OS トースト通知の ON/OFF と音声通知の ON/OFF を切り替えられる  
 7.3 Given: **AIターミナル状態判定（AI判定）**を編集する, When: ツールを選択する, Then: codex/claudecode/opencode のいずれかを選べる（内部識別子は `codex` / `claude` / `opencode`）  
 7.3.1 Given: AI Coding Agent を選ぶ, When: 設定を保存する, Then: **ターミナルでの起動コマンド判別**に使う  
@@ -153,6 +156,10 @@ nagomi terminal-send --session-id codex-test --text "codex `"ping`"`r`n"
 10.5 Given: Windows 環境で `worker_backend = windows` または未指定, When: Worker を起動する, Then: Orchestrator は Windows Worker を起動する  
 10.6 Given: WSL で Worker を起動する, When: Linux 側コマンドを指定する, Then: `wsl.exe -d <distro> -- <command>` 形式で実行する  
 10.7 Given: WSL ターミナルを対話的に扱う, When: 端末入力/制御を行う, Then: ConPTY を用いて `wsl.exe` を接続する  
+10.7.1 Given: Windows で terminal session を開始する, When: 起動方式が `Command Prompt`, Then: 起動コマンドは `cmd.exe` を使う  
+10.7.2 Given: Windows で terminal session を開始する, When: 起動方式が `PowerShell`, Then: 起動コマンドは `powershell.exe` を使う  
+10.7.3 Given: Windows で terminal session を開始する, When: 起動方式が `WSL` かつディストロ未指定, Then: 起動コマンドは `wsl.exe` を使う  
+10.7.4 Given: Windows で terminal session を開始する, When: 起動方式が `WSL` かつディストロ指定あり, Then: 起動コマンドは `wsl.exe -d <distro>` を使う  
 10.8 Given: Worker の起動に失敗する, When: 再起動を試みる, Then: 再接続手段を提示しユーザーは再試行できる  
 10.9 Given: Windows で Terminal session を開始する, When: PTY を起動する, Then: 環境変数は「通常の cmd/PowerShell と同等」を目指して同期する（現在の環境を優先しつつ、System/User の環境変数を不足分だけ補完し、PATH は不足分だけ後ろに追加する）  
 10.10 Given: OS が Windows, When: Orchestrator/Worker/PTY を起動する, Then: **余分なコンソールウィンドウを表示せず**、ユーザーには Terminal（+ tray）だけが見える状態を保つ  

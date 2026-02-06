@@ -90,6 +90,8 @@ nagomi の中核である「複数ターミナル並列作業」を、観測ベ�
 - [x] C-1 テスト: `target/debug/nagomi.exe` を2回起動して Terminal が2枚増える
 - [x] C-2 仕様/設計/実装: トレイメニューを運用向け最小構成（`Open Terminal Window` / `Arrange Terminal Windows` / `Open Settings` / `Quit`）へ整理し、`Open Chat` / `Open Run` / `worker_*` は既定表示から外す
 - [x] C-2 テスト: `cargo test -p nagomi-orchestrator` と `npm test -w apps/orchestrator -- --test-reporter=spec` を通し、トレイ導線変更の回帰がない
+- [x] C-3 仕様/設計/実装: Windows 実行時の設定画面にターミナル起動方式（Command Prompt / PowerShell / WSL）を追加し、WSL 選択時はディストロ選択を可能にする
+- [x] C-3 テスト: 設定保存後の terminal 起動コマンドが選択値（cmd/powershell/wsl -d <distro>）に一致し、`cargo test -p nagomi-orchestrator` と `npm test -w apps/orchestrator -- --test-reporter=spec` が通る
 
 ### D. Overview（タイル一覧 / Run相当） ※優先度低
 - [ ] D-1 実装: Orchestrator から Overview を開ける（tray/メニュー/ショートカットのいずれか）

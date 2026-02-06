@@ -1207,6 +1207,22 @@
                 data-role="settings-terminal-scrollback"
               />
             </div>
+            <div class="settings-row hidden" data-role="settings-terminal-shell-row">
+              <span data-i18n="settings.runtime.shell">terminal shell</span>
+              <select data-role="settings-terminal-shell-kind">
+                <option value="cmd" data-i18n="settings.runtime.shell.cmd">Command Prompt</option>
+                <option value="powershell" data-i18n="settings.runtime.shell.powershell">
+                  PowerShell
+                </option>
+                <option value="wsl" data-i18n="settings.runtime.shell.wsl">WSL</option>
+              </select>
+            </div>
+            <div class="settings-row hidden" data-role="settings-terminal-wsl-distro-row">
+              <span data-i18n="settings.runtime.wsl_distro">WSL distro</span>
+              <select data-role="settings-terminal-wsl-distro">
+                <option value="" data-i18n="settings.runtime.wsl_default">default distro</option>
+              </select>
+            </div>
             <div class="settings-row">
               <span data-i18n="settings.appearance.copy_on_select">copy on select</span>
               <button
@@ -1415,6 +1431,12 @@
           'settings.appearance.font_size': 'フォントサイズ',
           'settings.appearance.scrollback': 'スクロールバック',
           'settings.appearance.copy_on_select': '選択コピー',
+          'settings.runtime.shell': 'ターミナル起動方式',
+          'settings.runtime.shell.cmd': 'Command Prompt',
+          'settings.runtime.shell.powershell': 'PowerShell',
+          'settings.runtime.shell.wsl': 'WSL',
+          'settings.runtime.wsl_distro': 'WSLディストロ',
+          'settings.runtime.wsl_default': '既定のディストロ',
           'settings.theme.dark': 'ダーク',
           'settings.theme.light': 'ライト',
           'settings.font.system_default': 'システム既定',
@@ -1507,6 +1529,12 @@
           'settings.appearance.font_size': 'font size',
           'settings.appearance.scrollback': 'scrollback',
           'settings.appearance.copy_on_select': 'copy on select',
+          'settings.runtime.shell': 'terminal shell',
+          'settings.runtime.shell.cmd': 'Command Prompt',
+          'settings.runtime.shell.powershell': 'PowerShell',
+          'settings.runtime.shell.wsl': 'WSL',
+          'settings.runtime.wsl_distro': 'WSL distro',
+          'settings.runtime.wsl_default': 'default distro',
           'settings.theme.dark': 'dark',
           'settings.theme.light': 'light',
           'settings.font.system_default': 'system default',
@@ -1632,8 +1660,15 @@
       );
       const terminalFontSize = document.querySelector('[data-role="settings-terminal-font-size"]');
       const terminalScrollback = document.querySelector('[data-role="settings-terminal-scrollback"]');
+      const terminalShellRow = document.querySelector('[data-role="settings-terminal-shell-row"]');
+      const terminalShellKind = document.querySelector('[data-role="settings-terminal-shell-kind"]');
+      const terminalWslDistroRow = document.querySelector(
+        '[data-role="settings-terminal-wsl-distro-row"]'
+      );
+      const terminalWslDistro = document.querySelector('[data-role="settings-terminal-wsl-distro"]');
       const terminalCopyToggle = document.querySelector('[data-role="settings-terminal-copy"]');
       const terminalCopyState = document.querySelector('[data-role="settings-terminal-copy-state"]');
+      const isWindowsRuntime = /windows/i.test(navigator.userAgent || '');
 
       applyI18n();
 
@@ -2524,6 +2559,8 @@
         terminal_theme: terminalSettingsDefaults.theme,
         terminal_scrollback_lines: terminalSettingsDefaults.scrollbackLines,
         terminal_copy_on_select: terminalSettingsDefaults.copyOnSelect,
+        terminal_shell_kind: 'cmd',
+        terminal_wsl_distro: '',
       };
       const DEFAULT_SCROLLBACK_LINES = terminalSettingsDefaults.scrollbackLines;
       const characterBundles = new Set(['default']);
@@ -3972,6 +4009,68 @@
         terminalFontStatus.textContent = message || '';
       }
 
+      function normalizeTerminalShellKind(raw) {
+        const value = String(raw || '').trim().toLowerCase();
+        if (value === 'powershell' || value === 'wsl') return value;
+        return 'cmd';
+      }
+
+      function applyTerminalRuntimeVisibility() {
+        if (terminalShellRow) {
+          terminalShellRow.classList.toggle('hidden', !isWindowsRuntime);
+        }
+        const useWsl =
+          isWindowsRuntime && normalizeTerminalShellKind(settingsState.terminal_shell_kind) === 'wsl';
+        if (terminalWslDistroRow) {
+          terminalWslDistroRow.classList.toggle('hidden', !useWsl);
+        }
+      }
+
+      function ensureWslDistroOption(value) {
+        if (!terminalWslDistro) return;
+        const key = String(value || '').trim();
+        if (!key) return;
+        const exists = Array.from(terminalWslDistro.options).some((option) => option.value === key);
+        if (exists) return;
+        const option = document.createElement('option');
+        option.value = key;
+        option.textContent = key;
+        option.dataset.dynamic = '1';
+        terminalWslDistro.appendChild(option);
+      }
+
+      async function loadWslDistros() {
+        if (!isWindowsRuntime || !terminalWslDistro) return;
+        try {
+          const distros = await invokeWithSession('list_wsl_distros');
+          const current = String(settingsState.terminal_wsl_distro || '').trim();
+          const first = terminalWslDistro.options[0] || null;
+          terminalWslDistro.innerHTML = '';
+          if (first) {
+            terminalWslDistro.appendChild(first);
+          } else {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = t('settings.runtime.wsl_default');
+            option.dataset.i18n = 'settings.runtime.wsl_default';
+            terminalWslDistro.appendChild(option);
+          }
+          (Array.isArray(distros) ? distros : []).forEach((name) => {
+            const key = String(name || '').trim();
+            if (!key) return;
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = key;
+            terminalWslDistro.appendChild(option);
+          });
+          ensureWslDistroOption(current);
+          terminalWslDistro.value = current;
+        } catch {
+          ensureWslDistroOption(settingsState.terminal_wsl_distro);
+          terminalWslDistro.value = settingsState.terminal_wsl_distro || '';
+        }
+      }
+
       const fontMeasureCanvas = document.createElement('canvas');
       const fontMeasureCtx = fontMeasureCanvas.getContext('2d');
 
@@ -4073,6 +4172,10 @@
         settingsState.terminal_scrollback_lines = normalizeScrollback(
           settingsState.terminal_scrollback_lines
         );
+        settingsState.terminal_shell_kind = normalizeTerminalShellKind(
+          settingsState.terminal_shell_kind
+        );
+        settingsState.terminal_wsl_distro = String(settingsState.terminal_wsl_distro || '').trim();
         notifyEnabled = settingsState.notifications_enabled;
         audioEnabled = settingsState.audio_enabled;
         llmEnabled = settingsState.llm_enabled;
@@ -4093,6 +4196,11 @@
         }
         if (terminalFontSize) terminalFontSize.value = settingsState.terminal_font_size;
         if (terminalScrollback) terminalScrollback.value = settingsState.terminal_scrollback_lines;
+        if (terminalShellKind) terminalShellKind.value = settingsState.terminal_shell_kind;
+        if (terminalWslDistro) {
+          ensureWslDistroOption(settingsState.terminal_wsl_distro);
+          terminalWslDistro.value = settingsState.terminal_wsl_distro;
+        }
         if (terminalCopyState) setToggleState(terminalCopyOnSelect, terminalCopyState);
         if (settingsState.character_id) {
           characterBundles.add(settingsState.character_id);
@@ -4103,6 +4211,7 @@
           retention.value = settingsState.log_retention_lines;
         }
         applySettingsTheme(settingsState.terminal_theme);
+        applyTerminalRuntimeVisibility();
         applyTerminalWatcherVisibility();
         updateTerminalDebugBadge();
       }
@@ -4325,6 +4434,25 @@
         });
       }
 
+      if (terminalShellKind) {
+        terminalShellKind.addEventListener('change', () => {
+          settingsState.terminal_shell_kind = normalizeTerminalShellKind(terminalShellKind.value);
+          applyTerminalRuntimeVisibility();
+          if (settingsState.terminal_shell_kind !== 'wsl') {
+            settingsState.terminal_wsl_distro = '';
+            if (terminalWslDistro) terminalWslDistro.value = '';
+          }
+          saveSettingsToBackend();
+        });
+      }
+
+      if (terminalWslDistro) {
+        terminalWslDistro.addEventListener('change', () => {
+          settingsState.terminal_wsl_distro = String(terminalWslDistro.value || '').trim();
+          saveSettingsToBackend();
+        });
+      }
+
       if (terminalCopyToggle) {
         terminalCopyToggle.addEventListener('click', () => {
           terminalCopyOnSelect = !terminalCopyOnSelect;
@@ -4361,6 +4489,9 @@
           applySettings(loaded);
         } else {
           applySettings(settingsState);
+        }
+        if (isWindowsRuntime) {
+          loadWslDistros();
         }
       });
       applyTerminalDebugUiVisible(loadTerminalDebugUiVisible());

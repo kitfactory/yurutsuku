@@ -307,6 +307,13 @@ test("settings_llm", () => {
   assert.ok(html.includes('data-role="settings-llm-tool"'));
 });
 
+test("settings_terminal_runtime", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes('data-role="settings-terminal-shell-kind"'));
+  assert.ok(html.includes('data-role="settings-terminal-wsl-distro"'));
+});
+
 test("settings_character_log_retention", () => {
   const htmlPath = path.join(appRoot, "src", "index.html");
   const html = fs.readFileSync(htmlPath, "utf8");

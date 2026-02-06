@@ -61,6 +61,9 @@ const WINDOW_CHAT: &str = "chat";
 const WINDOW_RUN: &str = "run";
 const WINDOW_SETTINGS: &str = "settings";
 const WINDOW_WATCHER: &str = "watcher";
+const TERMINAL_SHELL_CMD: &str = "cmd";
+const TERMINAL_SHELL_POWERSHELL: &str = "powershell";
+const TERMINAL_SHELL_WSL: &str = "wsl";
 
 #[cfg(windows)]
 thread_local! {
@@ -90,6 +93,14 @@ struct Settings {
     terminal_scrollback_lines: u32,
     #[serde(default)]
     terminal_copy_on_select: bool,
+    #[serde(default = "default_terminal_shell_kind")]
+    terminal_shell_kind: String,
+    #[serde(default)]
+    terminal_wsl_distro: String,
+}
+
+fn default_terminal_shell_kind() -> String {
+    TERMINAL_SHELL_CMD.to_string()
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -235,7 +246,34 @@ impl Default for Settings {
             terminal_theme: "dark".to_string(),
             terminal_scrollback_lines: 5000,
             terminal_copy_on_select: true,
+            terminal_shell_kind: default_terminal_shell_kind(),
+            terminal_wsl_distro: String::new(),
         }
+    }
+}
+
+fn normalize_terminal_shell_kind(kind: &str) -> &'static str {
+    match kind.trim().to_ascii_lowercase().as_str() {
+        TERMINAL_SHELL_POWERSHELL => TERMINAL_SHELL_POWERSHELL,
+        TERMINAL_SHELL_WSL => TERMINAL_SHELL_WSL,
+        _ => TERMINAL_SHELL_CMD,
+    }
+}
+
+#[cfg(windows)]
+fn build_windows_terminal_command(settings: &Settings) -> String {
+    match normalize_terminal_shell_kind(&settings.terminal_shell_kind) {
+        TERMINAL_SHELL_POWERSHELL => "powershell.exe".to_string(),
+        TERMINAL_SHELL_WSL => {
+            let distro = settings.terminal_wsl_distro.trim();
+            if distro.is_empty() {
+                "wsl.exe".to_string()
+            } else {
+                let escaped = distro.replace('"', "\\\"");
+                format!("wsl.exe -d \"{escaped}\"")
+            }
+        }
+        _ => "cmd.exe".to_string(),
     }
 }
 
@@ -993,6 +1031,47 @@ fn save_settings<R: Runtime>(
     let _ = app.emit("settings-updated", settings.clone());
     sync_watcher_window(&app, &settings);
     Ok(())
+}
+
+#[tauri::command]
+fn list_wsl_distros<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+) -> Result<Vec<String>, String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    #[cfg(windows)]
+    {
+        let output = Command::new("wsl.exe")
+            .args(["-l", "-q"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|err| err.to_string())?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            if stderr.is_empty() {
+                return Err(format!("wsl -l -q failed: {}", output.status));
+            }
+            return Err(stderr);
+        }
+        let mut dedup = HashSet::new();
+        let mut distros = Vec::new();
+        let text = String::from_utf8_lossy(&output.stdout);
+        for line in text.lines() {
+            let name = line.trim();
+            if name.is_empty() {
+                continue;
+            }
+            if dedup.insert(name.to_string()) {
+                distros.push(name.to_string());
+            }
+        }
+        Ok(distros)
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(Vec::new())
+    }
 }
 
 #[tauri::command]
@@ -2136,8 +2215,9 @@ fn start_terminal_session<R: Runtime>(
             return Ok(());
         }
     }
+    let settings = read_settings(&settings_path(&app)).unwrap_or_else(|_| Settings::default());
     let cmd = if cfg!(windows) {
-        "cmd.exe".to_string()
+        build_windows_terminal_command(&settings)
     } else {
         "sh".to_string()
     };
@@ -3575,6 +3655,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             load_settings,
             save_settings,
+            list_wsl_distros,
             report_terminal_observation,
             ensure_codex_hook,
             tool_judge,
@@ -3688,6 +3769,8 @@ mod tests {
             terminal_theme: "light".to_string(),
             terminal_scrollback_lines: 5000,
             terminal_copy_on_select: false,
+            terminal_shell_kind: TERMINAL_SHELL_WSL.to_string(),
+            terminal_wsl_distro: "Ubuntu".to_string(),
         };
 
         write_settings(&path, &settings).expect("write settings");
@@ -3745,6 +3828,26 @@ mod tests {
             .tray_by_id(&tauri::tray::TrayIconId::new("main"))
             .expect("tray exists");
         assert_eq!(tray.id().as_ref(), "main");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_terminal_command_matches_shell_kind() {
+        let mut settings = Settings::default();
+
+        settings.terminal_shell_kind = TERMINAL_SHELL_CMD.to_string();
+        settings.terminal_wsl_distro = String::new();
+        assert_eq!(build_windows_terminal_command(&settings), "cmd.exe");
+
+        settings.terminal_shell_kind = TERMINAL_SHELL_POWERSHELL.to_string();
+        assert_eq!(build_windows_terminal_command(&settings), "powershell.exe");
+
+        settings.terminal_shell_kind = TERMINAL_SHELL_WSL.to_string();
+        settings.terminal_wsl_distro = String::new();
+        assert_eq!(build_windows_terminal_command(&settings), "wsl.exe");
+
+        settings.terminal_wsl_distro = "Ubuntu".to_string();
+        assert_eq!(build_windows_terminal_command(&settings), "wsl.exe -d \"Ubuntu\"");
     }
 }
 

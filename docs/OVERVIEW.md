@@ -10,6 +10,7 @@
   - 起動導線（`nagomi.exe`）を軸に、Orchestrator/Terminal を「必要時だけ開く」体験を固める
   - nagomi: ターミナル並列作業の「俯瞰（Overview）＋順番フォーカス＋観測ベース状態表示」を中核に据える
   - Terminal の環境変数をユーザー環境に同期し、PATH 等の差分をなくす
+  - Windows 設定画面に terminal 起動方式（Command Prompt / PowerShell / WSL）と WSL distro 選択を追加する
   - Terminal ストリームと AI フックの統合で終了候補を作り、AI判定（JSON 出力）で状態を確定する
   - 既定値（フォント/サイズ/scrollback 等）の参照元を docs→実装まで辿れる状態にする（値は当面ハードコードでOK）
   - トレイから設定画面を開ける導線を整える
