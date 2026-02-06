@@ -88,6 +88,8 @@ nagomi の中核である「複数ターミナル並列作業」を、観測ベ�
 ### C. 起動導線（nagomi / tray）
 - [x] C-1 仕様（docs）: 2回目以降の `nagomi` は **追加で新ターミナルを開く**を正とする（`docs/spec.md` 10.x）
 - [x] C-1 テスト: `target/debug/nagomi.exe` を2回起動して Terminal が2枚増える
+- [x] C-2 仕様/設計/実装: トレイメニューを運用向け最小構成（`Open Terminal Window` / `Arrange Terminal Windows` / `Open Settings` / `Quit`）へ整理し、`Open Chat` / `Open Run` / `worker_*` は既定表示から外す
+- [x] C-2 テスト: `cargo test -p nagomi-orchestrator` と `npm test -w apps/orchestrator -- --test-reporter=spec` を通し、トレイ導線変更の回帰がない
 
 ### D. Overview（タイル一覧 / Run相当） ※優先度低
 - [ ] D-1 実装: Orchestrator から Overview を開ける（tray/メニュー/ショートカットのいずれか）

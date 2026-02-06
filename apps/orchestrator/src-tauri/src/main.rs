@@ -2677,8 +2677,6 @@ fn create_window<R: Runtime>(
 
 fn build_tray<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
     let menu = Menu::new(app)?;
-    let open_chat = MenuItem::with_id(app, "open_chat", "Open Chat", true, None::<&str>)?;
-    let open_run = MenuItem::with_id(app, "open_run", "Open Run", true, None::<&str>)?;
     let open_settings =
         MenuItem::with_id(app, "open_settings", "Open Settings", true, None::<&str>)?;
     let open_terminal = MenuItem::with_id(
@@ -2695,38 +2693,11 @@ fn build_tray<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
         true,
         None::<&str>,
     )?;
-    let worker_start = MenuItem::with_id(
-        app,
-        "worker_start",
-        "Start Worker Session",
-        true,
-        None::<&str>,
-    )?;
-    let worker_send_sample = MenuItem::with_id(
-        app,
-        "worker_send_sample",
-        "Send Sample Input",
-        true,
-        None::<&str>,
-    )?;
-    let worker_stop = MenuItem::with_id(
-        app,
-        "worker_stop",
-        "Stop Worker Session",
-        true,
-        None::<&str>,
-    )?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
-    menu.append(&open_chat)?;
-    menu.append(&open_run)?;
-    menu.append(&open_settings)?;
     menu.append(&open_terminal)?;
     menu.append(&arrange_terminals)?;
-    menu.append(&PredefinedMenuItem::separator(app)?)?;
-    menu.append(&worker_start)?;
-    menu.append(&worker_send_sample)?;
-    menu.append(&worker_stop)?;
+    menu.append(&open_settings)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
     menu.append(&quit)?;
 
@@ -2734,20 +2705,6 @@ fn build_tray<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
         .menu(&menu)
         .tooltip("nagomi")
         .on_menu_event(|app, event| match event.id() {
-            id if id == "open_chat" => {
-                let _ = create_window(app, WINDOW_CHAT, "Chat", "chat");
-                if let Some(window) = app.get_webview_window(WINDOW_CHAT) {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
-            }
-            id if id == "open_run" => {
-                let _ = create_window(app, WINDOW_RUN, "Run", "run");
-                if let Some(window) = app.get_webview_window(WINDOW_RUN) {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
-            }
             id if id == "open_settings" => {
                 let _ = create_window(app, WINDOW_SETTINGS, "Settings", "settings");
                 if let Some(window) = app.get_webview_window(WINDOW_SETTINGS) {
@@ -2761,24 +2718,6 @@ fn build_tray<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
             }
             id if id == "arrange_terminals" => {
                 let _ = arrange_terminal_windows_inner(app.clone());
-            }
-            id if id == "worker_start" => {
-                if let Err(err) = start_worker_session(app) {
-                    let _ = log_worker_event(app, &format!("start_session failed: {err}"));
-                    println!("[worker] start_session failed: {err}");
-                }
-            }
-            id if id == "worker_send_sample" => {
-                if let Err(err) = send_sample_input(app) {
-                    let _ = log_worker_event(app, &format!("send_input failed: {err}"));
-                    println!("[worker] send_input failed: {err}");
-                }
-            }
-            id if id == "worker_stop" => {
-                if let Err(err) = stop_worker_session(app) {
-                    let _ = log_worker_event(app, &format!("stop_session failed: {err}"));
-                    println!("[worker] stop_session failed: {err}");
-                }
             }
             id if id == "quit" => {
                 app.exit(0);

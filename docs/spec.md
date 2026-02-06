@@ -13,7 +13,7 @@
 2.1 Given: Chat モードを開く, When: UI を描画する, Then: 左に対話レーン、右下にキャラクターを表示する  
 2.2 Given: 末尾追従が ON, When: 新しい出力が来る, Then: 自動スクロールで末尾に追従する  
 2.3 Given: ユーザーが上方向にスクロールする, When: 追従解除条件を満たす, Then: 末尾追従を OFF にする  
-2.4 Given: Run 画面を開く, When: トレイから起動する, Then: 整列/順序設定の操作パネルとして表示される  
+2.4 Given: トレイメニューを表示する, When: 項目一覧を表示する, Then: `Open Terminal Window` / `Arrange Terminal Windows` / `Open Settings` / `Quit` のみを表示する（`Open Chat` / `Open Run` / `worker_*` は表示しない）  
 2.5 Given: Run のタイル配置を行う, When: セッション一覧を描画する, Then: 各モニタの作業領域ごとにターミナルウィンドウを均等グリッドで並べる（現位置の中心点で上→下、左→右の順に並び替える / 同一行判定は中心点の y 差が作業領域高の約 12%（最低 80px）以内）  
 2.6 Given: 各モニタ内のウィンドウ数が 4 以上, When: 配置する, Then: 2 行で並べる  
 2.7 Given: 各モニタ内のウィンドウ数が 9 以上, When: 配置する, Then: 3 行で並べる  
@@ -126,7 +126,7 @@
 ## 10. 起動/バックエンド分岐（Windows + WSL）
 10.1 Given: ユーザーが `nagomi`（launcher: `nagomi.exe` / npm CLI `nagomi`）を起動する, When: Orchestrator が未起動, Then: Orchestrator を起動し Worker を起動する  
 10.2 Given: ユーザーが `nagomi`（launcher）を起動する, When: Orchestrator が起動済み, Then: Orchestrator は起動済みとして扱い terminal window を開く  
-10.2.1 Given: Orchestrator を起動する, When: `--start-hidden` を付与する, Then: 初期 window（Chat）は表示しない（tray から操作する）  
+10.2.1 Given: Orchestrator を起動する, When: `--start-hidden` を付与する, Then: 初期 window は表示しない（tray の `Open Terminal Window` / `Open Settings` から操作する）  
 10.2.2 Given: Orchestrator を起動する, When: `--exit-on-last-terminal` を付与する, Then: 最後の terminal session が停止した時点で Orchestrator は終了する  
 10.2.3 Given: ユーザーが `nagomi` を繰り返し起動する, When: `--session-id` を指定しない, Then: 起動のたびに追加で新しい terminal window を開く  
 10.3 Given: Orchestrator の起動済み判定を行う, When: プロセス名で検出した後に IPC probe を試す, Then: IPC が応答しない場合は未起動として扱う  

@@ -6,6 +6,7 @@
 
 #1. アーキテクチャ概要
 - UI: Tauri + HTML/TypeScript + xterm.js（Terminal/Watcher/tint/Settings）
+- Tray: 運用メニューは `Open Terminal Window` / `Arrange Terminal Windows` / `Open Settings` / `Quit` に限定し、`worker_*` のデバッグ操作は常時表示しない
 - Orchestrator: Rust（Session/Hook/Judge/StateIntegrator/IPC）
 - Worker: Rust（ConPTY で PTY を実行、Windows では余分なコンソールを出さない）
 - Protocol: NDJSON
