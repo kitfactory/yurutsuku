@@ -44,10 +44,14 @@ nagomi の中核である「複数ターミナル並列作業」を、観測ベ�
 - [ ] N-8.2 テスト: CWD 変化に追従してタイトルが更新され、汎用名ルールが適用される（`cargo test -p nagomi-orchestrator` / `npm test -w apps/orchestrator -- --test-reporter=spec`）
 
 ### N-9 内蔵特殊コマンド（`:ng`）
-- [ ] N-9.1 文書: `:ng` コマンドのI/F（文法、PTY非送信、エラー応答、権限境界）を `docs/concept.md` / `docs/spec.md` / `docs/architecture.md` に反映する（初期実装は `:ng ping` のみ）
-- [ ] N-9.1 テスト: docs の記述が一意で矛盾しない（自己レビュー）
-- [ ] N-9.2 実装: ターミナル入力の `:ng` プレフィックスを内蔵コマンドとして解釈し、` :ng ping ` で `pong` 応答を表示する（PTYへは送らない）
-- [ ] N-9.2 テスト: `:ng ping` が `pong` を返し、未定義/不正引数時もPTYへ漏れない（`cargo test -p nagomi-orchestrator` / `npm test -w apps/orchestrator -- --test-reporter=spec`）
+- [x] N-9.1 文書: `:ng` を **UI 内蔵コマンド層**で扱う I/F（文法、PTY非送信、ローカル表示、エラー応答、権限境界）とロールバックポイントを `docs/spec.md` / `docs/architecture.md` / `docs/OVERVIEW.md` に反映する
+- [x] N-9.1 テスト: docs の記述が一意で矛盾しない（自己レビュー）
+- [x] N-9.2 実装: `apps/orchestrator/src/index.html` に `:ng` の Frontend Internal Command Layer を実装する（入力中表示/Enter実行/`ping` 応答）
+- [x] N-9.2 テスト: `:ng` を打ち始めた時点で文字が見え、` :ng ping ` が即時 `pong` を返すことを確認する（PTY漏れなし）
+- [x] N-9.3 実装: ロールバックポイント RP-1/RP-2 を実装する（内蔵層の無効化で全面パススルーへ戻せる）
+- [x] N-9.3 テスト: ロールバック有効時に `:ng` が通常シェル入力として動作し、入力不能/重複入力が再発しないことを確認する
+- [x] N-9.4 実装: Rust 側の `:ng` 専用インターセプトを撤去し、`terminal_send_input` を通常パススルー中心へ整理する
+- [x] N-9.4 テスト: `cargo test -p nagomi-orchestrator` / `npm test -w apps/orchestrator -- --test-reporter=spec` と目視確認で回帰がないことを確認する
 
 ---
 

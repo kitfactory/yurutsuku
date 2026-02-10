@@ -35,6 +35,12 @@
 2.16 Given: Terminal 画面を開く, When: UI を描画する, Then: ターミナル表示領域が初期化される  
 2.16.1 Given: 複数の Terminal window を開く, When: `Open Terminal Window` / `GET /open-terminal` で追加する, Then: window ごとに別 `session_id` を持ち入力/出力は共有されない  
 2.17 Given: ターミナル入力が行われる, When: 入力が確定する, Then: PTY/Worker に入力が送られる  
+2.17.1 Given: Terminal 画面で入力行の先頭が `:ng` である, When: 入力/Enter を処理する, Then: **UI 内蔵コマンド**として解釈し PTY/Worker へは送信しない（初期対応は `:ng ping` のみ）  
+2.17.2 Given: `:ng` 入力中である, When: 文字入力/削除が行われる, Then: 文字は terminal 画面にローカルエコーで即時表示される（PTY エコー待ちをしない）  
+2.17.3 Given: `:ng ping` を Enter する, When: 実行する, Then: `:ng ping` の行に続けて `pong` を表示する（遅延表示しない）  
+2.17.4 Given: 未定義の `:ng` サブコマンドを Enter する, When: 実行する, Then: `[nagomi] unknown :ng command: <args>` を表示する（PTY へは送らない）  
+2.17.5 Given: 内蔵コマンド層が入力不能/重複送信/応答欠落を再発させる, When: 不具合を再現する, Then: **ロールバックポイント**として `settings > Windows > :ng 内蔵コマンド` を OFF にして `:ng` 解釈を無効化し、すべての入力を PTY/Worker へそのまま送る  
+2.17.6 Given: ロールバックが有効, When: `:ng ...` を入力する, Then: 通常のシェル入力として扱う（内蔵応答を出さない）  
 2.18 Given: PTY/Worker から出力が届く, When: 受信する, Then: ターミナルに表示されスクロールバックが更新される  
 2.19 Given: ユーザーがコピー/ペースト操作を行う, When: ターミナルにフォーカスがある, Then: OS のクリップボードで操作できる  
 2.20 Given: ターミナルウィンドウのサイズが変わる, When: リサイズが確定する, Then: PTY/Worker にサイズ変更が送られる  
@@ -42,7 +48,7 @@
 2.21.1 Given: P0 既定値を参照する, When: 初回起動で settings が未作成, Then: 既定値を採用する（実装参照: `apps/orchestrator/src-tauri/src/main.rs` の `Settings::default`、UI 参照: `apps/orchestrator/src/index.html` の `terminalSettingsDefaults`）  
 2.21.2 Given: トレイの Settings を開く, When: トレイメニューから設定画面を選ぶ, Then: `view=settings` の設定画面が表示される  
 2.22 Given: IME を使う, When: 変換操作を行う, Then: OS の IME に従って入力できる（専用処理は持たない）  
-2.23 Given: ターミナル画面を表示する, When: 描画する, Then: 画面内の表示は PTY 出力のみで構成し、説明文や装飾テキストは表示しない  
+2.23 Given: ターミナル画面を表示する, When: 描画する, Then: 画面内の表示は PTY 出力と `:ng` 内蔵コマンドのローカル出力のみで構成し、説明文や装飾テキストは表示しない  
 2.24 Given: ターミナルが表示中, When: 観測（Watcher）を表示する, Then: **全ターミナルを代表する状態**を右下のキャラクターで示す（実装参照: `apps/orchestrator/src/assets/watcher/nagomisan_*.png` / 元データ: `apps/orchestrator/src/assets/watcher/nagomi_fullbody_icons_96_v3.zip`）  
 2.24.1 Given: 観測（Watcher）を表示する, When: 表示設定が ON, Then: **別ウィンドウ（透過）**でフルボディ（96x192）を右下に表示する  
 2.24.2 Given: 観測（Watcher）を表示する, When: 表示設定が OFF, Then: 透過ウィンドウを表示しない  

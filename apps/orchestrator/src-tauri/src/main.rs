@@ -100,6 +100,8 @@ struct Settings {
     terminal_scrollback_lines: u32,
     #[serde(default)]
     terminal_copy_on_select: bool,
+    #[serde(default = "default_terminal_internal_commands_enabled")]
+    terminal_internal_commands_enabled: bool,
     #[serde(default = "default_terminal_shell_kind")]
     terminal_shell_kind: String,
     #[serde(default)]
@@ -114,6 +116,10 @@ struct Settings {
 
 fn default_terminal_shell_kind() -> String {
     TERMINAL_SHELL_CMD.to_string()
+}
+
+fn default_terminal_internal_commands_enabled() -> bool {
+    true
 }
 
 fn default_terminal_theme_palette() -> String {
@@ -225,6 +231,40 @@ struct TerminalSessionState {
     labels: Mutex<HashMap<String, String>>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum TerminalInputCaptureMode {
+    #[default]
+    Unknown,
+    SuppressCandidate,
+    PassThrough,
+}
+
+#[derive(Debug, Clone, Default)]
+struct TerminalInputCaptureState {
+    pending: String,
+    mode: TerminalInputCaptureMode,
+    skip_next_lf: bool,
+    echoed_display: String,
+}
+
+#[derive(Default)]
+struct TerminalBuiltinCommandState {
+    captures: Mutex<HashMap<String, TerminalInputCaptureState>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TerminalBuiltinCommand {
+    Ping,
+    Usage,
+    Unknown(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TerminalBuiltinInvocation {
+    command: TerminalBuiltinCommand,
+    line: String,
+}
+
 struct TerminalSmokeWaiter {
     token: String,
     sender: std::sync::mpsc::Sender<Result<(), String>>,
@@ -278,6 +318,7 @@ impl Default for Settings {
             terminal_theme_palette: default_terminal_theme_palette(),
             terminal_scrollback_lines: 5000,
             terminal_copy_on_select: true,
+            terminal_internal_commands_enabled: default_terminal_internal_commands_enabled(),
             terminal_shell_kind: default_terminal_shell_kind(),
             terminal_wsl_distro: String::new(),
             terminal_keybind_arrange: default_terminal_keybind_arrange(),
@@ -913,6 +954,240 @@ fn terminal_window_label(session_id: &str) -> String {
         .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
         .collect::<String>();
     format!("terminal-{safe_id}")
+}
+
+fn parse_terminal_builtin_command(line: &str) -> Option<TerminalBuiltinCommand> {
+    let cleaned = strip_ansi_control_sequences(line);
+    let trimmed = cleaned.trim();
+    let rest = trimmed.strip_prefix(":ng")?;
+    let args = rest.trim();
+    if args.is_empty() {
+        return Some(TerminalBuiltinCommand::Usage);
+    }
+    if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
+        return Some(TerminalBuiltinCommand::Unknown(args.to_string()));
+    }
+    let mut parts = args.split_whitespace();
+    let command = parts.next().unwrap_or_default().to_ascii_lowercase();
+    if command == "ping" && parts.next().is_none() {
+        return Some(TerminalBuiltinCommand::Ping);
+    }
+    Some(TerminalBuiltinCommand::Unknown(args.to_string()))
+}
+
+fn builtin_local_display_text(pending: &str) -> Option<String> {
+    let cleaned = strip_ansi_control_sequences(pending);
+    if cleaned.trim_start().starts_with(":ng") {
+        return Some(cleaned);
+    }
+    None
+}
+
+fn append_local_echo_delta(capture: &mut TerminalInputCaptureState, next_text: Option<String>, out: &mut String) {
+    let previous: Vec<char> = capture.echoed_display.chars().collect();
+    let next = next_text.unwrap_or_default();
+    let next_chars: Vec<char> = next.chars().collect();
+    let mut common = 0usize;
+    while common < previous.len() && common < next_chars.len() && previous[common] == next_chars[common] {
+        common += 1;
+    }
+    for _ in common..previous.len() {
+        out.push('\u{0008}');
+        out.push(' ');
+        out.push('\u{0008}');
+    }
+    for ch in next_chars.iter().skip(common) {
+        out.push(*ch);
+    }
+    capture.echoed_display = next;
+}
+
+fn strip_ansi_control_sequences(input: &str) -> String {
+    let chars: Vec<char> = input.chars().collect();
+    let mut out = String::new();
+    let mut i = 0usize;
+    while i < chars.len() {
+        let ch = chars[i];
+        if ch == '\u{001b}' {
+            i += 1;
+            if i >= chars.len() {
+                break;
+            }
+            let next = chars[i];
+            if next == '[' {
+                i += 1;
+                while i < chars.len() {
+                    let code = chars[i] as u32;
+                    i += 1;
+                    if (0x40..=0x7e).contains(&code) {
+                        break;
+                    }
+                }
+                continue;
+            }
+            if next == ']' {
+                i += 1;
+                while i < chars.len() {
+                    if chars[i] == '\u{0007}' {
+                        i += 1;
+                        break;
+                    }
+                    if chars[i] == '\u{001b}' && i + 1 < chars.len() && chars[i + 1] == '\\' {
+                        i += 2;
+                        break;
+                    }
+                    i += 1;
+                }
+                continue;
+            }
+            // Other ESC-prefixed controls are ignored as one sequence head.
+            i += 1;
+            continue;
+        }
+        if ch.is_control() && !ch.is_whitespace() {
+            i += 1;
+            continue;
+        }
+        out.push(ch);
+        i += 1;
+    }
+    out
+}
+
+fn process_terminal_input_chunk(
+    capture: &mut TerminalInputCaptureState,
+    chunk: &str,
+) -> (String, Vec<TerminalBuiltinInvocation>, String) {
+    let mut forward = String::new();
+    let mut builtins = Vec::new();
+    let mut local_echo = String::new();
+
+    for ch in chunk.chars() {
+        if capture.skip_next_lf {
+            capture.skip_next_lf = false;
+            if ch == '\n' {
+                continue;
+            }
+        }
+        if ch == '\r' || ch == '\n' {
+            let builtin = parse_terminal_builtin_command(&capture.pending);
+            if let Some(command) = builtin {
+                let display_line = strip_ansi_control_sequences(&capture.pending);
+                if capture.echoed_display.is_empty() {
+                    append_local_echo_delta(
+                        capture,
+                        builtin_local_display_text(&capture.pending),
+                        &mut local_echo,
+                    );
+                }
+                local_echo.push('\r');
+                local_echo.push('\n');
+                builtins.push(TerminalBuiltinInvocation {
+                    command,
+                    line: display_line.trim().to_string(),
+                });
+                if ch == '\r' {
+                    capture.skip_next_lf = true;
+                }
+            } else {
+                forward.push_str(&capture.pending);
+                forward.push(ch);
+            }
+            capture.pending.clear();
+            capture.mode = TerminalInputCaptureMode::Unknown;
+            capture.echoed_display.clear();
+            continue;
+        }
+
+        if capture.mode == TerminalInputCaptureMode::PassThrough {
+            forward.push(ch);
+            continue;
+        }
+
+        if ch == '\u{0008}' || ch == '\u{007f}' {
+            let _ = capture.pending.pop();
+            if capture.mode == TerminalInputCaptureMode::SuppressCandidate {
+                append_local_echo_delta(
+                    capture,
+                    builtin_local_display_text(&capture.pending),
+                    &mut local_echo,
+                );
+            }
+            continue;
+        }
+
+        capture.pending.push(ch);
+        if capture.mode == TerminalInputCaptureMode::Unknown {
+            let cleaned_for_mode = strip_ansi_control_sequences(&capture.pending);
+            if let Some(first_non_ws) = cleaned_for_mode.chars().find(|c| !c.is_whitespace()) {
+                if first_non_ws == ':' {
+                    capture.mode = TerminalInputCaptureMode::SuppressCandidate;
+                } else {
+                    capture.mode = TerminalInputCaptureMode::PassThrough;
+                    forward.push_str(&capture.pending);
+                    capture.pending.clear();
+                }
+            }
+        }
+        if capture.mode == TerminalInputCaptureMode::SuppressCandidate {
+            append_local_echo_delta(
+                capture,
+                builtin_local_display_text(&capture.pending),
+                &mut local_echo,
+            );
+        }
+    }
+
+    (forward, builtins, local_echo)
+}
+
+fn emit_terminal_output_for_session<R: Runtime>(
+    app: &AppHandle<R>,
+    session_id: &str,
+    text: &str,
+) -> Result<(), String> {
+    let payload = TerminalOutputPayload {
+        session_id: session_id.to_string(),
+        chunk: text.to_string(),
+        stream: "stdout".to_string(),
+    };
+    let label = {
+        let state = app.state::<TerminalSessionState>();
+        state
+            .labels
+            .lock()
+            .ok()
+            .and_then(|map| map.get(session_id).cloned())
+    };
+    if let Some(label) = label {
+        if let Some(window) = app.get_webview_window(&label) {
+            return window
+                .emit("terminal-output", payload)
+                .map_err(|err| err.to_string());
+        }
+    }
+    app.emit("terminal-output", payload)
+        .map_err(|err| err.to_string())
+}
+
+fn execute_terminal_builtin_command<R: Runtime>(
+    app: &AppHandle<R>,
+    session_id: &str,
+    invocation: &TerminalBuiltinInvocation,
+) -> Result<(), String> {
+    let mut out = String::new();
+    match &invocation.command {
+        TerminalBuiltinCommand::Ping => {
+            out.push_str("pong\r\n");
+        }
+        TerminalBuiltinCommand::Usage => {
+            out.push_str("[nagomi] usage: :ng ping\r\n");
+        }
+        TerminalBuiltinCommand::Unknown(raw) => {
+            out.push_str(&format!("[nagomi] unknown :ng command: {raw}\r\n"));
+        }
+    }
+    emit_terminal_output_for_session(app, session_id, &out)
 }
 
 fn handle_health_connection<R: Runtime>(mut stream: TcpStream, app: &AppHandle<R>) {
@@ -2475,22 +2750,14 @@ fn terminal_send_input<R: Runtime>(
     text: String,
 ) -> Result<(), String> {
     ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    if text.is_empty() {
+        return Ok(());
+    }
     let _ = log_worker_event(
         &app,
         &format!("terminal input requested: {session_id} size={}", text.len()),
     );
-    let workers = app.state::<TerminalWorkerState>();
-    let mut guard = workers
-        .processes
-        .lock()
-        .map_err(|_| "terminal worker lock".to_string())?;
-    let Some(process) = guard.get_mut(&session_id) else {
-        return Err("terminal session not started".to_string());
-    };
-    process
-        .send_input(nagomi_protocol::SendInput { session_id, text })
-        .map_err(|err| err.to_string())?;
-    Ok(())
+    send_terminal_input_for_session(&app, &session_id, &text)
 }
 
 #[tauri::command]
@@ -2548,6 +2815,9 @@ fn stop_terminal_session<R: Runtime>(
             .lock()
             .map_err(|_| "terminal labels lock".to_string())?;
         labels.remove(&session_id);
+    }
+    if let Ok(mut captures) = app.state::<TerminalBuiltinCommandState>().captures.lock() {
+        captures.remove(&session_id);
     }
     let workers = app.state::<TerminalWorkerState>();
     let mut guard = workers
@@ -3832,6 +4102,11 @@ fn start_terminal_worker_reader<R: Runtime>(
                         if let Ok(mut active) = app.state::<TerminalSessionState>().active.lock() {
                             active.remove(&exit.session_id);
                         }
+                        if let Ok(mut captures) =
+                            app.state::<TerminalBuiltinCommandState>().captures.lock()
+                        {
+                            captures.remove(&exit.session_id);
+                        }
                         if let Ok(mut guard) = app.state::<TerminalWorkerState>().processes.lock() {
                             if let Some(mut process) = guard.remove(&exit.session_id) {
                                 let _ = process.stop();
@@ -4053,6 +4328,7 @@ fn main() {
                 active: Mutex::new(HashSet::new()),
                 labels: Mutex::new(HashMap::new()),
             });
+            handle.manage(TerminalBuiltinCommandState::default());
             let (terminal_tx, terminal_rx) = std::sync::mpsc::channel::<Message>();
             handle.manage(TerminalWorkerBus { tx: terminal_tx });
             handle.manage(TerminalWorkerState {
@@ -4128,6 +4404,7 @@ mod tests {
             terminal_theme_palette: "light-sand".to_string(),
             terminal_scrollback_lines: 5000,
             terminal_copy_on_select: false,
+            terminal_internal_commands_enabled: true,
             terminal_shell_kind: TERMINAL_SHELL_WSL.to_string(),
             terminal_wsl_distro: "Ubuntu".to_string(),
             terminal_keybind_arrange: "Ctrl+Shift+Y".to_string(),
@@ -4183,6 +4460,113 @@ mod tests {
         assert!(!should_reuse_cached_layout(true, 3, 4, true));
         assert!(!should_reuse_cached_layout(true, 4, 4, false));
         assert!(should_reuse_cached_layout(true, 4, 4, true));
+    }
+
+    #[test]
+    fn parse_terminal_builtin_command_supports_ng_ping() {
+        assert_eq!(
+            parse_terminal_builtin_command(":ng ping"),
+            Some(TerminalBuiltinCommand::Ping)
+        );
+        assert_eq!(
+            parse_terminal_builtin_command("  :ng ping  "),
+            Some(TerminalBuiltinCommand::Ping)
+        );
+        assert_eq!(
+            parse_terminal_builtin_command(":ng"),
+            Some(TerminalBuiltinCommand::Usage)
+        );
+        assert_eq!(
+            parse_terminal_builtin_command(":ng unknown arg"),
+            Some(TerminalBuiltinCommand::Unknown("unknown arg".to_string()))
+        );
+        assert_eq!(
+            parse_terminal_builtin_command(":ngping"),
+            Some(TerminalBuiltinCommand::Unknown("ping".to_string()))
+        );
+        assert_eq!(parse_terminal_builtin_command("echo ok"), None);
+    }
+
+    #[test]
+    fn parse_terminal_builtin_command_ignores_ansi_prefix() {
+        let with_csi = "\u{001b}[200~:ng ping";
+        assert_eq!(
+            parse_terminal_builtin_command(with_csi),
+            Some(TerminalBuiltinCommand::Ping)
+        );
+        let with_osc = "\u{001b}]0;title\u{0007}:ng ping";
+        assert_eq!(
+            parse_terminal_builtin_command(with_osc),
+            Some(TerminalBuiltinCommand::Ping)
+        );
+    }
+
+    #[test]
+    fn process_terminal_input_chunk_intercepts_internal_command() {
+        let mut capture = TerminalInputCaptureState::default();
+        let (forward, invocations, local_echo) =
+            process_terminal_input_chunk(&mut capture, ":ng ping\r\n");
+        assert_eq!(forward, "");
+        assert_eq!(
+            invocations,
+            vec![TerminalBuiltinInvocation {
+                command: TerminalBuiltinCommand::Ping,
+                line: ":ng ping".to_string(),
+            }]
+        );
+        assert_eq!(local_echo, ":ng ping\r\n");
+
+        let mut capture = TerminalInputCaptureState::default();
+        let (forward, invocations, local_echo) =
+            process_terminal_input_chunk(&mut capture, "echo ok\r\n");
+        assert_eq!(forward, "echo ok\r\n");
+        assert!(invocations.is_empty());
+        assert_eq!(local_echo, "");
+    }
+
+    #[test]
+    fn process_terminal_input_chunk_supports_chunked_internal_command() {
+        let mut capture = TerminalInputCaptureState::default();
+        let (forward1, invocations1, local_echo1) = process_terminal_input_chunk(&mut capture, ":ng ");
+        let (forward2, invocations2, local_echo2) =
+            process_terminal_input_chunk(&mut capture, "ping\r");
+        let (forward3, invocations3, local_echo3) = process_terminal_input_chunk(&mut capture, "\n");
+        assert_eq!(forward1, "");
+        assert!(invocations1.is_empty());
+        assert_eq!(local_echo1, ":ng ");
+        assert_eq!(forward2, "");
+        assert_eq!(
+            invocations2,
+            vec![TerminalBuiltinInvocation {
+                command: TerminalBuiltinCommand::Ping,
+                line: ":ng ping".to_string(),
+            }]
+        );
+        assert_eq!(local_echo2, "ping\r\n");
+        assert_eq!(forward3, "");
+        assert!(invocations3.is_empty());
+        assert_eq!(local_echo3, "");
+    }
+
+    #[test]
+    fn process_terminal_input_chunk_intercepts_internal_with_ansi_wrapper() {
+        let mut capture = TerminalInputCaptureState::default();
+        let (forward1, invocations1, local_echo1) =
+            process_terminal_input_chunk(&mut capture, "\u{001b}[200~:ng ");
+        let (forward2, invocations2, local_echo2) =
+            process_terminal_input_chunk(&mut capture, "ping\u{001b}[201~\r\n");
+        assert_eq!(forward1, "");
+        assert!(invocations1.is_empty());
+        assert_eq!(local_echo1, ":ng ");
+        assert_eq!(forward2, "");
+        assert_eq!(
+            invocations2,
+            vec![TerminalBuiltinInvocation {
+                command: TerminalBuiltinCommand::Ping,
+                line: ":ng ping".to_string(),
+            }]
+        );
+        assert_eq!(local_echo2, "ping\r\n");
     }
 
     #[test]

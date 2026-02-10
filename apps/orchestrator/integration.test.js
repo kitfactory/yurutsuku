@@ -106,6 +106,10 @@ function startWorker() {
   };
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function withWorker(fn) {
   const worker = startWorker();
   try {
@@ -209,31 +213,24 @@ test("recv_output_exit_error", async () => {
       const sessionId = "session-flow";
 
       worker.send(baseStartSession(sessionId, shellCommand()));
-      try {
-        await waitForMessage(worker.queue, (message) => message.type === "output", 2000);
-      } catch {
-        // Prompt/banner may be slow; continue to send input anyway.
-      }
+      // Shell startup timing on ConPTY can vary; wait briefly before the first command.
+      // ConPTY の起動タイミングは変動するため、最初の入力前に短く待機する。
+      await sleep(process.platform === "win32" ? 120 : 40);
       worker.send({
         type: "send_input",
         session_id: sessionId,
-        text: echoAndExitPayload(),
+        text: process.platform === "win32" ? "echo ok\r\n" : "echo ok\n",
       });
-      const deadline = Date.now() + 15000;
-      let outputSeen = "";
-      while (Date.now() < deadline) {
-        const remaining = Math.max(50, deadline - Date.now());
-        const message = await worker.queue.next(remaining);
-        if (message.type === "output") {
-          outputSeen += String(message.chunk || "").toLowerCase();
-          if (outputSeen.includes("ok")) {
-            break;
-          }
-        }
-      }
-      if (!outputSeen.includes("ok")) {
-        throw new Error("timeout waiting for output containing ok");
-      }
+      await waitForMessage(
+        worker.queue,
+        (message) => message.type === "output" && String(message.chunk || "").toLowerCase().includes("ok"),
+        15000
+      );
+      worker.send({
+        type: "send_input",
+        session_id: sessionId,
+        text: process.platform === "win32" ? "exit\r\n" : "exit\n",
+      });
       await waitForMessage(worker.queue, (message) => message.type === "exit", 15000);
   });
 });
@@ -382,6 +379,32 @@ test("terminal_selection_pickup_requires_arranged_layout", () => {
   assert.ok(rust.includes("tauri::WindowEvent::Resized(_)"));
   assert.ok(rust.includes("mark_terminal_layout_arranged(&app, true);"));
   assert.ok(rust.includes("mark_terminal_layout_arranged(&app, false);"));
+});
+
+test("terminal_internal_ng_command_intercept", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("parseNagomiInternalCommand"));
+  assert.ok(html.includes("processNagomiInternalInputChunk"));
+  assert.ok(html.includes("executeNagomiInternalCommand"));
+  assert.ok(html.includes("emitLocalTerminalOutput(processed.localEchoText"));
+  assert.ok(html.includes("trimmed.startsWith(':ng')"));
+  assert.ok(html.includes("setLastTerminalEvent('internal'"));
+  assert.ok(html.includes("cleaned.trimStart().startsWith(':')"));
+  assert.ok(html.includes("rollbackNagomiInternalCommands"));
+  assert.ok(html.includes("if (nagomiInternalEnabled && internal)"));
+  assert.ok(html.includes("terminal_internal_commands_enabled"));
+  assert.ok(html.includes("settings-terminal-internal-commands"));
+  assert.ok(html.includes("nextForward += '\\r';"));
+
+  const tauriMain = path.join(appRoot, "src-tauri", "src", "main.rs");
+  const rust = fs.readFileSync(tauriMain, "utf8");
+  assert.ok(rust.includes("terminal_internal_commands_enabled"));
+  assert.ok(rust.includes("default_terminal_internal_commands_enabled"));
+  assert.ok(rust.includes("TerminalBuiltinCommand"));
+  assert.ok(rust.includes("process_terminal_input_chunk"));
+  assert.ok(rust.includes("execute_terminal_builtin_command"));
+  assert.ok(rust.includes("\"pong\\r\\n\""));
 });
 
 test("settings_character_log_retention", () => {

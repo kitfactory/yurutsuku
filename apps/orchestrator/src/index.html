@@ -1447,6 +1447,19 @@
               </select>
             </div>
             <div class="settings-row">
+              <span data-i18n="settings.runtime.internal_commands">:ng internal commands</span>
+              <button
+                class="toggle toggle-switch"
+                data-role="settings-terminal-internal-commands"
+                type="button"
+              >
+                <span class="toggle-state" data-role="settings-terminal-internal-commands-state">on</span>
+                <span class="toggle-track" aria-hidden="true">
+                  <span class="toggle-thumb"></span>
+                </span>
+              </button>
+            </div>
+            <div class="settings-row">
               <span data-i18n="settings.shortcuts.arrange">arrange shortcut</span>
               <input
                 type="text"
@@ -1677,6 +1690,7 @@
           'settings.runtime.shell.wsl': 'WSL',
           'settings.runtime.wsl_distro': 'WSLディストロ',
           'settings.runtime.wsl_default': '既定のディストロ',
+          'settings.runtime.internal_commands': ':ng 内蔵コマンド',
           'settings.windows.title': 'Windows',
           'settings.shortcuts.arrange': '整列ショートカット',
           'settings.shortcuts.focus_next': '次へ移動ショートカット',
@@ -1789,6 +1803,7 @@
           'settings.runtime.shell.wsl': 'WSL',
           'settings.runtime.wsl_distro': 'WSL distro',
           'settings.runtime.wsl_default': 'default distro',
+          'settings.runtime.internal_commands': ':ng internal commands',
           'settings.windows.title': 'Windows',
           'settings.shortcuts.arrange': 'arrange shortcut',
           'settings.shortcuts.focus_next': 'focus next shortcut',
@@ -1934,6 +1949,12 @@
         '[data-role="settings-terminal-wsl-distro-row"]'
       );
       const terminalWslDistro = document.querySelector('[data-role="settings-terminal-wsl-distro"]');
+      const terminalInternalCommandsToggle = document.querySelector(
+        '[data-role="settings-terminal-internal-commands"]'
+      );
+      const terminalInternalCommandsState = document.querySelector(
+        '[data-role="settings-terminal-internal-commands-state"]'
+      );
       const keybindArrangeInput = document.querySelector('[data-role="settings-keybind-arrange"]');
       const keybindFocusNextInput = document.querySelector(
         '[data-role="settings-keybind-focus-next"]'
@@ -2209,6 +2230,18 @@
       const INPUT_CHUNK_HISTORY_LIMIT = 10;
       let dataInputSeenAt = 0;
       let dataInputLineActive = false;
+      const nagomiInternalCaptureModes = Object.freeze({
+        unknown: 'unknown',
+        passThrough: 'pass-through',
+        suppressCandidate: 'suppress-candidate',
+      });
+      const nagomiInternalCapture = {
+        mode: nagomiInternalCaptureModes.unknown,
+        pending: '',
+        skipNextLf: false,
+        echoedDisplay: '',
+      };
+      let nagomiInternalEnabled = true;
 
       function truncateDebugText(value, limit = 48) {
         if (!value) return '';
@@ -2568,6 +2601,23 @@
         }
       }
 
+      function emitLocalTerminalOutput(chunk, reason) {
+        if (!chunk) return;
+        const now = Date.now();
+        terminalLastOutputAt = now;
+        terminalLastActivityAt = now;
+        appendOutputTail(chunk);
+        if (terminalStateDetector.tailForObservation) {
+          terminalLastChunkTail = terminalStateDetector.tailForObservation(outputTailBuffer);
+        } else {
+          terminalLastChunkTail = outputTailBuffer || String(chunk);
+        }
+        scheduleIdleJudge(reason || 'local-output');
+        updateTerminalObservedState();
+        enqueueTerminalOutput(chunk);
+        forceDrainOutputNow();
+      }
+
       function buildJudgeTail() {
         if (!outputTailBuffer) return '';
         const lines = outputTailBuffer.split('\n');
@@ -2702,11 +2752,236 @@
         return null;
       }
 
+      function stripAnsiControlSequences(text) {
+        const input = String(text || '');
+        let out = '';
+        let i = 0;
+        while (i < input.length) {
+          const ch = input[i];
+          if (ch === '\x1b') {
+            i += 1;
+            if (i >= input.length) break;
+            const next = input[i];
+            if (next === '[') {
+              i += 1;
+              while (i < input.length) {
+                const code = input.charCodeAt(i);
+                i += 1;
+                if (code >= 0x40 && code <= 0x7e) break;
+              }
+              continue;
+            }
+            if (next === ']') {
+              i += 1;
+              while (i < input.length) {
+                if (input[i] === '\x07') {
+                  i += 1;
+                  break;
+                }
+                if (input[i] === '\x1b' && i + 1 < input.length && input[i + 1] === '\\') {
+                  i += 2;
+                  break;
+                }
+                i += 1;
+              }
+              continue;
+            }
+            i += 1;
+            continue;
+          }
+          if (ch < ' ' && ch !== '\r' && ch !== '\n' && ch !== '\t') {
+            i += 1;
+            continue;
+          }
+          if (ch === '\x7f') {
+            i += 1;
+            continue;
+          }
+          out += ch;
+          i += 1;
+        }
+        return out;
+      }
+
+      function parseNagomiInternalCommand(line) {
+        const cleaned = stripAnsiControlSequences(String(line || ''));
+        const trimmed = cleaned.trim();
+        if (!trimmed.startsWith(':ng')) return null;
+        const rest = trimmed.slice(3);
+        const body = rest.trim();
+        if (!body) return { kind: 'usage', name: '', args: [], rawArgs: '' };
+        if (rest && !/^\s/.test(rest)) {
+          return { kind: 'unknown', name: '', args: [], rawArgs: body };
+        }
+        const parts = body.split(/\s+/).filter(Boolean);
+        if (!parts.length) return { kind: 'usage', name: '', args: [], rawArgs: '' };
+        return {
+          kind: 'command',
+          name: String(parts[0] || '').toLowerCase(),
+          args: parts.slice(1),
+          rawArgs: body,
+        };
+      }
+
+      function nagomiInternalDisplayText(line) {
+        const cleaned = stripAnsiControlSequences(String(line || ''));
+        if (cleaned.trimStart().startsWith(':')) return cleaned;
+        return null;
+      }
+
+      function appendNagomiLocalEchoDelta(capture, nextText) {
+        const previous = Array.from(String(capture.echoedDisplay || ''));
+        const next = String(nextText || '');
+        const nextChars = Array.from(next);
+        let common = 0;
+        while (
+          common < previous.length &&
+          common < nextChars.length &&
+          previous[common] === nextChars[common]
+        ) {
+          common += 1;
+        }
+        let out = '';
+        for (let i = common; i < previous.length; i += 1) {
+          out += '\b \b';
+        }
+        for (let i = common; i < nextChars.length; i += 1) {
+          out += nextChars[i];
+        }
+        capture.echoedDisplay = next;
+        return out;
+      }
+
+      function executeNagomiInternalCommand(command) {
+        if (!command) return '';
+        if (command.kind === 'usage') {
+          return '[nagomi] usage: :ng ping\r\n';
+        }
+        if (command.kind === 'command' && command.name === 'ping' && command.args.length === 0) {
+          return 'pong\r\n';
+        }
+        const rawArgs =
+          command.rawArgs ||
+          [command.name, ...(Array.isArray(command.args) ? command.args : [])]
+            .filter(Boolean)
+            .join(' ')
+            .trim();
+        return `[nagomi] unknown :ng command: ${rawArgs}\r\n`;
+      }
+
+      function processNagomiInternalInputChunk(chunk) {
+        const capture = nagomiInternalCapture;
+        const source = String(chunk || '');
+        let forwardText = '';
+        const internalCommands = [];
+        let localEchoText = '';
+        for (let i = 0; i < source.length; i += 1) {
+          const ch = source[i];
+          if (capture.skipNextLf) {
+            capture.skipNextLf = false;
+            if (ch === '\n') continue;
+          }
+          if (ch === '\r' || ch === '\n') {
+            const command = parseNagomiInternalCommand(capture.pending);
+            if (command) {
+              const displayLine = stripAnsiControlSequences(capture.pending).trim();
+              if (!capture.echoedDisplay) {
+                localEchoText += appendNagomiLocalEchoDelta(
+                  capture,
+                  nagomiInternalDisplayText(capture.pending)
+                );
+              }
+              localEchoText += '\r\n';
+              internalCommands.push({ command, line: displayLine });
+              if (ch === '\r') {
+                capture.skipNextLf = true;
+              }
+            } else {
+              forwardText += capture.pending;
+              forwardText += ch;
+            }
+            capture.pending = '';
+            capture.mode = nagomiInternalCaptureModes.unknown;
+            capture.echoedDisplay = '';
+            continue;
+          }
+
+          if (capture.mode === nagomiInternalCaptureModes.passThrough) {
+            forwardText += ch;
+            continue;
+          }
+
+          if (ch === '\x08' || ch === '\x7f') {
+            if (capture.pending.length > 0) {
+              capture.pending = capture.pending.slice(0, -1);
+            }
+            if (capture.mode === nagomiInternalCaptureModes.suppressCandidate) {
+              localEchoText += appendNagomiLocalEchoDelta(
+                capture,
+                nagomiInternalDisplayText(capture.pending)
+              );
+            }
+            continue;
+          }
+
+          capture.pending += ch;
+          if (capture.mode === nagomiInternalCaptureModes.unknown) {
+            const cleaned = stripAnsiControlSequences(capture.pending);
+            const firstNonWhitespace = cleaned.match(/\S/);
+            if (firstNonWhitespace && firstNonWhitespace[0] === ':') {
+              capture.mode = nagomiInternalCaptureModes.suppressCandidate;
+            } else if (firstNonWhitespace && firstNonWhitespace[0]) {
+              capture.mode = nagomiInternalCaptureModes.passThrough;
+              forwardText += capture.pending;
+              capture.pending = '';
+            }
+          }
+          if (capture.mode === nagomiInternalCaptureModes.suppressCandidate) {
+            localEchoText += appendNagomiLocalEchoDelta(
+              capture,
+              nagomiInternalDisplayText(capture.pending)
+            );
+          }
+        }
+        return { forwardText, internalCommands, localEchoText };
+      }
+
+      function resetNagomiInternalCapture() {
+        nagomiInternalCapture.mode = nagomiInternalCaptureModes.unknown;
+        nagomiInternalCapture.pending = '';
+        nagomiInternalCapture.skipNextLf = false;
+        nagomiInternalCapture.echoedDisplay = '';
+      }
+
+      function rollbackNagomiInternalCommands(reason, error) {
+        if (!nagomiInternalEnabled) return;
+        nagomiInternalEnabled = false;
+        settingsState.terminal_internal_commands_enabled = false;
+        resetNagomiInternalCapture();
+        if (terminalInternalCommandsState) {
+          setToggleState(false, terminalInternalCommandsState);
+        }
+        const message = reason || 'rollback';
+        setLastTerminalEvent('internal-rollback', message);
+        debugTerminal('internal-rollback', {
+          reason: message,
+          error: error ? String(error) : '',
+        });
+        saveSettingsToBackend();
+      }
+
       function handleTerminalLine(line) {
         const toolName = normalizeToolName(settingsState.llm_tool || 'codex');
         const trimmed = String(line || '').trim();
+        const internal = parseNagomiInternalCommand(trimmed);
         lastInputLine = trimmed;
         updateTerminalDebugBadge();
+        if (nagomiInternalEnabled && internal) {
+          const internalEvent =
+            internal.kind === 'usage' ? 'usage' : internal.name || internal.rawArgs || 'unknown';
+          setLastTerminalEvent('internal', internalEvent);
+          return;
+        }
         if (agentSessionActive && toolName && trimmed && isToolCommand(trimmed, toolName)) {
           setLastTerminalEvent('tool', 'start');
           updateTerminalObservedState();
@@ -2830,6 +3105,11 @@
       // Send queue for single-flight invoke / 送信キューで invoke を単発化
       let sendQueue = '';
       let sendInFlight = false;
+      let sendRetryTimer = null;
+      let sendRetryCount = 0;
+      let terminalSessionReady = false;
+      const SEND_RETRY_DELAY_MS = 80;
+      const SEND_RETRY_MAX = 40;
       // Output buffer to coalesce writes / 出力を合体して write 回数を削減
       const outputChunks = [];
       let outputHead = 0;
@@ -3035,6 +3315,7 @@
           })(),
         terminal_scrollback_lines: terminalSettingsDefaults.scrollbackLines,
         terminal_copy_on_select: terminalSettingsDefaults.copyOnSelect,
+        terminal_internal_commands_enabled: true,
         terminal_shell_kind: 'cmd',
         terminal_wsl_distro: '',
         terminal_keybind_arrange: terminalKeybindDefaults.arrange,
@@ -3498,6 +3779,7 @@
 
       async function startTerminalSession() {
         if (!terminal) return;
+        terminalSessionReady = false;
         try {
           console.debug('[terminal] start_session', {
             sessionId: terminalSessionId,
@@ -3509,7 +3791,18 @@
             cols: terminal.cols,
             rows: terminal.rows,
           });
+          terminalSessionReady = true;
+          if (rawInputQueue) {
+            flushNow();
+          } else if (sendQueue) {
+            if (typeof queueMicrotask === 'function') {
+              queueMicrotask(drainSendQueue);
+            } else {
+              setTimeout(drainSendQueue, 0);
+            }
+          }
         } catch {
+          terminalSessionReady = false;
           return;
         }
       }
@@ -3528,17 +3821,47 @@
         sendQueue += text;
       }
 
+      function queueDrainSendQueue() {
+        if (sendRetryTimer) {
+          clearTimeout(sendRetryTimer);
+          sendRetryTimer = null;
+        }
+        if (typeof queueMicrotask === 'function') {
+          queueMicrotask(drainSendQueue);
+        } else {
+          setTimeout(drainSendQueue, 0);
+        }
+      }
+
+      function scheduleSendRetry(reason) {
+        if (sendRetryTimer) return;
+        debugTerminal('send-input-retry', { reason, retry: sendRetryCount, queued: sendQueue.length });
+        sendRetryTimer = setTimeout(() => {
+          sendRetryTimer = null;
+          drainSendQueue();
+        }, SEND_RETRY_DELAY_MS);
+      }
+
       async function drainSendQueue() {
         if (sendInFlight) return;
         if (!sendQueue) return;
+        if (!terminalSessionReady) {
+          scheduleSendRetry('session-not-ready');
+          return;
+        }
         sendInFlight = true;
+        let chunk = '';
         try {
-          const chunk = sendQueue;
+          chunk = sendQueue;
           sendQueue = '';
           debugTerminal('send-input', { size: chunk.length, preview: visualizeText(chunk) });
           const sendStart = performance.now();
-          await invokeWithSession('terminal_send_input', { sessionId: terminalSessionId, text: chunk });
+          await invokeWithSession('terminal_send_input', {
+            sessionId: terminalSessionId,
+            text: chunk,
+          });
           const sendElapsed = performance.now() - sendStart;
+          sendRetryCount = 0;
           if (sendElapsed > 24) {
             controlInputFlushMs = CONTROL_INPUT_FLUSH_MAX;
           } else if (sendElapsed > 16) {
@@ -3550,12 +3873,31 @@
             controlInputFlushMs = Math.max(CONTROL_INPUT_FLUSH_MIN, controlInputFlushMs - 1);
           }
           if (sendQueue) {
-            if (typeof queueMicrotask === 'function') {
-              queueMicrotask(drainSendQueue);
-            } else {
-              setTimeout(drainSendQueue, 0);
-            }
+            queueDrainSendQueue();
           }
+        } catch (error) {
+          const message =
+            error && typeof error === 'object' && 'message' in error
+              ? String(error.message || '')
+              : String(error || '');
+          sendQueue = `${chunk}${sendQueue}`;
+          sendRetryCount += 1;
+          debugTerminal('send-input-error', {
+            retry: sendRetryCount,
+            size: chunk.length,
+            message: message || 'unknown',
+          });
+          if (sendRetryCount > SEND_RETRY_MAX) {
+            debugTerminal('send-input-drop', {
+              reason: 'retry-limit',
+              retries: sendRetryCount,
+              dropped: chunk.length,
+            });
+            sendRetryCount = 0;
+            sendQueue = '';
+            return;
+          }
+          scheduleSendRetry(message || 'invoke-error');
         } finally {
           sendInFlight = false;
         }
@@ -3579,21 +3921,46 @@
 
       function flushNow() {
         if (!rawInputQueue) return;
-        if (captureInputLinesFromSendQueue) {
-          ingestInputLines(rawInputQueue);
-        }
-        enqueueSend(rawInputQueue);
+        const queuedInput = rawInputQueue;
         rawInputQueue = '';
+        if (captureInputLinesFromSendQueue) {
+          ingestInputLines(queuedInput);
+        }
+        let nextForward = queuedInput;
+        if (nagomiInternalEnabled) {
+          try {
+            const processed = processNagomiInternalInputChunk(queuedInput);
+            nextForward = processed.forwardText;
+            if (processed.localEchoText) {
+              emitLocalTerminalOutput(processed.localEchoText, 'internal-echo');
+            }
+            if (processed.internalCommands.length > 0) {
+              debugTerminal('internal-command', {
+                count: processed.internalCommands.length,
+                lines: processed.internalCommands.map((item) => item.line),
+              });
+              for (const invocation of processed.internalCommands) {
+                const response = executeNagomiInternalCommand(invocation.command);
+                if (response) {
+                  emitLocalTerminalOutput(response, 'internal-command');
+                }
+              }
+              nextForward += '\r';
+            }
+          } catch (error) {
+            rollbackNagomiInternalCommands('internal-processing-error', error);
+            nextForward = queuedInput;
+          }
+        }
+        if (nextForward) {
+          enqueueSend(nextForward);
+        }
         if (controlFlushTimer) {
           clearTimeout(controlFlushTimer);
           controlFlushTimer = null;
         }
         if (!sendInFlight) {
-          if (typeof queueMicrotask === 'function') {
-            queueMicrotask(drainSendQueue);
-          } else {
-            setTimeout(drainSendQueue, 0);
-          }
+          queueDrainSendQueue();
         }
       }
 
@@ -3954,6 +4321,7 @@
               agentSource: agentSessionSource,
               lastTail: terminalLastChunkTail ? terminalLastChunkTail.slice(-160) : '',
               outputTail: outputTailBuffer ? outputTailBuffer.slice(-160) : '',
+              internalCommandsEnabled: nagomiInternalEnabled,
               ipcSessionId,
               terminalSessionId,
             };
@@ -4235,6 +4603,19 @@
         keyInputBuffer = '';
         skipNextCarriage = false;
         lastKeyLabel = '';
+        terminalSessionReady = false;
+        sendQueue = '';
+        rawInputQueue = '';
+        sendInFlight = false;
+        sendRetryCount = 0;
+        if (sendRetryTimer) {
+          clearTimeout(sendRetryTimer);
+          sendRetryTimer = null;
+        }
+        if (controlFlushTimer) {
+          clearTimeout(controlFlushTimer);
+          controlFlushTimer = null;
+        }
         inputChunkHistory.length = 0;
         dataInputSeenAt = 0;
         dataInputLineActive = false;
@@ -4242,6 +4623,7 @@
         agentSessionSource = null;
         inputLineBuffer = '';
         inputSawCarriage = false;
+        resetNagomiInternalCapture();
         if (idleJudgeTimer) {
           clearTimeout(idleJudgeTimer);
           idleJudgeTimer = null;
@@ -4442,6 +4824,7 @@
             setLastTerminalEvent('exit', payload.exit_code);
             const hasExitCode = Number.isFinite(payload.exit_code);
             terminalExitCode = hasExitCode ? payload.exit_code : 0;
+            terminalSessionReady = false;
             agentSessionActive = false;
             agentSessionSource = null;
               if (idleJudgeTimer) {
@@ -4473,6 +4856,7 @@
             });
             setLastTerminalEvent('error', payload.message);
             terminalExitCode = 1;
+            terminalSessionReady = false;
             agentSessionActive = false;
             agentSessionSource = null;
               if (idleJudgeTimer) {
@@ -4700,6 +5084,31 @@
         return '';
       }
 
+      function normalizeBoolean(value, fallback) {
+        if (typeof value === 'boolean') return value;
+        if (typeof value === 'number') return value !== 0;
+        if (typeof value === 'string') {
+          const normalized = value.trim().toLowerCase();
+          if (
+            normalized === 'true' ||
+            normalized === '1' ||
+            normalized === 'on' ||
+            normalized === 'enabled'
+          ) {
+            return true;
+          }
+          if (
+            normalized === 'false' ||
+            normalized === '0' ||
+            normalized === 'off' ||
+            normalized === 'disabled'
+          ) {
+            return false;
+          }
+        }
+        return Boolean(fallback);
+      }
+
       function themePresetToPair(preset, fallbackMode) {
         const normalizedPreset = normalizeThemePreset(preset);
         const mode = normalizedPreset.startsWith('light-')
@@ -4906,6 +5315,10 @@
         settingsState.terminal_scrollback_lines = normalizeScrollback(
           settingsState.terminal_scrollback_lines
         );
+        settingsState.terminal_internal_commands_enabled = normalizeBoolean(
+          settingsState.terminal_internal_commands_enabled,
+          true
+        );
         settingsState.terminal_shell_kind = normalizeTerminalShellKind(
           settingsState.terminal_shell_kind
         );
@@ -4927,10 +5340,17 @@
         llmEnabled = settingsState.llm_enabled;
         terminalCopyOnSelect = settingsState.terminal_copy_on_select;
         terminalWatcherEnabled = settingsState.terminal_watcher_enabled;
+        nagomiInternalEnabled = settingsState.terminal_internal_commands_enabled;
+        if (!nagomiInternalEnabled) {
+          resetNagomiInternalCapture();
+        }
         if (notifyState) setToggleState(notifyEnabled, notifyState);
         if (audioState) setToggleState(audioEnabled, audioState);
         if (llmState) setToggleState(llmEnabled, llmState);
         if (characterWatcherState) setToggleState(terminalWatcherEnabled, characterWatcherState);
+        if (terminalInternalCommandsState) {
+          setToggleState(nagomiInternalEnabled, terminalInternalCommandsState);
+        }
         if (volumeSlider) volumeSlider.value = settingsState.volume;
         if (silenceInput) silenceInput.value = settingsState.silence_timeout_ms;
         if (llmTool) llmTool.value = settingsState.llm_tool;
@@ -5232,6 +5652,21 @@
       if (terminalWslDistro) {
         terminalWslDistro.addEventListener('change', () => {
           settingsState.terminal_wsl_distro = String(terminalWslDistro.value || '').trim();
+          saveSettingsToBackend();
+        });
+      }
+
+      if (terminalInternalCommandsToggle) {
+        terminalInternalCommandsToggle.addEventListener('click', () => {
+          const next = !normalizeBoolean(settingsState.terminal_internal_commands_enabled, true);
+          settingsState.terminal_internal_commands_enabled = next;
+          nagomiInternalEnabled = next;
+          if (!nagomiInternalEnabled) {
+            resetNagomiInternalCapture();
+          }
+          if (terminalInternalCommandsState) {
+            setToggleState(nagomiInternalEnabled, terminalInternalCommandsState);
+          }
           saveSettingsToBackend();
         });
       }

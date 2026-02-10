@@ -22,6 +22,7 @@
 - 非選択ターミナルの選択による拡大表示は「整列済みレイアウトが維持されている場合」に限定し、未整列時は SelectionState/Focus のみ更新する
 - 選択ウィンドウ交代アニメーションは短時間（縮小 60-100ms / 拡大 80-140ms / 合計 240ms 以下）で完了させ、連続交代時は旧遷移をキャンセルして最新遷移を優先する
 - `未整列` の判定は「起動後未整列」「ユーザー操作による move/resize/maximize」「ウィンドウ増減」で `arranged=false` とし、`Arrange Terminal Windows` 実行時のみ `arranged=true` に戻す
+- Terminal の `:ng` は **Frontend Internal Command Layer** で解釈し、PTY へ送信しない（初期対応は `:ng ping`）
 
 #2. concept との対応
 | concept | 実装モジュール | 責務 |
@@ -91,6 +92,14 @@
 - 実装: WebView2 DevTools（`Page.captureScreenshot`）で取得し保存
 - 失敗時: `worker_smoke.log` に理由を記録（best-effort）
 
+### Frontend Internal Command Layer（`:ng`）
+- 配置: `apps/orchestrator/src/index.html`（入力行解釈とローカル表示）
+- 入力: キー入力バッファ（行単位）
+- 判定: 行先頭が `:ng` のときのみ内蔵コマンドとして処理
+- 出力: terminal 画面へのローカル出力（`pong` / usage / unknown）
+- 制約: `:ng` 系入力は PTY/Worker へ送らない
+- 初期サブコマンド: `:ng ping` のみ
+
 #4. データフロー
 1) PTY output → TerminalStateDetector → terminal 状態
 2) Hook → CompletionHook → AgentEventObserver
@@ -122,6 +131,11 @@
 - 不正な NDJSON type は無視
 - tool_judge 失敗時は heuristic にフォールバック
 - hook 正規化失敗は警告/無視
+
+## 7.3 `:ng` のロールバックポイント
+- RP-1: 入力不能/重複入力が再発した場合は、`settings > Windows > :ng 内蔵コマンド` を OFF にして Frontend Internal Command Layer を無効化し `terminal_send_input` へ全面パススルーする
+- RP-2: `pong` などの内蔵応答が消失する場合は、ローカル描画を止めて `:ng` を通常シェル入力として扱う
+- RP-3: 原因切り分け中は `:ng` サブコマンド追加を凍結し、`ping` のみで再現試験を継続する
 
 #7.1 AI判定 OFF の扱い
 - hook completed/error/need_input をそのまま state に反映する
