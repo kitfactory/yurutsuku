@@ -66,6 +66,9 @@ const WINDOW_WATCHER: &str = "watcher";
 const TERMINAL_SHELL_CMD: &str = "cmd";
 const TERMINAL_SHELL_POWERSHELL: &str = "powershell";
 const TERMINAL_SHELL_WSL: &str = "wsl";
+const TERMINAL_KEYBIND_ARRANGE_DEFAULT: &str = "Ctrl+Shift+Y";
+const TERMINAL_KEYBIND_FOCUS_NEXT_DEFAULT: &str = "Ctrl+Shift+J";
+const TERMINAL_KEYBIND_FOCUS_PREV_DEFAULT: &str = "Ctrl+Shift+K";
 
 #[cfg(windows)]
 thread_local! {
@@ -101,6 +104,12 @@ struct Settings {
     terminal_shell_kind: String,
     #[serde(default)]
     terminal_wsl_distro: String,
+    #[serde(default = "default_terminal_keybind_arrange")]
+    terminal_keybind_arrange: String,
+    #[serde(default = "default_terminal_keybind_focus_next")]
+    terminal_keybind_focus_next: String,
+    #[serde(default = "default_terminal_keybind_focus_prev")]
+    terminal_keybind_focus_prev: String,
 }
 
 fn default_terminal_shell_kind() -> String {
@@ -109,6 +118,18 @@ fn default_terminal_shell_kind() -> String {
 
 fn default_terminal_theme_palette() -> String {
     "dark-ink".to_string()
+}
+
+fn default_terminal_keybind_arrange() -> String {
+    TERMINAL_KEYBIND_ARRANGE_DEFAULT.to_string()
+}
+
+fn default_terminal_keybind_focus_next() -> String {
+    TERMINAL_KEYBIND_FOCUS_NEXT_DEFAULT.to_string()
+}
+
+fn default_terminal_keybind_focus_prev() -> String {
+    TERMINAL_KEYBIND_FOCUS_PREV_DEFAULT.to_string()
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -235,6 +256,8 @@ struct WindowAnimationState {
 struct TerminalWindowLayoutState {
     layout: Mutex<HashMap<String, WindowRect>>,
     order: Mutex<Vec<String>>,
+    arranged: Mutex<bool>,
+    internal_layout_change_deadline_ms: AtomicU64,
 }
 
 impl Default for Settings {
@@ -257,6 +280,9 @@ impl Default for Settings {
             terminal_copy_on_select: true,
             terminal_shell_kind: default_terminal_shell_kind(),
             terminal_wsl_distro: String::new(),
+            terminal_keybind_arrange: default_terminal_keybind_arrange(),
+            terminal_keybind_focus_next: default_terminal_keybind_focus_next(),
+            terminal_keybind_focus_prev: default_terminal_keybind_focus_prev(),
         }
     }
 }
@@ -288,9 +314,15 @@ fn default_terminal_theme_palette_for_mode(mode: &str) -> &'static str {
 fn normalize_terminal_theme_palette(mode: &str, palette: &str) -> String {
     let value = palette.trim().to_ascii_lowercase();
     let valid = if mode == "light" {
-        matches!(value.as_str(), "light-sand" | "light-sage" | "light-sky")
+        matches!(
+            value.as_str(),
+            "light-sand" | "light-sage" | "light-sky" | "light-mono"
+        )
     } else {
-        matches!(value.as_str(), "dark-ink" | "dark-ocean" | "dark-ember")
+        matches!(
+            value.as_str(),
+            "dark-ink" | "dark-ocean" | "dark-ember" | "dark-mono"
+        )
     };
     if valid {
         value
@@ -873,6 +905,14 @@ fn generate_terminal_session_id() -> String {
         .as_millis();
     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
     format!("terminal-{nonce}-{seq}")
+}
+
+fn terminal_window_label(session_id: &str) -> String {
+    let safe_id = session_id
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+        .collect::<String>();
+    format!("terminal-{safe_id}")
 }
 
 fn handle_health_connection<R: Runtime>(mut stream: TcpStream, app: &AppHandle<R>) {
@@ -1646,10 +1686,11 @@ fn get_or_recompute_terminal_layout<R: Runtime>(
 ) -> (HashMap<String, WindowRect>, Vec<String>) {
     let labels: HashSet<String> = windows.iter().map(|window| window.label().to_string()).collect();
     let state = app.state::<TerminalWindowLayoutState>();
+    let arranged = state.arranged.lock().ok().map(|guard| *guard).unwrap_or(false);
 
     if let (Ok(layout_guard), Ok(order_guard)) = (state.layout.lock(), state.order.lock()) {
-        if layout_guard.len() == labels.len() && labels.iter().all(|l| layout_guard.contains_key(l))
-        {
+        let labels_covered = labels.iter().all(|label| layout_guard.contains_key(label));
+        if should_reuse_cached_layout(arranged, layout_guard.len(), labels.len(), labels_covered) {
             return (layout_guard.clone(), order_guard.clone());
         }
     }
@@ -1665,7 +1706,99 @@ fn get_or_recompute_terminal_layout<R: Runtime>(
     (layout, order)
 }
 
-fn apply_window_rect<R: Runtime>(window: &tauri::WebviewWindow<R>, rect: WindowRect) {
+fn should_reuse_cached_layout(
+    arranged: bool,
+    cached_layout_len: usize,
+    window_count: usize,
+    labels_covered: bool,
+) -> bool {
+    arranged && cached_layout_len == window_count && labels_covered
+}
+
+fn mark_terminal_layout_arranged<R: Runtime>(app: &AppHandle<R>, arranged: bool) {
+    if let Ok(mut guard) = app.state::<TerminalWindowLayoutState>().arranged.lock() {
+        *guard = arranged;
+    }
+}
+
+fn unix_now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+fn mark_internal_layout_change<R: Runtime>(app: &AppHandle<R>, grace_ms: u64) {
+    let deadline = unix_now_ms().saturating_add(grace_ms);
+    let state = app.state::<TerminalWindowLayoutState>();
+    state
+        .internal_layout_change_deadline_ms
+        .store(deadline, Ordering::Relaxed);
+}
+
+fn is_internal_layout_change_active<R: Runtime>(app: &AppHandle<R>) -> bool {
+    let now = unix_now_ms();
+    let deadline = app
+        .state::<TerminalWindowLayoutState>()
+        .internal_layout_change_deadline_ms
+        .load(Ordering::Relaxed);
+    now <= deadline
+}
+
+fn window_rect_near(a: WindowRect, b: WindowRect, tolerance: i32) -> bool {
+    let width_diff = a.width as i64 - b.width as i64;
+    let height_diff = a.height as i64 - b.height as i64;
+    (a.x - b.x).abs() <= tolerance
+        && (a.y - b.y).abs() <= tolerance
+        && width_diff.abs() <= tolerance as i64
+        && height_diff.abs() <= tolerance as i64
+}
+
+fn should_enable_pickup_expand(arranged: bool, labels_match: bool, positions_match: bool) -> bool {
+    arranged && labels_match && positions_match
+}
+
+fn arranged_layout_for_pickup<R: Runtime>(
+    app: &AppHandle<R>,
+    windows: &[tauri::WebviewWindow<R>],
+) -> Option<HashMap<String, WindowRect>> {
+    let labels: HashSet<String> = windows.iter().map(|window| window.label().to_string()).collect();
+    let state = app.state::<TerminalWindowLayoutState>();
+    let arranged = state.arranged.lock().ok().map(|guard| *guard).unwrap_or(false);
+    let layout = state.layout.lock().ok().map(|guard| guard.clone())?;
+    let labels_match =
+        layout.len() == labels.len() && labels.iter().all(|label| layout.contains_key(label));
+    let selected_label = app
+        .state::<SelectionState>()
+        .current
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone());
+    let positions_match = if labels_match {
+        layout.iter().all(|(label, expected)| {
+            if selected_label.as_deref() == Some(label.as_str()) {
+                // 選択中ウィンドウは拡大表示でタイル外にいる場合があるため、この1件だけ不一致を許容する / The currently selected window may be expanded off-tile, so allow this single mismatch.
+                return true;
+            }
+            app.get_webview_window(label)
+                .and_then(|window| current_window_rect(&window))
+                .map(|current| window_rect_near(current, *expected, 12))
+                .unwrap_or(false)
+        })
+    } else {
+        false
+    };
+    if !should_enable_pickup_expand(arranged, labels_match, positions_match) {
+        if arranged && (!labels_match || !positions_match) {
+            mark_terminal_layout_arranged(app, false);
+        }
+        return None;
+    }
+    Some(layout)
+}
+
+fn apply_window_rect<R: Runtime>(app: &AppHandle<R>, window: &tauri::WebviewWindow<R>, rect: WindowRect) {
+    mark_internal_layout_change(app, 350);
     let _ = window.unmaximize();
     let _ = window.set_position(Position::Physical(PhysicalPosition::new(rect.x, rect.y)));
     let _ = window.set_size(Size::Physical(PhysicalSize::new(
@@ -1711,9 +1844,9 @@ fn start_focus_transition<R: Runtime>(
     new_expanded: WindowRect,
     layout: HashMap<String, WindowRect>,
 ) {
-    const SHRINK_MS: u64 = 120;
-    const EXPAND_MS: u64 = 160;
-    const STEP_MS: u64 = 16;
+    const SHRINK_MS: u64 = 80;
+    const EXPAND_MS: u64 = 110;
+    const STEP_MS: u64 = 10;
 
     let state = match app.try_state::<WindowAnimationState>() {
         Some(state) => state,
@@ -1727,7 +1860,7 @@ fn start_focus_transition<R: Runtime>(
         Some(rect) => rect,
         None => {
             if let Some(window) = app.get_webview_window(&new_label) {
-                apply_window_rect(&window, new_expanded);
+                apply_window_rect(app, &window, new_expanded);
                 let _ = window.set_focus();
             }
             return;
@@ -1743,7 +1876,7 @@ fn start_focus_transition<R: Runtime>(
             continue;
         }
         if let Some(window) = app.get_webview_window(label) {
-            apply_window_rect(&window, *rect);
+            apply_window_rect(app, &window, *rect);
         }
     }
 
@@ -1825,7 +1958,7 @@ fn start_focus_transition<R: Runtime>(
                         height: lerp_u32(from.height, old_tile.height, t),
                     };
                     if last != Some(rect) {
-                        apply_window_rect(&window, rect);
+                        apply_window_rect(&app, &window, rect);
                         last = Some(rect);
                     }
                     thread::sleep(Duration::from_millis(STEP_MS));
@@ -1858,7 +1991,7 @@ fn start_focus_transition<R: Runtime>(
             return;
         }
         if let Some(window) = app.get_webview_window(&new_label) {
-            apply_window_rect(&window, new_tile);
+            apply_window_rect(&app, &window, new_tile);
             let from = new_tile;
             let to = new_expanded;
             let steps = (EXPAND_MS / STEP_MS).max(1);
@@ -1893,7 +2026,7 @@ fn start_focus_transition<R: Runtime>(
                     height: lerp_u32(from.height, to.height, t),
                 };
                 if last != Some(rect) {
-                    apply_window_rect(&window, rect);
+                    apply_window_rect(&app, &window, rect);
                     last = Some(rect);
                 }
                 thread::sleep(Duration::from_millis(STEP_MS));
@@ -2152,7 +2285,29 @@ fn pickup_terminal_window_handle<R: Runtime>(
     app: &AppHandle<R>,
     window: &tauri::WebviewWindow<R>,
 ) -> Result<(), String> {
+    let new_label = window.label().to_string();
+    let old_label = app
+        .state::<SelectionState>()
+        .current
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone());
+    if old_label.as_deref() == Some(new_label.as_str()) {
+        let _ = window.set_focus();
+        return Ok(());
+    }
+
     let windows = collect_terminal_windows(app);
+    let layout = if let Some(layout) = arranged_layout_for_pickup(app, &windows) {
+        layout
+    } else {
+        if let Ok(mut guard) = app.state::<SelectionState>().current.lock() {
+            *guard = Some(new_label.clone());
+        }
+        let _ = window.set_focus();
+        return Ok(());
+    };
+
     let monitors = available_monitors(app)?;
     let monitor_index = monitor_index_for_window(window, &monitors);
     let monitor = monitors
@@ -2177,17 +2332,10 @@ fn pickup_terminal_window_handle<R: Runtime>(
         height: target_height,
     };
 
-    let (layout, _order) = get_or_recompute_terminal_layout(app, &monitors, windows);
-    let old_label = app
-        .state::<SelectionState>()
-        .current
-        .lock()
-        .ok()
-        .and_then(|guard| guard.clone());
     if let Ok(mut guard) = app.state::<SelectionState>().current.lock() {
-        *guard = Some(window.label().to_string());
+        *guard = Some(new_label.clone());
     }
-    start_focus_transition(app, old_label, window.label().to_string(), expanded, layout);
+    start_focus_transition(app, old_label, new_label, expanded, layout);
     Ok(())
 }
 
@@ -2440,6 +2588,135 @@ fn open_terminal_window<R: Runtime>(
     open_terminal_window_inner(app, session_id)
 }
 
+#[tauri::command]
+fn open_terminal_window_by_index_same_position<R: Runtime + 'static>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+    index: usize,
+) -> Result<String, String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    let mut windows = collect_terminal_windows(&app);
+    windows.sort_by_key(|window| window.label().to_string());
+    let source_label = windows.get(index).map(|window| window.label().to_string());
+    open_terminal_window_same_position_inner(&app, source_label)
+}
+
+#[tauri::command]
+fn open_terminal_window_same_position_selected<R: Runtime + 'static>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+) -> Result<String, String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    open_terminal_window_same_position_inner(&app, None)
+}
+
+#[tauri::command]
+fn open_terminal_window_same_position_for_session<R: Runtime + 'static>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+    session_id: String,
+) -> Result<String, String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    let source_label = terminal_window_label(&session_id);
+    open_terminal_window_same_position_inner(&app, Some(source_label))
+}
+
+fn open_terminal_window_same_position_inner<R: Runtime + 'static>(
+    app: &AppHandle<R>,
+    source_label_hint: Option<String>,
+) -> Result<String, String> {
+    let mut windows = collect_terminal_windows(app);
+    windows.sort_by_key(|window| window.label().to_string());
+    if windows.is_empty() {
+        return Err("window not found".to_string());
+    }
+
+    let source_label = if let Some(hint) = source_label_hint {
+        if app.get_webview_window(&hint).is_some() {
+            hint
+        } else {
+            windows
+                .first()
+                .map(|window| window.label().to_string())
+                .ok_or_else(|| "window not found".to_string())?
+        }
+    } else {
+        let selected_label = app
+            .state::<SelectionState>()
+            .current
+            .lock()
+            .ok()
+            .and_then(|guard| guard.clone());
+        let focused_label = windows
+            .iter()
+            .find(|window| window.is_focused().unwrap_or(false))
+            .map(|window| window.label().to_string());
+        let fallback_label = windows.first().map(|window| window.label().to_string());
+
+        selected_label
+            .or(focused_label)
+            .or(fallback_label)
+            .ok_or_else(|| "window not found".to_string())?
+    };
+    let source_rect = app
+        .get_webview_window(&source_label)
+        .and_then(|window| current_window_rect(&window));
+
+    mark_terminal_layout_arranged(app, false);
+
+    let session_id = generate_terminal_session_id();
+    let session_id_for_spawn = session_id.clone();
+    let source_label_for_spawn = source_label.clone();
+    let source_rect_for_spawn = source_rect;
+    let app_for_spawn = app.clone();
+    thread::spawn(move || {
+        if let Err(err) =
+            open_terminal_window_inner(app_for_spawn.clone(), session_id_for_spawn.clone())
+        {
+            let _ = log_worker_event(
+                &app_for_spawn,
+                &format!(
+                    "same-position open failed: session={} error={err}",
+                    session_id_for_spawn
+                ),
+            );
+            return;
+        }
+        if let Some(rect) = source_rect_for_spawn {
+            let new_label = terminal_window_label(&session_id_for_spawn);
+            if let Some(new_window) = app_for_spawn.get_webview_window(&new_label) {
+                apply_window_rect(&app_for_spawn, &new_window, rect);
+                let _ = new_window.set_focus();
+            }
+            if let Ok(mut layout) = app_for_spawn
+                .state::<TerminalWindowLayoutState>()
+                .layout
+                .lock()
+            {
+                layout.insert(new_label.clone(), rect);
+            }
+            if let Ok(mut order) = app_for_spawn
+                .state::<TerminalWindowLayoutState>()
+                .order
+                .lock()
+            {
+                if !order.iter().any(|label| label == &new_label) {
+                    if let Some(pos) = order
+                        .iter()
+                        .position(|label| label == &source_label_for_spawn)
+                    {
+                        order.insert(pos + 1, new_label.clone());
+                    } else {
+                        order.push(new_label.clone());
+                    }
+                }
+            }
+        }
+    });
+
+    Ok(session_id)
+}
+
 fn open_terminal_window_inner<R: Runtime>(
     app: AppHandle<R>,
     session_id: String,
@@ -2448,11 +2725,7 @@ fn open_terminal_window_inner<R: Runtime>(
         &app,
         &format!("terminal window open requested: {session_id}"),
     );
-    let safe_id = session_id
-        .chars()
-        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
-        .collect::<String>();
-    let label = format!("terminal-{safe_id}");
+    let label = terminal_window_label(&session_id);
     let title = format!("Terminal {session_id}");
     let settings = read_settings(&settings_path(&app)).unwrap_or_else(|_| Settings::default());
     let theme_mode = normalize_terminal_theme_mode(&settings.terminal_theme);
@@ -2462,6 +2735,7 @@ fn open_terminal_window_inner<R: Runtime>(
         "view=terminal&session_id={session_id}&theme={theme_mode}&palette={theme_palette}"
     );
     create_window(&app, &label, &title, &query).map_err(|err| err.to_string())?;
+    mark_terminal_layout_arranged(&app, false);
     let _ = register_terminal_window(&app, &session_id, &label);
     if let Some(window) = app.get_webview_window(&label) {
         let _ = window.show();
@@ -2698,14 +2972,18 @@ fn arrange_terminal_windows_inner<R: Runtime>(app: AppHandle<R>) -> Result<(), S
     }
     let monitors = available_monitors(&app)?;
     let (layout, order) = get_or_recompute_terminal_layout(&app, &monitors, windows);
-    for (label, rect) in layout {
+    for (label, rect) in &layout {
         if let Some(window) = app.get_webview_window(&label) {
-            apply_window_rect(&window, rect);
+            apply_window_rect(&app, &window, *rect);
         }
+    }
+    if let Ok(mut guard) = app.state::<TerminalWindowLayoutState>().layout.lock() {
+        *guard = layout;
     }
     if let Ok(mut guard) = app.state::<TerminalWindowLayoutState>().order.lock() {
         *guard = order;
     }
+    mark_terminal_layout_arranged(&app, true);
     Ok(())
 }
 
@@ -2716,11 +2994,7 @@ fn pickup_terminal_window<R: Runtime>(
     session_id: String,
 ) -> Result<(), String> {
     ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
-    let safe_id = session_id
-        .chars()
-        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
-        .collect::<String>();
-    let label = format!("terminal-{safe_id}");
+    let label = terminal_window_label(&session_id);
     let window = app
         .get_webview_window(&label)
         .ok_or_else(|| "window not found".to_string())?;
@@ -2812,9 +3086,39 @@ fn create_window<R: Runtime>(
         format!("view={query}")
     };
     let url = format!("index.html?{normalized_query}");
-    WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
-        .title(title)
-        .build()?;
+    let mut builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into())).title(title);
+    if label == WINDOW_SETTINGS {
+        // Settings は初期表示で横スクロールしない幅を確保する / Ensure initial width avoids horizontal scroll.
+        let mut width: f64 = 1200.0;
+        let mut height: f64 = 860.0;
+        if let Ok(Some(monitor)) = app.primary_monitor() {
+            let area = monitor.work_area();
+            let max_w = area.size.width.saturating_sub(40) as f64;
+            let max_h = area.size.height.saturating_sub(60) as f64;
+            width = width.min(max_w).max(780.0);
+            height = height.min(max_h).max(680.0);
+        }
+        builder = builder
+            .inner_size(width, height)
+            .min_inner_size(780.0, 680.0)
+            .resizable(true);
+    }
+    let window = builder.build()?;
+    if label.starts_with("terminal-") {
+        let app_for_events = app.clone();
+        window.on_window_event(move |event| match event {
+            tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
+                if is_internal_layout_change_active(&app_for_events) {
+                    return;
+                }
+                mark_terminal_layout_arranged(&app_for_events, false);
+            }
+            tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed => {
+                mark_terminal_layout_arranged(&app_for_events, false);
+            }
+            _ => {}
+        });
+    }
     Ok(())
 }
 
@@ -3702,18 +4006,7 @@ fn stop_worker_session<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
 }
 
 fn main() {
-    let global_shortcut = tauri_plugin_global_shortcut::Builder::new()
-        .with_shortcut("CommandOrControl+Shift+Y")
-        .expect("valid global shortcut")
-        .with_handler(|app, _shortcut, event| {
-            if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                let _ = arrange_terminal_windows_inner(app.clone());
-            }
-        })
-        .build();
-
     tauri::Builder::default()
-        .plugin(global_shortcut)
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             load_settings,
@@ -3724,6 +4017,9 @@ fn main() {
             ensure_codex_hook,
             tool_judge,
             open_terminal_window,
+            open_terminal_window_by_index_same_position,
+            open_terminal_window_same_position_selected,
+            open_terminal_window_same_position_for_session,
             arrange_terminal_windows,
             pickup_terminal_window,
             pickup_terminal_window_by_index,
@@ -3834,6 +4130,9 @@ mod tests {
             terminal_copy_on_select: false,
             terminal_shell_kind: TERMINAL_SHELL_WSL.to_string(),
             terminal_wsl_distro: "Ubuntu".to_string(),
+            terminal_keybind_arrange: "Ctrl+Shift+Y".to_string(),
+            terminal_keybind_focus_next: "Ctrl+Shift+J".to_string(),
+            terminal_keybind_focus_prev: "Ctrl+Shift+K".to_string(),
         };
 
         write_settings(&path, &settings).expect("write settings");
@@ -3848,6 +4147,42 @@ mod tests {
         let path = temp_settings_path("missing");
         let loaded = read_settings(&path).expect("read settings");
         assert_eq!(loaded, Settings::default());
+    }
+
+    #[test]
+    fn theme_palette_normalization_supports_monochrome() {
+        assert_eq!(
+            normalize_terminal_theme_palette("light", "light-mono"),
+            "light-mono"
+        );
+        assert_eq!(
+            normalize_terminal_theme_palette("dark", "dark-mono"),
+            "dark-mono"
+        );
+        assert_eq!(
+            normalize_terminal_theme_palette("light", "dark-mono"),
+            "light-sand"
+        );
+        assert_eq!(
+            normalize_terminal_theme_palette("dark", "light-mono"),
+            "dark-ink"
+        );
+    }
+
+    #[test]
+    fn pickup_expand_requires_arranged_layout() {
+        assert!(!should_enable_pickup_expand(false, true, true));
+        assert!(!should_enable_pickup_expand(true, false, true));
+        assert!(!should_enable_pickup_expand(true, true, false));
+        assert!(should_enable_pickup_expand(true, true, true));
+    }
+
+    #[test]
+    fn cached_layout_reuse_requires_arranged_state() {
+        assert!(!should_reuse_cached_layout(false, 4, 4, true));
+        assert!(!should_reuse_cached_layout(true, 3, 4, true));
+        assert!(!should_reuse_cached_layout(true, 4, 4, false));
+        assert!(should_reuse_cached_layout(true, 4, 4, true));
     }
 
     #[test]

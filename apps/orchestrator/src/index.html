@@ -26,8 +26,13 @@
               : prefersDark
               ? 'dark'
               : 'light';
-          const darkPalettes = new Set(['dark-ink', 'dark-ocean', 'dark-ember']);
-          const lightPalettes = new Set(['light-sand', 'light-sage', 'light-sky']);
+          const darkPalettes = new Set(['dark-ink', 'dark-ocean', 'dark-ember', 'dark-mono']);
+          const lightPalettes = new Set([
+            'light-sand',
+            'light-sage',
+            'light-sky',
+            'light-mono',
+          ]);
           const defaultPalette = themeMode === 'dark' ? 'dark-ink' : 'light-sand';
           const preferredPalette = queryThemePalette || storedThemePalette;
           const themePalette =
@@ -154,6 +159,21 @@
         --settings-accent-bg: rgba(46, 95, 158, 0.1);
       }
 
+      html[data-theme='light'][data-theme-palette='light-mono'] {
+        --bg: #f5f5f5;
+        --bg-2: #e8e8e8;
+        --accent: #222222;
+        --accent-2: #5a5a5a;
+        --panel: #ffffff;
+        --panel-border: #bdbdbd;
+        --settings-panel: #f4f4f4;
+        --settings-card: #ffffff;
+        --settings-border: #bdbdbd;
+        --settings-accent: #1a1a1a;
+        --settings-accent-border: rgba(26, 26, 26, 0.45);
+        --settings-accent-bg: rgba(26, 26, 26, 0.08);
+      }
+
       html[data-theme='dark'][data-theme-palette='dark-ink'] {
         --bg: #0c1116;
         --bg-2: #121a22;
@@ -197,6 +217,21 @@
         --settings-accent: #d3885a;
         --settings-accent-border: rgba(211, 136, 90, 0.58);
         --settings-accent-bg: rgba(211, 136, 90, 0.16);
+      }
+
+      html[data-theme='dark'][data-theme-palette='dark-mono'] {
+        --bg: #090909;
+        --bg-2: #111111;
+        --accent: #f1f1f1;
+        --accent-2: #b8b8b8;
+        --panel: #151515;
+        --panel-border: #3c3c3c;
+        --settings-panel: #111111;
+        --settings-card: #191919;
+        --settings-border: #3c3c3c;
+        --settings-accent: #ededed;
+        --settings-accent-border: rgba(237, 237, 237, 0.45);
+        --settings-accent-bg: rgba(237, 237, 237, 0.12);
       }
 
       * {
@@ -434,6 +469,8 @@
         box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
         transition: transform 200ms ease, box-shadow 200ms ease;
         cursor: pointer;
+        user-select: none;
+        -webkit-user-select: none;
       }
 
       .tile-header {
@@ -722,12 +759,13 @@
         color: var(--settings-ink);
         accent-color: var(--settings-accent);
         max-width: 1040px;
+        width: 100%;
         margin: 0 auto;
       }
 
       .settings-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
         gap: 16px;
       }
 
@@ -789,14 +827,18 @@
       .settings-board .settings-row {
         justify-content: flex-start;
         gap: 12px;
+        display: grid;
+        grid-template-columns: minmax(0, 160px) minmax(0, 1fr);
+        align-items: center;
       }
 
       .settings-board .settings-row > span {
-        min-width: 140px;
+        min-width: 0;
       }
 
       .settings-row--single {
         justify-content: flex-start;
+        display: flex !important;
       }
 
       .settings-note {
@@ -821,16 +863,17 @@
       .settings-row select,
       .settings-row input[type="number"],
       .settings-row input[type="text"] {
-        width: 140px;
+        width: 100%;
         border: 1px solid var(--settings-border);
         border-radius: 8px;
         padding: 4px 6px;
         background: var(--settings-panel);
         color: var(--settings-ink);
+        min-width: 0;
       }
 
       .settings-row input[type="range"] {
-        width: 140px;
+        width: 100%;
       }
 
       .settings-upload {
@@ -984,6 +1027,34 @@
         .sidebar {
           order: -1;
         }
+      }
+
+      @media (max-width: 860px) {
+        .settings-board {
+          padding: 16px;
+          width: 100%;
+        }
+        .settings-grid {
+          grid-template-columns: 1fr;
+        }
+        .settings-board .settings-row {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+      }
+
+      body.settings-only .app {
+        padding: 12px 14px 14px;
+        gap: 10px;
+      }
+
+      body.settings-only header {
+        display: none;
+      }
+
+      body.settings-only .settings-board {
+        max-width: none;
+        margin: 0;
       }
 
       html.terminal-only body,
@@ -1274,9 +1345,11 @@
                 <option value="light-sand" data-i18n="settings.theme.palette.light_sand">light: sand</option>
                 <option value="light-sage" data-i18n="settings.theme.palette.light_sage">light: sage</option>
                 <option value="light-sky" data-i18n="settings.theme.palette.light_sky">light: sky</option>
+                <option value="light-mono" data-i18n="settings.theme.palette.light_mono">light: mono</option>
                 <option value="dark-ink" data-i18n="settings.theme.palette.dark_ink">dark: ink</option>
                 <option value="dark-ocean" data-i18n="settings.theme.palette.dark_ocean">dark: ocean</option>
                 <option value="dark-ember" data-i18n="settings.theme.palette.dark_ember">dark: ember</option>
+                <option value="dark-mono" data-i18n="settings.theme.palette.dark_mono">dark: mono</option>
               </select>
             </div>
             <div class="settings-row">
@@ -1373,6 +1446,36 @@
                 <option value="" data-i18n="settings.runtime.wsl_default">default distro</option>
               </select>
             </div>
+            <div class="settings-row">
+              <span data-i18n="settings.shortcuts.arrange">arrange shortcut</span>
+              <input
+                type="text"
+                readonly
+                data-role="settings-keybind-arrange"
+                value="Ctrl+Shift+Y"
+              />
+            </div>
+            <div class="settings-row">
+              <span data-i18n="settings.shortcuts.focus_next">focus next shortcut</span>
+              <input
+                type="text"
+                readonly
+                data-role="settings-keybind-focus-next"
+                value="Ctrl+Shift+J"
+              />
+            </div>
+            <div class="settings-row">
+              <span data-i18n="settings.shortcuts.focus_prev">focus prev shortcut</span>
+              <input
+                type="text"
+                readonly
+                data-role="settings-keybind-focus-prev"
+                value="Ctrl+Shift+K"
+              />
+            </div>
+            <p class="settings-note" data-i18n="settings.shortcuts.note">
+              フィールドを選択してキーの組み合わせを押してください（Escで既定値に戻します）
+            </p>
           </div>
 
           <div class="settings-card settings-card--agent">
@@ -1575,12 +1678,19 @@
           'settings.runtime.wsl_distro': 'WSLディストロ',
           'settings.runtime.wsl_default': '既定のディストロ',
           'settings.windows.title': 'Windows',
+          'settings.shortcuts.arrange': '整列ショートカット',
+          'settings.shortcuts.focus_next': '次へ移動ショートカット',
+          'settings.shortcuts.focus_prev': '前へ移動ショートカット',
+          'settings.shortcuts.note':
+            'フィールドを選択してキーの組み合わせを押してください（Escで既定値に戻します）',
           'settings.theme.palette.light_sand': 'ライト: Sand',
           'settings.theme.palette.light_sage': 'ライト: Sage',
           'settings.theme.palette.light_sky': 'ライト: Sky',
+          'settings.theme.palette.light_mono': 'ライト: Mono',
           'settings.theme.palette.dark_ink': 'ダーク: Ink',
           'settings.theme.palette.dark_ocean': 'ダーク: Ocean',
           'settings.theme.palette.dark_ember': 'ダーク: Ember',
+          'settings.theme.palette.dark_mono': 'ダーク: Mono',
           'settings.theme.dark': 'ダーク',
           'settings.theme.light': 'ライト',
           'settings.font.system_default': 'システム既定',
@@ -1680,12 +1790,19 @@
           'settings.runtime.wsl_distro': 'WSL distro',
           'settings.runtime.wsl_default': 'default distro',
           'settings.windows.title': 'Windows',
+          'settings.shortcuts.arrange': 'arrange shortcut',
+          'settings.shortcuts.focus_next': 'focus next shortcut',
+          'settings.shortcuts.focus_prev': 'focus prev shortcut',
+          'settings.shortcuts.note':
+            'Focus each field and press a key combination (Esc resets default).',
           'settings.theme.palette.light_sand': 'Light: Sand',
           'settings.theme.palette.light_sage': 'Light: Sage',
           'settings.theme.palette.light_sky': 'Light: Sky',
+          'settings.theme.palette.light_mono': 'Light: Mono',
           'settings.theme.palette.dark_ink': 'Dark: Ink',
           'settings.theme.palette.dark_ocean': 'Dark: Ocean',
           'settings.theme.palette.dark_ember': 'Dark: Ember',
+          'settings.theme.palette.dark_mono': 'Dark: Mono',
           'settings.theme.dark': 'dark',
           'settings.theme.light': 'light',
           'settings.font.system_default': 'system default',
@@ -1817,6 +1934,13 @@
         '[data-role="settings-terminal-wsl-distro-row"]'
       );
       const terminalWslDistro = document.querySelector('[data-role="settings-terminal-wsl-distro"]');
+      const keybindArrangeInput = document.querySelector('[data-role="settings-keybind-arrange"]');
+      const keybindFocusNextInput = document.querySelector(
+        '[data-role="settings-keybind-focus-next"]'
+      );
+      const keybindFocusPrevInput = document.querySelector(
+        '[data-role="settings-keybind-focus-prev"]'
+      );
       const terminalCopyToggle = document.querySelector('[data-role="settings-terminal-copy"]');
       const terminalCopyState = document.querySelector('[data-role="settings-terminal-copy-state"]');
       const isWindowsRuntime = /windows/i.test(navigator.userAgent || '');
@@ -1854,6 +1978,12 @@
       let lastResizeRows = null;
       let focusTransitionToken = null;
       let focusTransitionActive = false;
+      let terminalPickupInFlight = false;
+      let terminalPickupLastAt = 0;
+      const terminalPickupCooldownMs = 120;
+      let terminalSurfaceDoubleClickAt = 0;
+      const terminalSurfaceDoubleClickCooldownMs = 350;
+      let terminalSurfaceSpawnInFlight = false;
 
       const terminalSettingsDefaults = {
         // Prefer widely-available monospace fonts on Windows first. / Windowsで入手性が高い等幅フォントを優先
@@ -1888,11 +2018,13 @@
           { value: 'light-sand', i18n: 'settings.theme.palette.light_sand' },
           { value: 'light-sage', i18n: 'settings.theme.palette.light_sage' },
           { value: 'light-sky', i18n: 'settings.theme.palette.light_sky' },
+          { value: 'light-mono', i18n: 'settings.theme.palette.light_mono' },
         ],
         dark: [
           { value: 'dark-ink', i18n: 'settings.theme.palette.dark_ink' },
           { value: 'dark-ocean', i18n: 'settings.theme.palette.dark_ocean' },
           { value: 'dark-ember', i18n: 'settings.theme.palette.dark_ember' },
+          { value: 'dark-mono', i18n: 'settings.theme.palette.dark_mono' },
         ],
       });
 
@@ -2712,6 +2844,170 @@
       let terminalOutputLastWriteMs = 0;
       const MAX_PENDING_ECHO = 256;
       const PENDING_ECHO_TTL_MS = 1000;
+      const terminalKeybindDefaults = Object.freeze({
+        arrange: 'Ctrl+Shift+Y',
+        focusNext: 'Ctrl+Shift+J',
+        focusPrev: 'Ctrl+Shift+K',
+      });
+
+      function normalizeShortcutKeyToken(raw) {
+        const text = String(raw || '').trim();
+        if (!text) return '';
+        const lower = text.toLowerCase();
+        if (
+          lower === 'control' ||
+          lower === 'ctrl' ||
+          lower === 'shift' ||
+          lower === 'alt' ||
+          lower === 'meta'
+        ) {
+          return '';
+        }
+        const keyAliases = {
+          esc: 'Escape',
+          escape: 'Escape',
+          enter: 'Enter',
+          return: 'Enter',
+          tab: 'Tab',
+          space: 'Space',
+          spacebar: 'Space',
+          backspace: 'Backspace',
+          delete: 'Delete',
+          insert: 'Insert',
+          home: 'Home',
+          end: 'End',
+          pageup: 'PageUp',
+          pagedown: 'PageDown',
+          up: 'ArrowUp',
+          down: 'ArrowDown',
+          left: 'ArrowLeft',
+          right: 'ArrowRight',
+          arrowup: 'ArrowUp',
+          arrowdown: 'ArrowDown',
+          arrowleft: 'ArrowLeft',
+          arrowright: 'ArrowRight',
+        };
+        if (keyAliases[lower]) {
+          return keyAliases[lower];
+        }
+        if (/^f\d{1,2}$/i.test(text)) {
+          return text.toUpperCase();
+        }
+        if (text.length === 1) {
+          if (/[a-z]/i.test(text)) return text.toUpperCase();
+          if (/[0-9]/.test(text)) return text;
+          return '';
+        }
+        return '';
+      }
+
+      function parseShortcutBinding(raw) {
+        const parts = String(raw || '')
+          .split('+')
+          .map((item) => item.trim())
+          .filter(Boolean);
+        if (parts.length === 0) return null;
+        let primary = false;
+        let alt = false;
+        let shift = false;
+        let key = '';
+        parts.forEach((part) => {
+          const lower = part.toLowerCase();
+          if (
+            lower === 'ctrl' ||
+            lower === 'control' ||
+            lower === 'cmd' ||
+            lower === 'command' ||
+            lower === 'meta' ||
+            lower === 'primary'
+          ) {
+            primary = true;
+            return;
+          }
+          if (lower === 'alt' || lower === 'option') {
+            alt = true;
+            return;
+          }
+          if (lower === 'shift') {
+            shift = true;
+            return;
+          }
+          if (key) {
+            key = '';
+            return;
+          }
+          key = normalizeShortcutKeyToken(part);
+        });
+        if (!key) return null;
+        if (!primary && !alt && !shift) return null;
+        return { primary, alt, shift, key };
+      }
+
+      function serializeShortcutBinding(binding) {
+        if (!binding || !binding.key) return '';
+        const parts = [];
+        if (binding.primary) parts.push('Ctrl');
+        if (binding.alt) parts.push('Alt');
+        if (binding.shift) parts.push('Shift');
+        parts.push(binding.key);
+        return parts.join('+');
+      }
+
+      function normalizeShortcutBinding(raw, fallback) {
+        const parsed = parseShortcutBinding(raw);
+        if (parsed) return serializeShortcutBinding(parsed);
+        const fallbackParsed = parseShortcutBinding(fallback);
+        return fallbackParsed ? serializeShortcutBinding(fallbackParsed) : '';
+      }
+
+      function buildShortcutBindingFromEvent(event) {
+        const key = normalizeShortcutKeyToken(event && event.key);
+        if (!key) return '';
+        const binding = {
+          primary: Boolean(event && (event.ctrlKey || event.metaKey)),
+          alt: Boolean(event && event.altKey),
+          shift: Boolean(event && event.shiftKey),
+          key,
+        };
+        if (!binding.primary && !binding.alt && !binding.shift) return '';
+        return serializeShortcutBinding(binding);
+      }
+
+      function shortcutMatchesEvent(event, binding) {
+        const parsed = parseShortcutBinding(binding);
+        if (!parsed) return false;
+        const key = normalizeShortcutKeyToken(event && event.key);
+        if (!key || key !== parsed.key) return false;
+        const primary = Boolean(event && (event.ctrlKey || event.metaKey));
+        if (primary !== parsed.primary) return false;
+        if (Boolean(event && event.altKey) !== parsed.alt) return false;
+        if (Boolean(event && event.shiftKey) !== parsed.shift) return false;
+        return true;
+      }
+
+      function bindShortcutInput(input, settingsKey, fallback) {
+        if (!input) return;
+        input.addEventListener('keydown', (event) => {
+          if (event.key === 'Tab') return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (event.key === 'Escape') {
+            settingsState[settingsKey] = normalizeShortcutBinding('', fallback);
+            input.value = settingsState[settingsKey];
+            saveSettingsToBackend();
+            return;
+          }
+          const binding = buildShortcutBindingFromEvent(event);
+          if (!binding) return;
+          settingsState[settingsKey] = normalizeShortcutBinding(binding, fallback);
+          input.value = settingsState[settingsKey];
+          saveSettingsToBackend();
+        });
+        input.addEventListener('focus', () => {
+          input.select();
+        });
+      }
+
       const settingsState = {
         notifications_enabled: true,
         audio_enabled: true,
@@ -2741,6 +3037,9 @@
         terminal_copy_on_select: terminalSettingsDefaults.copyOnSelect,
         terminal_shell_kind: 'cmd',
         terminal_wsl_distro: '',
+        terminal_keybind_arrange: terminalKeybindDefaults.arrange,
+        terminal_keybind_focus_next: terminalKeybindDefaults.focusNext,
+        terminal_keybind_focus_prev: terminalKeybindDefaults.focusPrev,
       };
       const DEFAULT_SCROLLBACK_LINES = terminalSettingsDefaults.scrollbackLines;
       const characterBundles = new Set(['default']);
@@ -2931,6 +3230,13 @@
 
       function applyView(view) {
         if (!view) return;
+        if (view === 'settings') {
+          document.body.classList.add('settings-only');
+          document.documentElement.classList.add('settings-only');
+        } else {
+          document.body.classList.remove('settings-only');
+          document.documentElement.classList.remove('settings-only');
+        }
         if (view === 'watcher') {
           document.body.classList.add('watcher-only');
           document.documentElement.classList.add('watcher-only');
@@ -3044,12 +3350,13 @@
       }
 
       async function ensureTerminalWindow(sessionId) {
-        if (!sessionId) return;
+        if (!sessionId) return false;
         try {
           await invokeWithSession('open_terminal_window', { sessionId });
           await invokeWithSession('pickup_terminal_window', { sessionId });
+          return true;
         } catch {
-          return;
+          return false;
         }
       }
 
@@ -3062,11 +3369,62 @@
         }
       }
 
+      async function pickupCurrentTerminalWindowIfNeeded(source = 'unknown') {
+        if (!terminalSessionId) return false;
+        if (focusTransitionActive) return false;
+        if (terminalPickupInFlight) return false;
+        const now = Date.now();
+        if (now - terminalPickupLastAt < terminalPickupCooldownMs) {
+          return false;
+        }
+        terminalPickupInFlight = true;
+        terminalPickupLastAt = now;
+        try {
+          await invokeWithSession('pickup_terminal_window', { sessionId: terminalSessionId });
+          return true;
+        } catch {
+          return false;
+        } finally {
+          // Coalesce click+focus duplicate pickup requests from the same interaction.
+          setTimeout(() => {
+            terminalPickupInFlight = false;
+          }, source === 'focus' ? 80 : 40);
+        }
+      }
+
       async function focusNextTerminal(direction) {
         try {
           await invokeWithSession('focus_next_terminal_window', { direction });
         } catch {
           return;
+        }
+      }
+
+      async function openTerminalWindowByIndexSamePosition(index) {
+        try {
+          await invokeWithSession('open_terminal_window_by_index_same_position', { index });
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
+      async function openTerminalWindowSamePositionSelected() {
+        try {
+          await invokeWithSession('open_terminal_window_same_position_selected');
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
+      async function openTerminalWindowSamePositionForSession(sessionId) {
+        if (!sessionId) return false;
+        try {
+          await invokeWithSession('open_terminal_window_same_position_for_session', { sessionId });
+          return true;
+        } catch {
+          return false;
         }
       }
 
@@ -3092,6 +3450,12 @@
             cursor: '#2e5f9e',
             selection: 'rgba(46, 95, 158, 0.22)',
           },
+          'light-mono': {
+            background: '#ffffff',
+            foreground: '#111111',
+            cursor: '#222222',
+            selection: 'rgba(17, 17, 17, 0.2)',
+          },
           'dark-ink': {
             background: '#0d1117',
             foreground: '#e6edf3',
@@ -3109,6 +3473,12 @@
             foreground: '#f0e4d6',
             cursor: '#d89a68',
             selection: 'rgba(216, 154, 104, 0.3)',
+          },
+          'dark-mono': {
+            background: '#0a0a0a',
+            foreground: '#f3f3f3',
+            cursor: '#ffffff',
+            selection: 'rgba(243, 243, 243, 0.26)',
           },
         };
         return palettes[key] || palettes[themePaletteDefault(normalizedMode)];
@@ -3926,9 +4296,48 @@
         });
         resizeObserver.observe(terminalContainer);
 
-        terminalContainer.addEventListener('mousedown', () => {
+        terminalContainer.addEventListener('mousedown', (event) => {
+          if (event && event.detail >= 2 && typeof event.preventDefault === 'function') {
+            event.preventDefault();
+          }
           terminal.focus();
         });
+        terminalContainer.addEventListener('click', (event) => {
+          if (!isTerminalView) return;
+          if (!event || event.detail !== 1) return;
+          void pickupCurrentTerminalWindowIfNeeded('click');
+        });
+        window.addEventListener('focus', () => {
+          if (!isTerminalView) return;
+          void pickupCurrentTerminalWindowIfNeeded('focus');
+        });
+        terminalContainer.addEventListener(
+          'dblclick',
+          async (event) => {
+            if (!isTerminalView) return;
+            if (event && typeof event.preventDefault === 'function') {
+              event.preventDefault();
+            }
+            if (event && typeof event.stopPropagation === 'function') {
+              event.stopPropagation();
+            }
+            const now = Date.now();
+            if (now - terminalSurfaceDoubleClickAt < terminalSurfaceDoubleClickCooldownMs) {
+              return;
+            }
+            if (terminalSurfaceSpawnInFlight) {
+              return;
+            }
+            terminalSurfaceDoubleClickAt = now;
+            terminalSurfaceSpawnInFlight = true;
+            try {
+              await openTerminalWindowSamePositionForSession(terminalSessionId);
+            } finally {
+              terminalSurfaceSpawnInFlight = false;
+            }
+          },
+          { capture: true }
+        );
 
         const listen = getEventListen();
         if (!listen) {
@@ -4141,17 +4550,56 @@
         }
       });
 
-      tiles.forEach((tile, index) => {
-        tile.addEventListener('click', async () => {
-          const alreadyFocused = tile.classList.contains('focused');
+      const tileSingleClickTimers = new WeakMap();
+      const singleClickDelayMs = 240;
+
+      async function runTileSingleClick(tile, index) {
+        const alreadyFocused = tile.classList.contains('focused');
+        tiles.forEach((item) => item.classList.remove('focused'));
+        if (!alreadyFocused) {
+          tile.classList.add('focused');
+        }
+        const picked = await pickupTerminalWindowByIndex(index);
+        if (!picked) {
+          await ensureTerminalWindow(tile.dataset.session);
+        }
+      }
+
+      async function runTileDoubleClick(tile, index) {
+        const picked = await pickupTerminalWindowByIndex(index);
+        if (!picked) {
+          await ensureTerminalWindow(tile.dataset.session);
+        }
+        const opened = await openTerminalWindowByIndexSamePosition(index);
+        if (opened) {
           tiles.forEach((item) => item.classList.remove('focused'));
-          if (!alreadyFocused) {
-            tile.classList.add('focused');
-          }
-          const picked = await pickupTerminalWindowByIndex(index);
-          if (!picked) {
-            ensureTerminalWindow(tile.dataset.session);
-          }
+          tile.classList.add('focused');
+        }
+      }
+
+      function clearTileSingleClickTimer(tile) {
+        const timer = tileSingleClickTimers.get(tile);
+        if (timer) {
+          clearTimeout(timer);
+          tileSingleClickTimers.delete(tile);
+        }
+      }
+
+      tiles.forEach((tile, index) => {
+        tile.addEventListener('click', (event) => {
+          if (event.detail !== 1) return;
+          clearTileSingleClickTimer(tile);
+          const timer = setTimeout(async () => {
+            tileSingleClickTimers.delete(tile);
+            await runTileSingleClick(tile, index);
+          }, singleClickDelayMs);
+          tileSingleClickTimers.set(tile, timer);
+        });
+
+        tile.addEventListener('dblclick', async (event) => {
+          event.preventDefault();
+          clearTileSingleClickTimer(tile);
+          await runTileDoubleClick(tile, index);
         });
       });
 
@@ -4164,22 +4612,20 @@
 
       if (isTerminalView) {
         window.addEventListener('keydown', (event) => {
-          if (!event.ctrlKey && !event.metaKey) return;
-          if (!event.shiftKey) return;
-          if (event.key.toLowerCase() === 'j') {
+          if (shortcutMatchesEvent(event, settingsState.terminal_keybind_focus_next)) {
             event.preventDefault();
             focusNextTerminal('next');
+            return;
           }
-          if (event.key.toLowerCase() === 'k') {
+          if (shortcutMatchesEvent(event, settingsState.terminal_keybind_focus_prev)) {
             event.preventDefault();
             focusNextTerminal('prev');
           }
         });
       }
       window.addEventListener('keydown', (event) => {
-        if (!event.ctrlKey && !event.metaKey) return;
-        if (!event.shiftKey) return;
-        if (event.key.toLowerCase() !== 'y') return;
+        if (settingsBoard && !settingsBoard.classList.contains('hidden')) return;
+        if (!shortcutMatchesEvent(event, settingsState.terminal_keybind_arrange)) return;
         event.preventDefault();
         arrangeWindows();
       });
@@ -4464,6 +4910,18 @@
           settingsState.terminal_shell_kind
         );
         settingsState.terminal_wsl_distro = String(settingsState.terminal_wsl_distro || '').trim();
+        settingsState.terminal_keybind_arrange = normalizeShortcutBinding(
+          settingsState.terminal_keybind_arrange,
+          terminalKeybindDefaults.arrange
+        );
+        settingsState.terminal_keybind_focus_next = normalizeShortcutBinding(
+          settingsState.terminal_keybind_focus_next,
+          terminalKeybindDefaults.focusNext
+        );
+        settingsState.terminal_keybind_focus_prev = normalizeShortcutBinding(
+          settingsState.terminal_keybind_focus_prev,
+          terminalKeybindDefaults.focusPrev
+        );
         notifyEnabled = settingsState.notifications_enabled;
         audioEnabled = settingsState.audio_enabled;
         llmEnabled = settingsState.llm_enabled;
@@ -4488,6 +4946,13 @@
         if (terminalWslDistro) {
           ensureWslDistroOption(settingsState.terminal_wsl_distro);
           terminalWslDistro.value = settingsState.terminal_wsl_distro;
+        }
+        if (keybindArrangeInput) keybindArrangeInput.value = settingsState.terminal_keybind_arrange;
+        if (keybindFocusNextInput) {
+          keybindFocusNextInput.value = settingsState.terminal_keybind_focus_next;
+        }
+        if (keybindFocusPrevInput) {
+          keybindFocusPrevInput.value = settingsState.terminal_keybind_focus_prev;
         }
         if (terminalCopyState) setToggleState(terminalCopyOnSelect, terminalCopyState);
         if (settingsState.character_id) {
@@ -4770,6 +5235,22 @@
           saveSettingsToBackend();
         });
       }
+
+      bindShortcutInput(
+        keybindArrangeInput,
+        'terminal_keybind_arrange',
+        terminalKeybindDefaults.arrange
+      );
+      bindShortcutInput(
+        keybindFocusNextInput,
+        'terminal_keybind_focus_next',
+        terminalKeybindDefaults.focusNext
+      );
+      bindShortcutInput(
+        keybindFocusPrevInput,
+        'terminal_keybind_focus_prev',
+        terminalKeybindDefaults.focusPrev
+      );
 
       if (terminalCopyToggle) {
         terminalCopyToggle.addEventListener('click', () => {

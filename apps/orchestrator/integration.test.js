@@ -313,6 +313,9 @@ test("settings_terminal_runtime", () => {
   assert.ok(html.includes('data-role="settings-windows-card"'));
   assert.ok(html.includes('data-role="settings-terminal-shell-kind"'));
   assert.ok(html.includes('data-role="settings-terminal-wsl-distro"'));
+  assert.ok(html.includes('data-role="settings-keybind-arrange"'));
+  assert.ok(html.includes('data-role="settings-keybind-focus-next"'));
+  assert.ok(html.includes('data-role="settings-keybind-focus-prev"'));
 });
 
 test("settings_theme_single_selector", () => {
@@ -323,9 +326,62 @@ test("settings_theme_single_selector", () => {
   assert.ok(html.includes('value="light-sand"'));
   assert.ok(html.includes('value="light-sage"'));
   assert.ok(html.includes('value="light-sky"'));
+  assert.ok(html.includes('value="light-mono"'));
   assert.ok(html.includes('value="dark-ink"'));
   assert.ok(html.includes('value="dark-ocean"'));
   assert.ok(html.includes('value="dark-ember"'));
+  assert.ok(html.includes('value="dark-mono"'));
+});
+
+test("run_tile_double_click_same_position", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("singleClickDelayMs"));
+  assert.ok(html.includes("event.detail !== 1"));
+  assert.ok(html.includes("addEventListener('dblclick'"));
+  assert.ok(html.includes("clearTileSingleClickTimer(tile)"));
+  assert.ok(html.includes("open_terminal_window_same_position_for_session"));
+  assert.ok(html.includes("open_terminal_window_by_index_same_position"));
+  assert.ok(html.includes("terminalSurfaceDoubleClickCooldownMs"));
+  assert.ok(html.includes("terminalSurfaceSpawnInFlight"));
+  assert.ok(html.includes("if (!isTerminalView) return;"));
+  assert.ok(html.includes("event.detail >= 2"));
+});
+
+test("terminal_selection_handoff_pickup", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("pickupCurrentTerminalWindowIfNeeded"));
+  assert.ok(html.includes("terminalPickupInFlight"));
+  assert.ok(html.includes("terminalPickupCooldownMs"));
+  assert.ok(html.includes("focusTransitionActive"));
+  assert.ok(html.includes("pickup_terminal_window', { sessionId: terminalSessionId }"));
+  assert.ok(html.includes("terminalContainer.addEventListener('click'"));
+  assert.ok(html.includes("event.detail !== 1"));
+  assert.ok(html.includes("window.addEventListener('focus'"));
+});
+
+test("focus_transition_animation_speed_policy", () => {
+  const tauriMain = path.join(appRoot, "src-tauri", "src", "main.rs");
+  const rust = fs.readFileSync(tauriMain, "utf8");
+  assert.ok(rust.includes("const SHRINK_MS: u64 = 80;"));
+  assert.ok(rust.includes("const EXPAND_MS: u64 = 110;"));
+  assert.ok(rust.includes("const STEP_MS: u64 = 10;"));
+});
+
+test("terminal_selection_pickup_requires_arranged_layout", () => {
+  const tauriMain = path.join(appRoot, "src-tauri", "src", "main.rs");
+  const rust = fs.readFileSync(tauriMain, "utf8");
+  assert.ok(rust.includes("arranged: Mutex<bool>"));
+  assert.ok(rust.includes("internal_layout_change_deadline_ms: AtomicU64"));
+  assert.ok(rust.includes("arranged_layout_for_pickup"));
+  assert.ok(rust.includes("is_internal_layout_change_active"));
+  assert.ok(rust.includes("should_reuse_cached_layout"));
+  assert.ok(rust.includes("window.on_window_event"));
+  assert.ok(rust.includes("tauri::WindowEvent::Moved(_)"));
+  assert.ok(rust.includes("tauri::WindowEvent::Resized(_)"));
+  assert.ok(rust.includes("mark_terminal_layout_arranged(&app, true);"));
+  assert.ok(rust.includes("mark_terminal_layout_arranged(&app, false);"));
 });
 
 test("settings_character_log_retention", () => {

@@ -11,7 +11,14 @@
   - nagomi: ターミナル並列作業の「俯瞰（Overview）＋順番フォーカス＋観測ベース状態表示」を中核に据える
   - Terminal の環境変数をユーザー環境に同期し、PATH 等の差分をなくす
   - Windows 設定画面に `Windows` カテゴリを追加し、terminal 起動方式（CMD / PowerShell / WSL）と WSL distro 選択を分離する
-  - テーマは 6 種類（light-sand / light-sage / light-sky / dark-ink / dark-ocean / dark-ember）を 1 つの選択UIで提供する
+  - Windows 設定画面で整列/選択ショートカット（既定 `Ctrl+Shift+Y/J/K`）を変更できるようにする
+  - テーマは 8 種類（light-sand / light-sage / light-sky / light-mono / dark-ink / dark-ocean / dark-ember / dark-mono）を 1 つの選択UIで提供する
+  - 設定画面のレスポンシブを安定化し、狭幅では 1 列、十分な幅で 2 列表示に切り替える
+  - Run タイル/Terminal 本文のダブルクリックで、クリック元と同位置に新規ターミナルを開けるようにする
+  - 非選択ターミナルを選んだときの選択交代は維持し、拡大表示は整列済み状態でのみ適用する（未整列時はフォーカスのみ）
+  - 選択ウィンドウ交代時のフォーカス切替アニメーションを高速化する
+  - ターミナルウィンドウタイトルを CWD ベース表示にし、`src` / `docs` / `tests` など汎用名は 2 階層表示にする
+  - nagomi ターミナル内で `:ng` 内蔵特殊コマンドを扱えるようにする（PTY へは送らない）
   - Terminal ストリームと AI フックの統合で終了候補を作り、AI判定（JSON 出力）で状態を確定する
   - 既定値（フォント/サイズ/scrollback 等）の参照元を docs→実装まで辿れる状態にする（値は当面ハードコードでOK）
   - トレイから設定画面を開ける導線を整える
@@ -25,7 +32,7 @@
   - spec: `./spec.md`
   - usage: `./usage.md`
   - architecture: `./architecture.md`
-  - plan (NOW): `./plan.md`
+  - plan (current/future): `./plan.md`
   - plan (archive): `./plan.archive.md`
   - tauri-driver E2E: `./tauri-driver-e2e.md`
   - complete spec: `../nagomi_complete_spec_v1.3.md`

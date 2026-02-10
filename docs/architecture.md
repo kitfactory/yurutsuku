@@ -15,7 +15,13 @@
 - Environment: Windows の User/System 環境変数を統合して PTY に渡す。`NAGOMI_SESSION_ID` を付与する
 - PATH は不足分のみ後ろに追加し、User/System の不足分を補完する
 - Windows 設定画面では `Windows` カテゴリを分離し、terminal 起動方式（`cmd`/`powershell`/`wsl`）と `wsl` distro 指定を行う
-- テーマは 6 種類（`light-sand` / `light-sage` / `light-sky` / `dark-ink` / `dark-ocean` / `dark-ember`）を 1 つの選択UIで選び、内部では mode（`dark`/`light`）+ palette に正規化して CSS 変数を切り替える
+- Windows 設定画面では terminal 操作ショートカット（整列/次へ移動/前へ移動）を編集でき、既定は `Ctrl+Shift+Y/J/K` とする
+- テーマは 8 種類（`light-sand` / `light-sage` / `light-sky` / `light-mono` / `dark-ink` / `dark-ocean` / `dark-ember` / `dark-mono`）を 1 つの選択UIで選び、内部では mode（`dark`/`light`）+ palette に正規化して CSS 変数を切り替える
+- 設定画面のレスポンシブは「十分な幅で 2 列、狭幅で 1 列」に固定し、項目幅を潰さない
+- Run タイル/Terminal 本文のダブルクリックは「既存ウィンドウの位置/サイズを複製して新規ウィンドウを開く」経路を持つ
+- 非選択ターミナルの選択による拡大表示は「整列済みレイアウトが維持されている場合」に限定し、未整列時は SelectionState/Focus のみ更新する
+- 選択ウィンドウ交代アニメーションは短時間（縮小 60-100ms / 拡大 80-140ms / 合計 240ms 以下）で完了させ、連続交代時は旧遷移をキャンセルして最新遷移を優先する
+- `未整列` の判定は「起動後未整列」「ユーザー操作による move/resize/maximize」「ウィンドウ増減」で `arranged=false` とし、`Arrange Terminal Windows` 実行時のみ `arranged=true` に戻す
 
 #2. concept との対応
 | concept | 実装モジュール | 責務 |
@@ -24,6 +30,9 @@
 | F-2 AgentEventObserver | `apps/orchestrator/src/agent_event_observer.js` + `apps/orchestrator/src-tauri/src/completion_hook.rs` | hook イベントの正規化 |
 | F-3 StateIntegrator + ToolJudge | `apps/orchestrator/src/state_integrator.js` + `tool_judge` | 終了候補の判定と状態統合 |
 | F-4 Grouping | UI + Orchestrator（将来） | Workspace / Task Group / Pane の整理 |
+| F-5 Settings Theme/Responsive | `apps/orchestrator/src/index.html`（settings theme / responsive css） | モノクロテーマ追加と設定画面の崩れ防止 |
+| F-6 Double Click Spawn | `apps/orchestrator/src/index.html` + `open_terminal_window_by_index_same_position` + `open_terminal_window_same_position_selected` | クリック元と同位置に新規 terminal を追加 |
+| F-7 Selection Handoff | `pickup_terminal_window` + `SelectionState` + `terminal-focus-transition` | 整列済み時のみ非選択 terminal の選択交代と拡大表示を同期（未整列時は focus のみ） |
 
 #3. I/F 設計
 ## 3.1 UI → Orchestrator（Tauri Command）
@@ -31,6 +40,9 @@
 - `terminal_send_input(sessionId, text)`
 - `terminal_resize(sessionId, cols, rows)`
 - `register_terminal_session(sessionId)`
+- `open_terminal_window_by_index_same_position(index)`（クリック元の位置/サイズを引き継いで新規 terminal を開く）
+- `open_terminal_window_same_position_selected()`（選択中/フォーカス中の terminal の位置/サイズを引き継いで新規 terminal を開く）
+- `open_terminal_window_same_position_for_session(sessionId)`（指定 terminal の位置/サイズを引き継いで新規 terminal を開く）
 - `tool_judge(tool, tail)` -> `{ state, summary }`
 - `append_terminal_debug_snapshot(payload)`（開発用）
 - `save_debug_screenshot(ipc_session_id)`（開発用）
@@ -92,9 +104,12 @@
 #6. Settings
 - `llm_enabled` / `llm_tool` / `silence_timeout_ms`
 - `terminal_*`（font/size/theme/scrollback/copy）
-- `terminal_theme_palette`（6テーマの palette 値。UIは単一テーマ選択）
+- `terminal_theme_palette`（8テーマの palette 値。UIは単一テーマ選択）
 - `terminal_shell_kind`（`cmd` / `powershell` / `wsl`）
 - `terminal_wsl_distro`（空なら既定 distro）
+- `terminal_keybind_arrange`（整列ショートカット）
+- `terminal_keybind_focus_next`（次へ移動ショートカット）
+- `terminal_keybind_focus_prev`（前へ移動ショートカット）
 - AI Coding Agent 選択（codex/claudecode/opencode）
 
 ## 6.1 Windows Terminal 起動コマンド

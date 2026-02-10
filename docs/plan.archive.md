@@ -1,6 +1,6 @@
-# Plan Archive
+﻿# Plan Archive
 
-`docs/plan.md` は NOW のみ。完了した plan はここに移す。
+`docs/plan.md` は current / future のみ。完了した plan はここに移す。
 
 ---
 
@@ -24,6 +24,25 @@
 - [x] Orchestrator: ヘルスチェックに加えて `/open-terminal` を提供する
 - [x] `yuru.exe`: Orchestrator を起動し、Terminal window を開く
 - [x] 動作確認
-  - [x] `yuru` で Terminal window が1つ開く（Chat/Run/Settings が勝手に開かない）
-  - [x] 2回目の `yuru` で Terminal window が追加で開く（または既存をフォーカスする）
+- [x] `yuru` で Terminal window が1つ開く（Chat/Run/Settings が勝手に開かない）
+- [x] 2回目の `yuru` で Terminal window が追加で開く（または既存をフォーカスする）
+
+---
+
+## 2026-02-10: P0 current（H〜M）を plan.md から archive へ移管
+
+- [x] H. 外部ツールフック（仕様/実装/テスト）
+- [x] J. 環境同期（Terminal）
+- [x] K. ストリーム+フック統合 / LLM Judge
+- [x] A. 観測（Watcher）: 仕様の確定
+- [x] B. 観測（Watcher）: 実装の安定化
+- [x] I. 終了検知の部品化（部品→単体テスト→統合）
+- [x] C. 起動導線（nagomi / tray）
+- [x] E. 設定（参照元の明確化）
+- [x] G. 体験: フォーカス切替アニメーション
+- [x] L. 状態UX（idle/success/need_input/failure）
+- [x] M. UX拡張（Palette / Settings / Double Click）
+
+備考:
+- 以降の `current` は future 6-9 を再展開した N-6〜N-9（文書→テスト→実装→テスト）を対象とする。
 
