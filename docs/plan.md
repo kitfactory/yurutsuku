@@ -95,12 +95,6 @@ nagomi の中核である「複数ターミナル並列作業」を、観測ベ�
 - [x] C-4 仕様/設計/実装: 起動方式設定を `外観` から分離して `Windows` カテゴリへ移動し、テーマは 6 種類を単一選択UIで選べるようにする（内部は dark/light + palette を維持）
 - [x] C-4 テスト: `cargo test -p nagomi-orchestrator` / `cargo test -p nagomi-worker` / `npm test -w apps/orchestrator -- --test-reporter=spec` / `NAGOMI_E2E_STRICT=1 npm run e2e:tint -w apps/orchestrator` が通る
 
-### D. Overview（タイル一覧 / Run相当） ※優先度低
-- [ ] D-1 実装: Orchestrator から Overview を開ける（tray/メニュー/ショートカットのいずれか）
-- [ ] D-1 テスト: Overview を開閉しても Terminal は壊れない（入力/表示が継続）
-- [ ] D-2 実装: 起動時に Overview を表示する設定（ON/OFF、既定OFF）
-- [ ] D-2 テスト: ON/OFF で起動時の挙動が変わる
-
 ### E. 設定（参照元の明確化）
 - [x] E-1 実装: 既定値（terminal font/size/scrollback 等）の参照元を `docs/spec.md` から辿れるようにする（実装ファイルへリンク）
 - [x] E-1 テスト: `docs/spec.md` のリンク/記述が最新実装と一致（自己レビュー）
@@ -124,7 +118,12 @@ nagomi の中核である「複数ターミナル並列作業」を、観測ベ�
 ---
 
 ## FUTURE
+- Overview: Orchestrator から Overview を開ける（tray/メニュー/ショートカットのいずれか）
+- Overview: 開閉しても Terminal は壊れない（入力/表示が継続）
+- Overview: 起動時に Overview を表示する設定（ON/OFF、既定OFF）
+- Overview: ON/OFF で起動時の挙動が変わる
 - グループごとの整列（Workspace / Task Group 単位でタイル配置、グループ内は pane 順で並べる）
+- キーバインド変更機能（ショートカットのカスタマイズ）
 - macOS のショートカット作成（.command / Automator などの起動導線）
 - ターミナル入力補助の拡充（履歴/補完/スニペット/貼り付け支援）
 - ターミナル表示の拡充（検索/ハイライト/スクロール補助）
