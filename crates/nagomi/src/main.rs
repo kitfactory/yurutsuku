@@ -4,6 +4,8 @@ use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 fn env_u16(name: &str, default: u16) -> u16 {
     std::env::var(name)
@@ -74,12 +76,20 @@ fn resolve_orchestrator_path() -> Option<PathBuf> {
 }
 
 fn spawn_orchestrator(path: &Path) -> Result<()> {
-    Command::new(path)
+    let mut command = Command::new(path);
+    command
         .arg("--start-hidden")
         .arg("--exit-on-last-terminal")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        // 余分なコンソールウィンドウを表示しない / Hide extra console window on Windows.
+        const CREATE_NO_WINDOW_FLAG: u32 = 0x08000000;
+        command.creation_flags(CREATE_NO_WINDOW_FLAG);
+    }
+    command
         .spawn()
         .with_context(|| format!("spawn orchestrator: {}", path.display()))?;
     Ok(())

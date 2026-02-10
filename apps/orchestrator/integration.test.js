@@ -310,8 +310,22 @@ test("settings_llm", () => {
 test("settings_terminal_runtime", () => {
   const htmlPath = path.join(appRoot, "src", "index.html");
   const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes('data-role="settings-windows-card"'));
   assert.ok(html.includes('data-role="settings-terminal-shell-kind"'));
   assert.ok(html.includes('data-role="settings-terminal-wsl-distro"'));
+});
+
+test("settings_theme_single_selector", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes('data-role="settings-terminal-theme"'));
+  assert.ok(!html.includes('data-role="settings-terminal-theme-palette"'));
+  assert.ok(html.includes('value="light-sand"'));
+  assert.ok(html.includes('value="light-sage"'));
+  assert.ok(html.includes('value="light-sky"'));
+  assert.ok(html.includes('value="dark-ink"'));
+  assert.ok(html.includes('value="dark-ocean"'));
+  assert.ok(html.includes('value="dark-ember"'));
 });
 
 test("settings_character_log_retention", () => {

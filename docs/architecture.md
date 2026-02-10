@@ -14,7 +14,8 @@
 - Debug: デバッグ UI（バッジ/スナップショット/スクショ）+ worker_smoke.log
 - Environment: Windows の User/System 環境変数を統合して PTY に渡す。`NAGOMI_SESSION_ID` を付与する
 - PATH は不足分のみ後ろに追加し、User/System の不足分を補完する
-- Windows 設定画面では terminal 起動方式（`cmd`/`powershell`/`wsl`）を選択可能にし、`wsl` 時は distro を指定できる
+- Windows 設定画面では `Windows` カテゴリを分離し、terminal 起動方式（`cmd`/`powershell`/`wsl`）と `wsl` distro 指定を行う
+- テーマは 6 種類（`light-sand` / `light-sage` / `light-sky` / `dark-ink` / `dark-ocean` / `dark-ember`）を 1 つの選択UIで選び、内部では mode（`dark`/`light`）+ palette に正規化して CSS 変数を切り替える
 
 #2. concept との対応
 | concept | 実装モジュール | 責務 |
@@ -91,6 +92,7 @@
 #6. Settings
 - `llm_enabled` / `llm_tool` / `silence_timeout_ms`
 - `terminal_*`（font/size/theme/scrollback/copy）
+- `terminal_theme_palette`（6テーマの palette 値。UIは単一テーマ選択）
 - `terminal_shell_kind`（`cmd` / `powershell` / `wsl`）
 - `terminal_wsl_distro`（空なら既定 distro）
 - AI Coding Agent 選択（codex/claudecode/opencode）

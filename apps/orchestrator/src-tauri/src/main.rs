@@ -11,6 +11,8 @@ use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 #[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::fs;
 use std::io::{Read, Write};
@@ -89,6 +91,8 @@ struct Settings {
     terminal_font_size: u16,
     #[serde(default)]
     terminal_theme: String,
+    #[serde(default = "default_terminal_theme_palette")]
+    terminal_theme_palette: String,
     #[serde(default)]
     terminal_scrollback_lines: u32,
     #[serde(default)]
@@ -101,6 +105,10 @@ struct Settings {
 
 fn default_terminal_shell_kind() -> String {
     TERMINAL_SHELL_CMD.to_string()
+}
+
+fn default_terminal_theme_palette() -> String {
+    "dark-ink".to_string()
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -244,6 +252,7 @@ impl Default for Settings {
             terminal_font_family: "ui-monospace, 'Cascadia Mono', Consolas, 'SFMono-Regular', Menlo, Monaco, 'Liberation Mono', 'DejaVu Sans Mono', monospace".to_string(),
             terminal_font_size: 18,
             terminal_theme: "dark".to_string(),
+            terminal_theme_palette: default_terminal_theme_palette(),
             terminal_scrollback_lines: 5000,
             terminal_copy_on_select: true,
             terminal_shell_kind: default_terminal_shell_kind(),
@@ -257,6 +266,36 @@ fn normalize_terminal_shell_kind(kind: &str) -> &'static str {
         TERMINAL_SHELL_POWERSHELL => TERMINAL_SHELL_POWERSHELL,
         TERMINAL_SHELL_WSL => TERMINAL_SHELL_WSL,
         _ => TERMINAL_SHELL_CMD,
+    }
+}
+
+fn normalize_terminal_theme_mode(mode: &str) -> &'static str {
+    if mode.trim().eq_ignore_ascii_case("light") {
+        "light"
+    } else {
+        "dark"
+    }
+}
+
+fn default_terminal_theme_palette_for_mode(mode: &str) -> &'static str {
+    if mode == "light" {
+        "light-sand"
+    } else {
+        "dark-ink"
+    }
+}
+
+fn normalize_terminal_theme_palette(mode: &str, palette: &str) -> String {
+    let value = palette.trim().to_ascii_lowercase();
+    let valid = if mode == "light" {
+        matches!(value.as_str(), "light-sand" | "light-sage" | "light-sky")
+    } else {
+        matches!(value.as_str(), "dark-ink" | "dark-ocean" | "dark-ember")
+    };
+    if valid {
+        value
+    } else {
+        default_terminal_theme_palette_for_mode(mode).to_string()
     }
 }
 
@@ -1041,12 +1080,15 @@ fn list_wsl_distros<R: Runtime>(
     ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
     #[cfg(windows)]
     {
-        let output = Command::new("wsl.exe")
+        let mut command = Command::new("wsl.exe");
+        command
             .args(["-l", "-q"])
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .map_err(|err| err.to_string())?;
+            .stderr(Stdio::piped());
+        // Hide helper console window while probing distros. / ディストロ取得時の補助コンソール表示を抑止。
+        const CREATE_NO_WINDOW_FLAG: u32 = 0x08000000;
+        command.creation_flags(CREATE_NO_WINDOW_FLAG);
+        let output = command.output().map_err(|err| err.to_string())?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
             if stderr.is_empty() {
@@ -1969,7 +2011,7 @@ fn open_watcher_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
         .resizable(false)
         .always_on_top(true)
         .skip_taskbar(true)
-        .visible(true)
+        .visible(false)
         .build()
         .map_err(|err| err.to_string())?;
     let _ = position_watcher_window(app, &window);
@@ -1981,6 +2023,21 @@ fn open_watcher_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
         .map(|value| value.clone())
         .unwrap_or_else(|| "idle".to_string());
     emit_terminal_aggregate_state(app, &last_state);
+    Ok(())
+}
+
+#[tauri::command]
+fn watcher_window_ready<R: Runtime>(
+    window: tauri::WebviewWindow<R>,
+    ipc_session_id: String,
+) -> Result<(), String> {
+    ipc_session::touch_ipc_session_for_window(&window, &ipc_session_id)?;
+    if window.label() != WINDOW_WATCHER {
+        return Ok(());
+    }
+    let app = window.app_handle();
+    let _ = position_watcher_window(&app, &window);
+    let _ = window.show();
     Ok(())
 }
 
@@ -2397,7 +2454,13 @@ fn open_terminal_window_inner<R: Runtime>(
         .collect::<String>();
     let label = format!("terminal-{safe_id}");
     let title = format!("Terminal {session_id}");
-    let query = format!("view=terminal&session_id={session_id}");
+    let settings = read_settings(&settings_path(&app)).unwrap_or_else(|_| Settings::default());
+    let theme_mode = normalize_terminal_theme_mode(&settings.terminal_theme);
+    let theme_palette =
+        normalize_terminal_theme_palette(theme_mode, &settings.terminal_theme_palette);
+    let query = format!(
+        "view=terminal&session_id={session_id}&theme={theme_mode}&palette={theme_palette}"
+    );
     create_window(&app, &label, &title, &query).map_err(|err| err.to_string())?;
     let _ = register_terminal_window(&app, &session_id, &label);
     if let Some(window) = app.get_webview_window(&label) {
@@ -3656,6 +3719,7 @@ fn main() {
             load_settings,
             save_settings,
             list_wsl_distros,
+            watcher_window_ready,
             report_terminal_observation,
             ensure_codex_hook,
             tool_judge,
@@ -3714,10 +3778,8 @@ fn main() {
             });
             start_worker_reader(handle.clone());
             start_terminal_worker_reader(handle.clone(), terminal_rx);
-            if should_start_hidden() {
-                if let Some(window) = handle.get_webview_window(WINDOW_CHAT) {
-                    let _ = window.hide();
-                }
+            if !should_start_hidden() {
+                let _ = create_window(handle, WINDOW_CHAT, "Chat", "chat");
             }
 
             let path = settings_path(handle);
@@ -3767,6 +3829,7 @@ mod tests {
                     .to_string(),
             terminal_font_size: 14,
             terminal_theme: "light".to_string(),
+            terminal_theme_palette: "light-sand".to_string(),
             terminal_scrollback_lines: 5000,
             terminal_copy_on_select: false,
             terminal_shell_kind: TERMINAL_SHELL_WSL.to_string(),
@@ -3803,7 +3866,7 @@ mod tests {
             .filter_map(|window| window.get("label").and_then(|value| value.as_str()))
             .collect();
 
-        assert!(labels.contains(&WINDOW_CHAT));
+        assert!(!labels.contains(&WINDOW_CHAT));
     }
 
     #[test]

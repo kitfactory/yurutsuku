@@ -13,15 +13,7 @@
     "security": {
       "capabilities": ["default"]
     },
-    "windows": [
-      {
-        "label": "chat",
-        "title": "Chat",
-        "width": 1200,
-        "height": 800,
-        "visible": false
-      }
-    ]
+    "windows": []
   },
   "bundle": {
     "active": false,

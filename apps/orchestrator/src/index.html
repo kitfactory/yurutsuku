@@ -11,6 +11,35 @@
           if (params.get('view') === 'terminal') {
             document.documentElement.classList.add('terminal-only');
           }
+          const storedThemeMode = localStorage.getItem('nagomi_theme_mode') || '';
+          const storedThemePalette = localStorage.getItem('nagomi_theme_palette') || '';
+          const queryThemeMode = params.get('theme') || '';
+          const queryThemePalette = params.get('palette') || '';
+          const prefersDark =
+            typeof window.matchMedia === 'function' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches;
+          const themeMode =
+            queryThemeMode === 'light' || queryThemeMode === 'dark'
+              ? queryThemeMode
+              : storedThemeMode === 'light' || storedThemeMode === 'dark'
+              ? storedThemeMode
+              : prefersDark
+              ? 'dark'
+              : 'light';
+          const darkPalettes = new Set(['dark-ink', 'dark-ocean', 'dark-ember']);
+          const lightPalettes = new Set(['light-sand', 'light-sage', 'light-sky']);
+          const defaultPalette = themeMode === 'dark' ? 'dark-ink' : 'light-sand';
+          const preferredPalette = queryThemePalette || storedThemePalette;
+          const themePalette =
+            themeMode === 'dark'
+              ? darkPalettes.has(preferredPalette)
+                ? preferredPalette
+                : defaultPalette
+              : lightPalettes.has(preferredPalette)
+              ? preferredPalette
+              : defaultPalette;
+          document.documentElement.dataset.theme = themeMode;
+          document.documentElement.dataset.themePalette = themePalette;
         } catch {
           // no-op
         }
@@ -78,6 +107,96 @@
         --settings-accent-bg: rgba(77, 179, 199, 0.14);
         --toggle-track-off: rgba(255, 255, 255, 0.18);
         --toggle-thumb: #f6f1e6;
+      }
+
+      html[data-theme='light'][data-theme-palette='light-sand'] {
+        --bg: #f0ede7;
+        --bg-2: #e7e1d7;
+        --accent: #1f7a8c;
+        --accent-2: #f26a3d;
+        --panel: #f7f3ed;
+        --panel-border: #d8d0c5;
+        --settings-panel: #f7f3ed;
+        --settings-card: #fbf6ee;
+        --settings-border: #d8d0c5;
+        --settings-accent: #1f7a8c;
+        --settings-accent-border: rgba(31, 122, 140, 0.55);
+        --settings-accent-bg: rgba(31, 122, 140, 0.08);
+      }
+
+      html[data-theme='light'][data-theme-palette='light-sage'] {
+        --bg: #eef3ec;
+        --bg-2: #e2ebdf;
+        --accent: #2c7a4f;
+        --accent-2: #c57b2e;
+        --panel: #f3f8f1;
+        --panel-border: #c8d9cb;
+        --settings-panel: #f3f8f1;
+        --settings-card: #f7fbf6;
+        --settings-border: #c8d9cb;
+        --settings-accent: #2c7a4f;
+        --settings-accent-border: rgba(44, 122, 79, 0.5);
+        --settings-accent-bg: rgba(44, 122, 79, 0.1);
+      }
+
+      html[data-theme='light'][data-theme-palette='light-sky'] {
+        --bg: #edf2f8;
+        --bg-2: #dfe9f4;
+        --accent: #2e5f9e;
+        --accent-2: #b6684b;
+        --panel: #f4f8fc;
+        --panel-border: #c6d5e8;
+        --settings-panel: #f4f8fc;
+        --settings-card: #f8fbff;
+        --settings-border: #c6d5e8;
+        --settings-accent: #2e5f9e;
+        --settings-accent-border: rgba(46, 95, 158, 0.52);
+        --settings-accent-bg: rgba(46, 95, 158, 0.1);
+      }
+
+      html[data-theme='dark'][data-theme-palette='dark-ink'] {
+        --bg: #0c1116;
+        --bg-2: #121a22;
+        --accent: #4db3c7;
+        --accent-2: #f28a63;
+        --panel: #151c24;
+        --panel-border: #2b3440;
+        --settings-panel: #11161b;
+        --settings-card: #181f27;
+        --settings-border: #2b3440;
+        --settings-accent: #4db3c7;
+        --settings-accent-border: rgba(77, 179, 199, 0.55);
+        --settings-accent-bg: rgba(77, 179, 199, 0.14);
+      }
+
+      html[data-theme='dark'][data-theme-palette='dark-ocean'] {
+        --bg: #08121a;
+        --bg-2: #0f1f2b;
+        --accent: #4aa7d8;
+        --accent-2: #58c2a7;
+        --panel: #10202d;
+        --panel-border: #274152;
+        --settings-panel: #0d1a24;
+        --settings-card: #132534;
+        --settings-border: #274152;
+        --settings-accent: #4aa7d8;
+        --settings-accent-border: rgba(74, 167, 216, 0.56);
+        --settings-accent-bg: rgba(74, 167, 216, 0.16);
+      }
+
+      html[data-theme='dark'][data-theme-palette='dark-ember'] {
+        --bg: #14100f;
+        --bg-2: #1d1614;
+        --accent: #d3885a;
+        --accent-2: #c6a14f;
+        --panel: #241b18;
+        --panel-border: #3e2f2a;
+        --settings-panel: #1d1513;
+        --settings-card: #2a1f1b;
+        --settings-border: #3e2f2a;
+        --settings-accent: #d3885a;
+        --settings-accent-border: rgba(211, 136, 90, 0.58);
+        --settings-accent-bg: rgba(211, 136, 90, 0.16);
       }
 
       * {
@@ -379,10 +498,10 @@
 
       .terminal-shell {
         flex: 1;
-        background: #0d1117;
+        background: var(--panel);
         border-radius: 16px;
         padding: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        border: 1px solid var(--panel-border);
         display: flex;
         position: relative;
         overflow: hidden;
@@ -643,6 +762,16 @@
         grid-column: 1 / -1;
       }
 
+      .settings-card--windows {
+        border-color: var(--settings-accent-border);
+        background: linear-gradient(
+            135deg,
+            var(--settings-accent-bg),
+            transparent 55%
+          ),
+          var(--settings-card);
+      }
+
       .settings-card h3 {
         margin: 0;
         font-size: 15px;
@@ -859,7 +988,7 @@
 
       html.terminal-only body,
       body.terminal-only {
-        background: #0d1117;
+        background: var(--bg);
         overflow: hidden;
       }
 
@@ -1142,8 +1271,12 @@
             <div class="settings-row">
               <span data-i18n="settings.appearance.theme">theme</span>
               <select data-role="settings-terminal-theme">
-                <option value="dark" data-i18n="settings.theme.dark">dark</option>
-                <option value="light" data-i18n="settings.theme.light">light</option>
+                <option value="light-sand" data-i18n="settings.theme.palette.light_sand">light: sand</option>
+                <option value="light-sage" data-i18n="settings.theme.palette.light_sage">light: sage</option>
+                <option value="light-sky" data-i18n="settings.theme.palette.light_sky">light: sky</option>
+                <option value="dark-ink" data-i18n="settings.theme.palette.dark_ink">dark: ink</option>
+                <option value="dark-ocean" data-i18n="settings.theme.palette.dark_ocean">dark: ocean</option>
+                <option value="dark-ember" data-i18n="settings.theme.palette.dark_ember">dark: ember</option>
               </select>
             </div>
             <div class="settings-row">
@@ -1207,22 +1340,6 @@
                 data-role="settings-terminal-scrollback"
               />
             </div>
-            <div class="settings-row hidden" data-role="settings-terminal-shell-row">
-              <span data-i18n="settings.runtime.shell">terminal shell</span>
-              <select data-role="settings-terminal-shell-kind">
-                <option value="cmd" data-i18n="settings.runtime.shell.cmd">Command Prompt</option>
-                <option value="powershell" data-i18n="settings.runtime.shell.powershell">
-                  PowerShell
-                </option>
-                <option value="wsl" data-i18n="settings.runtime.shell.wsl">WSL</option>
-              </select>
-            </div>
-            <div class="settings-row hidden" data-role="settings-terminal-wsl-distro-row">
-              <span data-i18n="settings.runtime.wsl_distro">WSL distro</span>
-              <select data-role="settings-terminal-wsl-distro">
-                <option value="" data-i18n="settings.runtime.wsl_default">default distro</option>
-              </select>
-            </div>
             <div class="settings-row">
               <span data-i18n="settings.appearance.copy_on_select">copy on select</span>
               <button
@@ -1235,6 +1352,26 @@
                   <span class="toggle-thumb"></span>
                 </span>
               </button>
+            </div>
+          </div>
+
+          <div class="settings-card settings-card--windows hidden" data-role="settings-windows-card">
+            <h3 data-i18n="settings.windows.title">windows</h3>
+            <div class="settings-row" data-role="settings-terminal-shell-row">
+              <span data-i18n="settings.runtime.shell">terminal shell</span>
+              <select data-role="settings-terminal-shell-kind">
+                <option value="cmd" data-i18n="settings.runtime.shell.cmd">CMD</option>
+                <option value="powershell" data-i18n="settings.runtime.shell.powershell">
+                  PowerShell
+                </option>
+                <option value="wsl" data-i18n="settings.runtime.shell.wsl">WSL</option>
+              </select>
+            </div>
+            <div class="settings-row hidden" data-role="settings-terminal-wsl-distro-row">
+              <span data-i18n="settings.runtime.wsl_distro">WSL distro</span>
+              <select data-role="settings-terminal-wsl-distro">
+                <option value="" data-i18n="settings.runtime.wsl_default">default distro</option>
+              </select>
             </div>
           </div>
 
@@ -1432,11 +1569,18 @@
           'settings.appearance.scrollback': 'スクロールバック',
           'settings.appearance.copy_on_select': '選択コピー',
           'settings.runtime.shell': 'ターミナル起動方式',
-          'settings.runtime.shell.cmd': 'Command Prompt',
+          'settings.runtime.shell.cmd': 'CMD',
           'settings.runtime.shell.powershell': 'PowerShell',
           'settings.runtime.shell.wsl': 'WSL',
           'settings.runtime.wsl_distro': 'WSLディストロ',
           'settings.runtime.wsl_default': '既定のディストロ',
+          'settings.windows.title': 'Windows',
+          'settings.theme.palette.light_sand': 'ライト: Sand',
+          'settings.theme.palette.light_sage': 'ライト: Sage',
+          'settings.theme.palette.light_sky': 'ライト: Sky',
+          'settings.theme.palette.dark_ink': 'ダーク: Ink',
+          'settings.theme.palette.dark_ocean': 'ダーク: Ocean',
+          'settings.theme.palette.dark_ember': 'ダーク: Ember',
           'settings.theme.dark': 'ダーク',
           'settings.theme.light': 'ライト',
           'settings.font.system_default': 'システム既定',
@@ -1530,11 +1674,18 @@
           'settings.appearance.scrollback': 'scrollback',
           'settings.appearance.copy_on_select': 'copy on select',
           'settings.runtime.shell': 'terminal shell',
-          'settings.runtime.shell.cmd': 'Command Prompt',
+          'settings.runtime.shell.cmd': 'CMD',
           'settings.runtime.shell.powershell': 'PowerShell',
           'settings.runtime.shell.wsl': 'WSL',
           'settings.runtime.wsl_distro': 'WSL distro',
           'settings.runtime.wsl_default': 'default distro',
+          'settings.windows.title': 'Windows',
+          'settings.theme.palette.light_sand': 'Light: Sand',
+          'settings.theme.palette.light_sage': 'Light: Sage',
+          'settings.theme.palette.light_sky': 'Light: Sky',
+          'settings.theme.palette.dark_ink': 'Dark: Ink',
+          'settings.theme.palette.dark_ocean': 'Dark: Ocean',
+          'settings.theme.palette.dark_ember': 'Dark: Ember',
           'settings.theme.dark': 'dark',
           'settings.theme.light': 'light',
           'settings.font.system_default': 'system default',
@@ -1616,6 +1767,7 @@
       const chatToolbar = document.querySelector('[data-role="chat-toolbar"]');
       const runBoard = document.querySelector('[data-role="run-board"]');
       const settingsBoard = document.querySelector('[data-role="settings-board"]');
+      const settingsWindowsCard = document.querySelector('[data-role="settings-windows-card"]');
       const terminalBoard = document.querySelector('[data-role="terminal-board"]');
       const terminalContainer = document.querySelector('[data-role="terminal-container"]');
       const terminalWatcher = document.querySelector('[data-role="terminal-watcher"]');
@@ -1660,7 +1812,6 @@
       );
       const terminalFontSize = document.querySelector('[data-role="settings-terminal-font-size"]');
       const terminalScrollback = document.querySelector('[data-role="settings-terminal-scrollback"]');
-      const terminalShellRow = document.querySelector('[data-role="settings-terminal-shell-row"]');
       const terminalShellKind = document.querySelector('[data-role="settings-terminal-shell-kind"]');
       const terminalWslDistroRow = document.querySelector(
         '[data-role="settings-terminal-wsl-distro-row"]'
@@ -1685,6 +1836,9 @@
       let llmEnabled = false;
       let terminalCopyOnSelect = true;
       let terminalWatcherEnabled = false;
+      let watcherReadyNotified = false;
+      let wslDistrosLoaded = false;
+      let wslDistrosLoading = false;
       const viewParam = new URLSearchParams(window.location.search).get('view');
       const isTerminalView = viewParam === 'terminal';
       const isWatcherView = viewParam === 'watcher';
@@ -1707,6 +1861,7 @@
           "ui-monospace, 'Cascadia Mono', Consolas, 'SFMono-Regular', Menlo, Monaco, 'Liberation Mono', 'DejaVu Sans Mono', monospace",
         fontSize: 18,
         theme: 'dark',
+        themePalette: 'dark-ink',
         scrollbackLines: 5000,
         copyOnSelect: true,
       };
@@ -1727,6 +1882,19 @@
           controlFlushMaxMs: 16,
         },
       };
+
+      const themePaletteOptions = Object.freeze({
+        light: [
+          { value: 'light-sand', i18n: 'settings.theme.palette.light_sand' },
+          { value: 'light-sage', i18n: 'settings.theme.palette.light_sage' },
+          { value: 'light-sky', i18n: 'settings.theme.palette.light_sky' },
+        ],
+        dark: [
+          { value: 'dark-ink', i18n: 'settings.theme.palette.dark_ink' },
+          { value: 'dark-ocean', i18n: 'settings.theme.palette.dark_ocean' },
+          { value: 'dark-ember', i18n: 'settings.theme.palette.dark_ember' },
+        ],
+      });
 
       function stripAnsiText(text) {
         if (!text) return '';
@@ -2556,7 +2724,19 @@
         terminal_watcher_enabled: false,
         terminal_font_family: terminalSettingsDefaults.fontFamily,
         terminal_font_size: terminalSettingsDefaults.fontSize,
-        terminal_theme: terminalSettingsDefaults.theme,
+        terminal_theme:
+          document.documentElement.dataset.theme === 'light'
+            ? 'light'
+            : terminalSettingsDefaults.theme,
+        terminal_theme_palette:
+          (() => {
+            const value = String(document.documentElement.dataset.themePalette || '')
+              .trim()
+              .toLowerCase();
+            return value.startsWith('light-') || value.startsWith('dark-')
+              ? value
+              : terminalSettingsDefaults.themePalette;
+          })(),
         terminal_scrollback_lines: terminalSettingsDefaults.scrollbackLines,
         terminal_copy_on_select: terminalSettingsDefaults.copyOnSelect,
         terminal_shell_kind: 'cmd',
@@ -2778,6 +2958,11 @@
             modeSwitch.classList.add('hidden');
           }
           applyTerminalWatcherVisibility();
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              notifyWatcherWindowReady();
+            });
+          });
           return;
         }
         if (view === 'settings') {
@@ -2790,6 +2975,9 @@
           settingsBoard.classList.remove('hidden');
           if (modeSwitch) {
             modeSwitch.classList.add('hidden');
+          }
+          if (isWindowsRuntime) {
+            loadWslDistros();
           }
           return;
         }
@@ -2882,28 +3070,58 @@
         }
       }
 
-      function terminalThemePalette(theme) {
-        if (theme === 'light') {
-          return {
+      function terminalThemePalette(theme, palette) {
+        const normalizedMode = normalizeThemeMode(theme);
+        const key = normalizeThemePalette(normalizedMode, palette);
+        const palettes = {
+          'light-sand': {
             background: '#f1ede6',
             foreground: '#1f2429',
             cursor: '#1f7a8c',
             selection: 'rgba(31, 122, 140, 0.2)',
-          };
-        }
-        return {
-          background: '#0d1117',
-          foreground: '#e6edf3',
-          cursor: '#f6d28b',
-          selection: 'rgba(246, 210, 139, 0.3)',
+          },
+          'light-sage': {
+            background: '#eef4ec',
+            foreground: '#1f2b22',
+            cursor: '#2c7a4f',
+            selection: 'rgba(44, 122, 79, 0.2)',
+          },
+          'light-sky': {
+            background: '#edf3f9',
+            foreground: '#1d2838',
+            cursor: '#2e5f9e',
+            selection: 'rgba(46, 95, 158, 0.22)',
+          },
+          'dark-ink': {
+            background: '#0d1117',
+            foreground: '#e6edf3',
+            cursor: '#f6d28b',
+            selection: 'rgba(246, 210, 139, 0.3)',
+          },
+          'dark-ocean': {
+            background: '#09131c',
+            foreground: '#dcecf7',
+            cursor: '#5cb8df',
+            selection: 'rgba(92, 184, 223, 0.28)',
+          },
+          'dark-ember': {
+            background: '#161110',
+            foreground: '#f0e4d6',
+            cursor: '#d89a68',
+            selection: 'rgba(216, 154, 104, 0.3)',
+          },
         };
+        return palettes[key] || palettes[themePaletteDefault(normalizedMode)];
       }
 
       function applyTerminalSettings() {
         if (!terminal) return;
         terminal.options.fontFamily = settingsState.terminal_font_family;
         terminal.options.fontSize = settingsState.terminal_font_size;
-        terminal.options.theme = terminalThemePalette(settingsState.terminal_theme);
+        terminal.options.theme = terminalThemePalette(
+          settingsState.terminal_theme,
+          settingsState.terminal_theme_palette
+        );
         terminal.options.scrollback = normalizeScrollback(settingsState.terminal_scrollback_lines);
         terminalCopyOnSelect = settingsState.terminal_copy_on_select;
       }
@@ -3626,7 +3844,10 @@
         terminal = new window.Terminal({
           fontFamily: settingsState.terminal_font_family,
           fontSize: settingsState.terminal_font_size,
-          theme: terminalThemePalette(settingsState.terminal_theme),
+          theme: terminalThemePalette(
+            settingsState.terminal_theme,
+            settingsState.terminal_theme_palette
+          ),
           scrollback: settingsState.terminal_scrollback_lines,
           allowProposedApi: true,
         });
@@ -4009,6 +4230,59 @@
         terminalFontStatus.textContent = message || '';
       }
 
+      function normalizeThemeMode(raw) {
+        return raw === 'light' ? 'light' : 'dark';
+      }
+
+      function themePaletteDefault(mode) {
+        return mode === 'light' ? 'light-sand' : 'dark-ink';
+      }
+
+      function normalizeThemePalette(mode, raw) {
+        const normalizedMode = normalizeThemeMode(mode);
+        const value = String(raw || '').trim().toLowerCase();
+        const candidates = themePaletteOptions[normalizedMode] || [];
+        const matched = candidates.find((item) => item.value === value);
+        return matched ? matched.value : themePaletteDefault(normalizedMode);
+      }
+
+      function normalizeThemePreset(raw) {
+        const value = String(raw || '').trim().toLowerCase();
+        if (value.startsWith('light-') || value.startsWith('dark-')) {
+          return value;
+        }
+        return '';
+      }
+
+      function themePresetToPair(preset, fallbackMode) {
+        const normalizedPreset = normalizeThemePreset(preset);
+        const mode = normalizedPreset.startsWith('light-')
+          ? 'light'
+          : normalizedPreset.startsWith('dark-')
+          ? 'dark'
+          : normalizeThemeMode(fallbackMode);
+        const palette = normalizeThemePalette(mode, normalizedPreset || themePaletteDefault(mode));
+        return { mode, palette };
+      }
+
+      function resolveThemePreset(mode, palette) {
+        const normalizedMode = normalizeThemeMode(mode);
+        return normalizeThemePalette(normalizedMode, palette);
+      }
+
+      function readStoredThemePreference() {
+        try {
+          const rawMode = localStorage.getItem('nagomi_theme_mode');
+          const rawPalette = localStorage.getItem('nagomi_theme_palette');
+          if (!rawMode && !rawPalette) return null;
+          const mode = normalizeThemeMode(rawMode || 'dark');
+          const palette = normalizeThemePalette(mode, rawPalette || themePaletteDefault(mode));
+          return { mode, palette };
+        } catch {
+          return null;
+        }
+      }
+
       function normalizeTerminalShellKind(raw) {
         const value = String(raw || '').trim().toLowerCase();
         if (value === 'powershell' || value === 'wsl') return value;
@@ -4016,8 +4290,8 @@
       }
 
       function applyTerminalRuntimeVisibility() {
-        if (terminalShellRow) {
-          terminalShellRow.classList.toggle('hidden', !isWindowsRuntime);
+        if (settingsWindowsCard) {
+          settingsWindowsCard.classList.toggle('hidden', !isWindowsRuntime);
         }
         const useWsl =
           isWindowsRuntime && normalizeTerminalShellKind(settingsState.terminal_shell_kind) === 'wsl';
@@ -4041,6 +4315,8 @@
 
       async function loadWslDistros() {
         if (!isWindowsRuntime || !terminalWslDistro) return;
+        if (wslDistrosLoaded || wslDistrosLoading) return;
+        wslDistrosLoading = true;
         try {
           const distros = await invokeWithSession('list_wsl_distros');
           const current = String(settingsState.terminal_wsl_distro || '').trim();
@@ -4065,9 +4341,12 @@
           });
           ensureWslDistroOption(current);
           terminalWslDistro.value = current;
+          wslDistrosLoaded = true;
         } catch {
           ensureWslDistroOption(settingsState.terminal_wsl_distro);
           terminalWslDistro.value = settingsState.terminal_wsl_distro || '';
+        } finally {
+          wslDistrosLoading = false;
         }
       }
 
@@ -4169,6 +4448,15 @@
       function applySettings(next) {
         if (!next) return;
         Object.assign(settingsState, next);
+        settingsState.terminal_theme = normalizeThemeMode(settingsState.terminal_theme);
+        settingsState.terminal_theme_palette = normalizeThemePalette(
+          settingsState.terminal_theme,
+          settingsState.terminal_theme_palette
+        );
+        const themePreset = resolveThemePreset(
+          settingsState.terminal_theme,
+          settingsState.terminal_theme_palette
+        );
         settingsState.terminal_scrollback_lines = normalizeScrollback(
           settingsState.terminal_scrollback_lines
         );
@@ -4189,7 +4477,7 @@
         if (silenceInput) silenceInput.value = settingsState.silence_timeout_ms;
         if (llmTool) llmTool.value = settingsState.llm_tool;
         if (characterUploaded) characterUploaded.textContent = settingsState.character_id;
-        if (terminalTheme) terminalTheme.value = settingsState.terminal_theme;
+        if (terminalTheme) terminalTheme.value = themePreset;
         if (terminalFont) {
           ensureFontOption(settingsState.terminal_font_family);
           terminalFont.value = settingsState.terminal_font_family;
@@ -4210,17 +4498,29 @@
         if (settingsState.log_retention_lines && retention) {
           retention.value = settingsState.log_retention_lines;
         }
-        applySettingsTheme(settingsState.terminal_theme);
+        applySettingsTheme(settingsState.terminal_theme, settingsState.terminal_theme_palette);
         applyTerminalRuntimeVisibility();
         applyTerminalWatcherVisibility();
+        applyTerminalSettings();
         updateTerminalDebugBadge();
       }
 
-      function applySettingsTheme(theme) {
-        const normalized = theme === 'dark' ? 'dark' : 'light';
-        document.documentElement.dataset.theme = normalized;
+      function applySettingsTheme(theme, palette) {
+        const normalizedMode = normalizeThemeMode(theme);
+        const normalizedPalette = normalizeThemePalette(normalizedMode, palette);
+        settingsState.terminal_theme = normalizedMode;
+        settingsState.terminal_theme_palette = normalizedPalette;
+        try {
+          localStorage.setItem('nagomi_theme_mode', normalizedMode);
+          localStorage.setItem('nagomi_theme_palette', normalizedPalette);
+        } catch {
+          // no-op
+        }
+        document.documentElement.dataset.theme = normalizedMode;
+        document.documentElement.dataset.themePalette = normalizedPalette;
         if (settingsBoard) {
-          settingsBoard.dataset.theme = normalized;
+          settingsBoard.dataset.theme = normalizedMode;
+          settingsBoard.dataset.themePalette = normalizedPalette;
         }
       }
 
@@ -4246,6 +4546,16 @@
         });
       }
 
+      async function notifyWatcherWindowReady() {
+        if (!isWatcherView || watcherReadyNotified) return;
+        try {
+          await invokeWithSession('watcher_window_ready');
+          watcherReadyNotified = true;
+        } catch {
+          // retry on next requestAnimationFrame
+        }
+      }
+
       async function loadSettingsFromBackend() {
         try {
           return await invokeWithSession('load_settings');
@@ -4269,10 +4579,13 @@
       }
 
       async function saveSettingsToBackend() {
-        try {
-          await invokeWithSession('save_settings', { settings: settingsState });
-        } catch {
-          return;
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          try {
+            await invokeWithSession('save_settings', { settings: settingsState });
+            return;
+          } catch {
+            await new Promise((resolve) => setTimeout(resolve, 120));
+          }
         }
       }
 
@@ -4394,8 +4707,10 @@
 
       if (terminalTheme) {
         terminalTheme.addEventListener('change', () => {
-          settingsState.terminal_theme = terminalTheme.value;
-          applySettingsTheme(settingsState.terminal_theme);
+          const themePair = themePresetToPair(terminalTheme.value, settingsState.terminal_theme);
+          settingsState.terminal_theme = themePair.mode;
+          settingsState.terminal_theme_palette = themePair.palette;
+          applySettingsTheme(settingsState.terminal_theme, settingsState.terminal_theme_palette);
           applyTerminalSettings();
           saveSettingsToBackend();
         });
@@ -4438,6 +4753,9 @@
         terminalShellKind.addEventListener('change', () => {
           settingsState.terminal_shell_kind = normalizeTerminalShellKind(terminalShellKind.value);
           applyTerminalRuntimeVisibility();
+          if (settingsState.terminal_shell_kind === 'wsl') {
+            loadWslDistros();
+          }
           if (settingsState.terminal_shell_kind !== 'wsl') {
             settingsState.terminal_wsl_distro = '';
             if (terminalWslDistro) terminalWslDistro.value = '';
@@ -4485,17 +4803,18 @@
       const initialView = new URLSearchParams(window.location.search).get('view') || 'chat';
       bootstrapIpcSession(6);
       loadSettingsFromBackend().then((loaded) => {
-        if (loaded) {
-          applySettings(loaded);
-        } else {
-          applySettings(settingsState);
+        const next = loaded ? { ...loaded } : { ...settingsState };
+        if (!loaded) {
+          const storedTheme = readStoredThemePreference();
+          if (storedTheme) {
+            next.terminal_theme = storedTheme.mode;
+            next.terminal_theme_palette = storedTheme.palette;
+          }
         }
-        if (isWindowsRuntime) {
-          loadWslDistros();
-        }
+        applySettings(next);
+        applyTerminalDebugUiVisible(loadTerminalDebugUiVisible());
+        applyView(initialView);
       });
-      applyTerminalDebugUiVisible(loadTerminalDebugUiVisible());
-      applyView(initialView);
     </script>
   </body>
 </html>

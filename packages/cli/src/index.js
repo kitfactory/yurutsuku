@@ -463,9 +463,10 @@ async function waitForHealth(retries) {
 }
 
 function spawnOrchestrator(orchestratorPath) {
-  const child = spawn(orchestratorPath, [], {
+  const child = spawn(orchestratorPath, ["--start-hidden", "--exit-on-last-terminal"], {
     detached: true,
     stdio: "ignore",
+    windowsHide: true,
   });
   child.unref();
 }

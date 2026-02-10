@@ -84,9 +84,11 @@
 7.1.2 Given: フォント設定を行う, When: 設定画面を表示する, Then: フォントはリスト選択式で表示する  
 7.1.3 Given: OS のローカルフォント一覧を取得できる, When: ユーザーが読み込み操作を行う, Then: OS フォントを選択肢に追加する（未対応の場合は既定リストのみ）  
 7.1.4 Given: 設定が変更される, When: 設定を保存する, Then: 変更内容を全ウィンドウに通知し、起動済みターミナルの表示にも即時反映する  
-7.1.5 Given: OS が Windows, When: 設定画面を表示する, Then: ターミナル起動方式として `Command Prompt` / `PowerShell` / `WSL` を選択できる  
+7.1.5 Given: OS が Windows, When: 設定画面を表示する, Then: ターミナル起動方式として `CMD` / `PowerShell` / `WSL` を選択できる  
 7.1.6 Given: 起動方式が `WSL`, When: 設定画面を表示する, Then: インストール済みディストロ一覧（`wsl -l -q`）から対象ディストロを選択できる（未選択は既定ディストロを使う）  
 7.1.7 Given: OS が Windows 以外, When: 設定画面を表示する, Then: Windows 専用の起動方式設定は表示しない  
+7.1.8 Given: OS が Windows, When: 設定画面を表示する, Then: 起動方式設定は `外観` ではなく `Windows` カテゴリで表示する  
+7.1.9 Given: 設定画面でテーマを選択する, When: 外観を変更する, Then: **1つのテーマ選択UI**から 6 種類（`light-sand` / `light-sage` / `light-sky` / `dark-ink` / `dark-ocean` / `dark-ember`）を選択できる（配色パレットの別ドロップダウンは表示しない）  
 7.2 Given: 通知設定を編集する, When: 設定を変更する, Then: OS トースト通知の ON/OFF と音声通知の ON/OFF を切り替えられる  
 7.3 Given: **AIターミナル状態判定（AI判定）**を編集する, When: ツールを選択する, Then: codex/claudecode/opencode のいずれかを選べる（内部識別子は `codex` / `claude` / `opencode`）  
 7.3.1 Given: AI Coding Agent を選ぶ, When: 設定を保存する, Then: **ターミナルでの起動コマンド判別**に使う  
@@ -100,7 +102,7 @@
 7.5 Given: AI Coding Agent セクションを表示する, When: 設定画面を開く, Then: 「使用ツール」「AIターミナル状態判定」のみを表示する（連携ボタンは表示しない）  
 7.6 Given: AI Coding Agent を使う, When: 設定を保存する, Then: 使用する AI ツールを 1 つ選択できる（codex/claudecode/opencode）  
 7.7 Given: AI Coding Agent を選択する, When: 設定画面を表示する, Then: 「選択したAIツールは起動コマンド判別とAI判定の対象になる」旨を説明する  
-7.9 Given: 設定画面を表示する, When: テーマが dark/light のいずれか, Then: 設定画面の背景/カード/文字色をテーマに合わせて切り替える  
+7.9 Given: 設定画面を表示する, When: 6種類のテーマのいずれかを選ぶ, Then: 設定画面の背景/カード/文字色を選択テーマに合わせて切り替える  
 7.9.1 Given: AI Coding Agent の設定を表示する, When: 重要度を示す, Then: 設定カードを軽く強調して視認性を上げる  
 
 ## 8. 環境変数/.env
@@ -156,7 +158,7 @@ nagomi terminal-send --session-id codex-test --text "codex `"ping`"`r`n"
 10.5 Given: Windows 環境で `worker_backend = windows` または未指定, When: Worker を起動する, Then: Orchestrator は Windows Worker を起動する  
 10.6 Given: WSL で Worker を起動する, When: Linux 側コマンドを指定する, Then: `wsl.exe -d <distro> -- <command>` 形式で実行する  
 10.7 Given: WSL ターミナルを対話的に扱う, When: 端末入力/制御を行う, Then: ConPTY を用いて `wsl.exe` を接続する  
-10.7.1 Given: Windows で terminal session を開始する, When: 起動方式が `Command Prompt`, Then: 起動コマンドは `cmd.exe` を使う  
+10.7.1 Given: Windows で terminal session を開始する, When: 起動方式が `CMD`, Then: 起動コマンドは `cmd.exe` を使う  
 10.7.2 Given: Windows で terminal session を開始する, When: 起動方式が `PowerShell`, Then: 起動コマンドは `powershell.exe` を使う  
 10.7.3 Given: Windows で terminal session を開始する, When: 起動方式が `WSL` かつディストロ未指定, Then: 起動コマンドは `wsl.exe` を使う  
 10.7.4 Given: Windows で terminal session を開始する, When: 起動方式が `WSL` かつディストロ指定あり, Then: 起動コマンドは `wsl.exe -d <distro>` を使う  
