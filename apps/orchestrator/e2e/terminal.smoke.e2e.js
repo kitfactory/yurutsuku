@@ -4,6 +4,7 @@ const { spawn, spawnSync } = require("node:child_process");
 const http = require("node:http");
 const { Builder, By, Capabilities, until } = require("selenium-webdriver");
 const { ensureDriversOnPath } = require("./driver_paths");
+const { openAndSwitchToTerminalWindow } = require("./terminal_window_helper");
 
 const repoRoot = path.join(__dirname, "..", "..", "..");
 
@@ -89,7 +90,11 @@ async function main() {
     await client.manage().setTimeouts({ script: 40000, implicit: 0, pageLoad: 30000 });
     await client.wait(until.elementLocated(By.css("[data-role='chat-main']")), 30000);
 
-    await client.executeScript("applyView('terminal'); if (typeof initTerminal==='function') initTerminal();");
+    const terminalWindow = await openAndSwitchToTerminalWindow(
+      client,
+      `e2e-smoke-${Date.now()}`
+    );
+    console.log("[e2e] terminal window", terminalWindow);
     await client.wait(until.elementLocated(By.css("#terminal-container")), 10000);
 
     const ready = await client.executeAsyncScript(function (done) {

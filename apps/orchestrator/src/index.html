@@ -3680,6 +3680,19 @@
         return Math.max(1, Math.floor(lines));
       }
 
+      function normalizeTerminalFontFamily(value) {
+        const text = String(value || '').trim();
+        if (!text) return terminalSettingsDefaults.fontFamily;
+        return text;
+      }
+
+      function normalizeTerminalFontSize(value) {
+        const size = Number(value);
+        if (!Number.isFinite(size)) return terminalSettingsDefaults.fontSize;
+        const rounded = Math.floor(size);
+        return Math.min(24, Math.max(10, rounded));
+      }
+
       function getInvoke() {
         if (!window.__TAURI__) return null;
         return window.__TAURI__.core && window.__TAURI__.core.invoke
@@ -5019,10 +5032,6 @@
         terminal.focus();
         applyTerminalSettings();
         setupTerminalEvents();
-        registerTerminalSession().finally(() => {
-          startTerminalSession();
-          fitAndNotifyTerminalResize({ force: true });
-        });
 
         if (resizeObserver) {
           resizeObserver.disconnect();
@@ -5259,6 +5268,10 @@
             }
           });
         }
+        registerTerminalSession().finally(() => {
+          startTerminalSession();
+          fitAndNotifyTerminalResize({ force: true });
+        });
       }
 
       function appendLine(text, kind) {
@@ -5673,6 +5686,12 @@
       function applySettings(next) {
         if (!next) return;
         Object.assign(settingsState, next);
+        settingsState.terminal_font_family = normalizeTerminalFontFamily(
+          settingsState.terminal_font_family
+        );
+        settingsState.terminal_font_size = normalizeTerminalFontSize(
+          settingsState.terminal_font_size
+        );
         settingsState.terminal_theme = normalizeThemeMode(settingsState.terminal_theme);
         settingsState.terminal_theme_palette = normalizeThemePalette(
           settingsState.terminal_theme,
@@ -5973,8 +5992,7 @@
 
       if (terminalFont) {
         terminalFont.addEventListener('change', () => {
-          settingsState.terminal_font_family =
-            terminalFont.value || terminalSettingsDefaults.fontFamily;
+          settingsState.terminal_font_family = normalizeTerminalFontFamily(terminalFont.value);
           applyTerminalSettings();
           saveSettingsToBackend();
         });
@@ -5988,8 +6006,8 @@
 
       if (terminalFontSize) {
         terminalFontSize.addEventListener('change', () => {
-          settingsState.terminal_font_size =
-            Number(terminalFontSize.value) || terminalSettingsDefaults.fontSize;
+          settingsState.terminal_font_size = normalizeTerminalFontSize(terminalFontSize.value);
+          terminalFontSize.value = settingsState.terminal_font_size;
           applyTerminalSettings();
           saveSettingsToBackend();
         });

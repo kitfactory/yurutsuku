@@ -4,6 +4,7 @@ const { spawn, spawnSync } = require("node:child_process");
 const http = require("node:http");
 const { Builder, By, Capabilities, until } = require("selenium-webdriver");
 const { ensureDriversOnPath } = require("./driver_paths");
+const { openAndSwitchToTerminalWindow } = require("./terminal_window_helper");
 
 const repoRoot = path.join(__dirname, "..", "..", "..");
 process.env.NAGOMI_ENABLE_TEST_ENDPOINTS =
@@ -208,6 +209,15 @@ async function main() {
     if (!hasInvoke) {
       throw new Error("invoke not available");
     }
+    const chatLocation = await client.executeScript("return window.location.href;");
+    console.log("[e2e] chat window", { hasInvoke, chatLocation });
+
+    const terminalWindow = await openAndSwitchToTerminalWindow(
+      client,
+      `e2e-terminal-${Date.now()}`
+    );
+    await client.wait(until.elementLocated(By.css("#terminal-container")), 10000);
+
     const ipcSessionId = await invokeTauri(client, "ipc_session_open", {
       clientEpoch: Date.now(),
     }).then((snapshot) => (snapshot && snapshot.sessionId ? snapshot.sessionId : null));
@@ -219,10 +229,6 @@ async function main() {
       ipcSessionId
     );
     await client.executeScript("window.__e2eInvokeErrors = [];");
-    const chatLocation = await client.executeScript("return window.location.href;");
-    console.log("[e2e] chat window", { hasInvoke, chatLocation, ipcSessionId });
-    await client.executeScript("applyView('terminal');");
-    await client.wait(until.elementLocated(By.css("#terminal-container")), 10000);
     const hasTerminalLib = await client.executeScript("return Boolean(window.Terminal);");
     if (!hasTerminalLib) {
       const location = await client.executeScript("return window.location.href;");
@@ -233,7 +239,12 @@ async function main() {
     const terminalInvoke = await client.executeScript(
       "return Boolean(window.__TAURI__ && (window.__TAURI__.core || window.__TAURI__.invoke));"
     );
-    console.log("[e2e] terminal window", { terminalLocation, terminalInvoke });
+    console.log("[e2e] terminal window", {
+      terminalWindow,
+      terminalLocation,
+      terminalInvoke,
+      ipcSessionId,
+    });
     const hasTestHook = await client.executeScript(
       "return Boolean(window.nagomiTest && window.nagomiTest.getObservedState);"
     );

@@ -43,8 +43,14 @@ node apps/orchestrator/e2e/codex.hook.e2e.js
 node apps/orchestrator/e2e/terminal.tint.e2e.js
 ```
 
+Terminal 系 E2E は `applyView('terminal')` で Chat を擬似切替しない。  
+実装は `GET /open-terminal` で **実際の Terminal window（`view=terminal&session_id=...`）** を開き、WebDriver をそのウィンドウへ切り替えて検証する。  
+
+`tauri-driver`（WebView2）では `--start-hidden` で初期ウィンドウが 0 の場合、セッション作成時に  
+`SessionNotCreatedError: DevToolsActivePort file doesn't exist` になる環境があるため、E2E は初期ウィンドウを確保してから Terminal window を開く手順を採用する。
+
 `terminal.tint.e2e.js` は前提不足（例: `msedge` 不在、driver/browser の major 不一致、既存プロセス残存）時に skip を返す。  
-CI などで必ず失敗扱いにしたい場合は `NAGOMI_E2E_STRICT=1` を指定する。
+CI などで必ず失敗扱いにしたい場合は `NAGOMI_E2E_STRICT=1` を指定する。  
 
 ```powershell
 $env:NAGOMI_E2E_STRICT = "1"

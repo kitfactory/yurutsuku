@@ -5,6 +5,7 @@ const http = require("node:http");
 const { spawn, spawnSync } = require("node:child_process");
 const { Builder, By, Capabilities, until } = require("selenium-webdriver");
 const { ensureDriversOnPath } = require("./driver_paths");
+const { openAndSwitchToTerminalWindow } = require("./terminal_window_helper");
 
 const repoRoot = path.join(__dirname, "..", "..", "..");
 
@@ -238,15 +239,31 @@ async function main() {
     await client.manage().setTimeouts({ script: 20000, implicit: 0, pageLoad: 30000 });
     await client.wait(until.elementLocated(By.css("[data-role='chat-main']")), 30000);
 
-    const ipcSessionId = await waitFor(async () => {
+    const terminalWindow = await openAndSwitchToTerminalWindow(
+      client,
+      `e2e-codex-${Date.now()}`
+    );
+    console.log("[e2e] terminal window", terminalWindow);
+    await client.wait(until.elementLocated(By.css("#terminal-container")), 10000);
+
+    let ipcSessionId = await waitFor(async () => {
       const sessionId = await client.executeScript("return window.__ipcSessionId || null;");
       return sessionId || null;
     }, 10000).then(async () => {
       return await client.executeScript("return window.__ipcSessionId || null;");
     });
     if (!ipcSessionId) {
+      ipcSessionId = await invokeTauri(client, "ipc_session_open", {
+        clientEpoch: Date.now(),
+      }).then((snapshot) => (snapshot && snapshot.sessionId ? snapshot.sessionId : null));
+    }
+    if (!ipcSessionId) {
       throw new Error("ipc session id not ready");
     }
+    await client.executeScript(
+      "window.__ipcSessionId = arguments[0]; if (typeof ipcSessionId !== 'undefined') { ipcSessionId = arguments[0]; }",
+      ipcSessionId
+    );
 
     const hookListenResult = await client.executeAsyncScript(function (done) {
       const listen =
@@ -310,9 +327,6 @@ async function main() {
       const updatedSettings = { ...previousSettings, llm_tool: "codex" };
       await invokeTauri(client, "save_settings", { ipcSessionId, settings: updatedSettings });
     }
-
-    await client.executeScript("applyView('terminal');");
-    await client.wait(until.elementLocated(By.css("#terminal-container")), 10000);
 
     const hasTerminalLib = await client.executeScript("return Boolean(window.Terminal);");
     if (!hasTerminalLib) {

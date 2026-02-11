@@ -5,6 +5,7 @@ const { spawn, spawnSync } = require("node:child_process");
 const http = require("node:http");
 const { Builder, By, Capabilities, until } = require("selenium-webdriver");
 const { ensureDriversOnPath } = require("./driver_paths");
+const { openAndSwitchToTerminalWindow } = require("./terminal_window_helper");
 
 const repoRoot = path.join(__dirname, "..", "..", "..");
 process.env.NAGOMI_ENABLE_TEST_ENDPOINTS =
@@ -317,6 +318,10 @@ async function main() {
       return Boolean(hasInvoke);
     }, 10000);
 
+    const terminalWindow = await openAndSwitchToTerminalWindow(client, `e2e-tint-${Date.now()}`);
+    console.log("[e2e] terminal window", terminalWindow);
+    await client.wait(until.elementLocated(By.css("#terminal-container")), 10000);
+
     let ipcSessionId = null;
     await waitFor(async () => {
       ipcSessionId = await client.executeScript("return window.__ipcSessionId || null;");
@@ -354,10 +359,6 @@ async function main() {
       },
       updatedSettings
     );
-
-    await client.executeScript("applyView('terminal');");
-    await client.wait(until.elementLocated(By.css("#terminal-container")), 10000);
-    await client.executeScript("if (typeof initTerminal === 'function') initTerminal();");
 
     await waitFor(async () => {
       const initialized = await client
@@ -409,11 +410,12 @@ async function main() {
     await waitForNeutralState(client, 7000);
 
     // codex にプロンプト入力で running / Enter prompt input to start running.
-    await sendInput(client, "ping\r");
+    const runningCommand = process.platform === "win32" ? "ping 127.0.0.1 -n 4\r" : "sleep 2\n";
+    await sendInput(client, runningCommand);
     await waitFor(async () => {
       const classes = await getShellClasses(client);
       return classes.includes("state-running");
-    }, 3000);
+    }, 8000);
 
     await client.executeScript(
       function (payload) {
