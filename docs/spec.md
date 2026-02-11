@@ -55,7 +55,7 @@
 2.24.3 Given: 観測表示を行う, When: 全体状況で表情/モーションを選ぶ, Then: `need_input` は呼びかけ、`running` は作業中、`failure` は困った、`idle/success` は眠い表情として表示する  
 2.24.4 Given: 観測表示を行う, When: 3Dキャラ（VRM）が設定済み, Then: 3D表示を優先する（未設定なら2D画像を表示する）  
 2.25 Given: 観測状態が変化する, When: 状態を適用する, Then: terminal の背景に対して半透明でトーンの揃った tint を重ねて状態を区別する  
-2.25.1 Given: 状態を表示する, When: 表示色を決める, Then: **色は以下で固定**する（黒=idle/success、青=running、赤=need_input/failure）  
+2.25.1 Given: 状態を表示する, When: 表示色を決める, Then: **色は以下で固定**する（黒=idle/success、青=running、オレンジ=need_input、赤=failure）  
 2.25.2 Given: 画面に文言を表示する, When: UI を描画する, Then: 表示文言はリソース管理し **日本語/英語** を用意する  
 2.26 Given: プロセスが終了する, When: exit_code を受信する, Then: 即時に `success`（exit_code=0）または `fail`（exit_code!=0）として確定する  
 2.27 Given: プロセスが生存している, When: 観測を行う, Then: 通常は `running` を維持し、**終了候補イベント**（出力無更新 30s / hook completed|error|need_input）を受けたときのみ Judge を走らせて `success/failure/need_input` に遷移する  
@@ -180,6 +180,9 @@ nagomi terminal-send --session-id codex-test --text "codex `"ping`"`r`n"
 10.8 Given: Worker の起動に失敗する, When: 再起動を試みる, Then: 再接続手段を提示しユーザーは再試行できる  
 10.9 Given: Windows で Terminal session を開始する, When: PTY を起動する, Then: 環境変数は「通常の cmd/PowerShell と同等」を目指して同期する（現在の環境を優先しつつ、System/User の環境変数を不足分だけ補完し、PATH は不足分だけ後ろに追加する）  
 10.10 Given: OS が Windows, When: Orchestrator/Worker/PTY を起動する, Then: **余分なコンソールウィンドウを表示せず**、ユーザーには Terminal（+ tray）だけが見える状態を保つ  
+10.11 Given: Windows で `nagomi shortcut` が生成した `.lnk` を実行する, When: デスクトップ/スタートメニューから起動する, Then: ランチャー/コンソールの余分なウィンドウを表示せず Terminal を起動する  
+10.11.1 Given: ショートカット生成時の既定ターゲットが Node.js である, When: `.lnk` の実行ターゲットを決定する, Then: `nodew.exe` を優先し、未検出時は `wscript.exe + *.vbs` の非表示ランチャーを使い、最終フォールバックのみ `node.exe` を使う  
+10.11.2 Given: `nagomi shortcut --target <path>` を指定する, When: `.lnk` を生成する, Then: 実行ターゲットは指定値をそのまま使う（自動置換しない）  
 
 ## 11. 外部ツールフック（観測/完了検知）
 11.1 Given: 外部ツールのフック通知を受け取る, When: 正規化する, Then: `hook_event` を生成する（`source`, `kind`, `ts_ms`, `source_session_id?`, `raw?`）  
@@ -303,19 +306,22 @@ export const NagomiNotify = async ({ $, project, directory }) => {
 12.22 Given: 最小テスト観点を定める, When: P0 の壊れにくさを確認する, Then: PTY 終了（正常/異常/強制 kill/WSL 再起動/SSH 切断）/コマンド終了（exit code 0/非0）/入力待ち遷移/誤検知耐性/復帰の 5 点を確認する  
 12.23 Given: ターミナルを起動する, When: 初期表示する, Then: 状態は `idle`（黒）として扱う  
 12.24 Given: codex を起動する, When: `codex` コマンドだけを入力する, Then: 状態は **変化させない**（idle/success のまま）  
+12.24.1 Given: codex 起動入力の取りこぼしが発生する, When: codex 出力 marker（例: `for shortcuts` / `100% context left`）を検出する, Then: agent セッションを `running` として補助開始する  
 12.25 Given: codex に作業プロンプトを入力する, When: 処理が開始される, Then: 状態は `running`（青）になる  
 12.26 Given: codex の処理が完了する, When: 完了を検知する, Then: 状態は `success`（黒）を **維持**する  
-12.27 Given: codex が入力を要求する, When: input/permission/request を検知する, Then: 状態は `need_input`（赤）になる  
+12.27 Given: codex が入力を要求する, When: input/permission/request を検知する, Then: 状態は `need_input`（オレンジ）になる  
+12.27.1 Given: codex フックが未到達で `running` が継続する, When: codex 出力に prompt marker（例: `for shortcuts`）を検出し短時間（約2.2s）安定する, Then: `need_input`（オレンジ）へ補助遷移する  
 12.28 Given: codex を `/quit` で抜ける, When: セッション終了を検知する, Then: 状態は `idle`（黒）になる  
 12.29 Given: 通常コマンドを実行する, When: コマンド入力が確定する, Then: 状態は `running`（青）になる  
-12.30 Given: 通常コマンドが入力要求する, When: prompt を検知する, Then: 状態は `need_input`（赤）になる  
+12.30 Given: 通常コマンドが入力要求する, When: prompt を検知する, Then: 状態は `need_input`（オレンジ）になる  
 12.31 Given: 通常コマンドが正常終了する, When: exit_code=0 を検知する, Then: 状態は `success`（黒）を **維持**する  
 12.32 Given: 通常コマンドが異常終了する, When: exit_code!=0 を検知する, Then: 状態は `failure`（赤）になる  
+12.33 Given: `idle/success/failure` の状態にある, When: `need_input` 相当イベントを受ける, Then: `running`（青）を経由してから `need_input`（オレンジ）へ遷移し、色表示と状態が不一致にならない  
 
 ## 13. デバッグ/開発用機能
 13.1 Given: Terminal 画面でデバッグ UI を扱う, When: `debug ui: on/off` を切り替える, Then: デバッグバッジと保存ボタンの表示を切り替える（表示状態はローカルに保存する）  
-13.2 Given: デバッグ UI が表示中, When: 状態/入力/イベントが更新される, Then: デバッグバッジに state と簡易情報を表示する  
-13.3 Given: デバッグスナップショットを保存する, When: `save debug snapshot` を押す, Then: 現在の入力/イベント/状態を JSONL 1 行として保存する（保存先: app_config_dir の `terminal_debug_snapshots.jsonl`）  
+13.2 Given: デバッグ UI が表示中, When: 状態/入力/イベントが更新される, Then: デバッグバッジに state と簡易情報に加えて **直近の状態遷移（from->to）** を表示する  
+13.3 Given: デバッグスナップショットを保存する, When: `save debug snapshot` を押す, Then: 現在の入力/イベント/状態と **state_transitions（直近遷移履歴）** を JSONL 1 行として保存する（保存先: app_config_dir の `terminal_debug_snapshots.jsonl`）  
 13.4 Given: デバッグスナップショットを保存する, When: 保存する, Then: `ts_ms` を付与して追記保存する  
 13.5 Given: terminal-output-broadcast を有効化する, When: `NAGOMI_ENABLE_TERMINAL_OUTPUT_BROADCAST=1`, Then: 端末出力を `terminal-output-broadcast` イベントとしてアプリ全体へ emit する  
 13.6 Given: worker I/O のデバッグを行う, When: `NAGOMI_DEBUG_WORKER_IO=1`, Then: worker の入出力に関するログを app_config_dir の `worker_smoke.log` に追記する  

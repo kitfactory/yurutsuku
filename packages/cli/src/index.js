@@ -174,6 +174,83 @@ function resolveShortcutInvocation(targetOverride) {
   return { target: "nagomi", baseArgs: [] };
 }
 
+function isNodeLauncherTarget(target) {
+  const basename = path.basename(String(target || "")).toLowerCase();
+  return basename === "node.exe" || basename === "node";
+}
+
+function resolveNodewPath(nodePath) {
+  if (!isWindows() || !nodePath) return null;
+  const dir = path.dirname(nodePath);
+  const candidate = path.join(dir, "nodew.exe");
+  return fs.existsSync(candidate) ? candidate : null;
+}
+
+function resolveWscriptPath() {
+  if (!isWindows()) return null;
+  const fromPath = resolveCommandInPath("wscript.exe");
+  if (fromPath) return fromPath;
+  const systemRoot = process.env.SystemRoot || "C:\\Windows";
+  const fallback = path.join(systemRoot, "System32", "wscript.exe");
+  return fs.existsSync(fallback) ? fallback : null;
+}
+
+function escapeVbsString(value) {
+  return String(value || "").replace(/"/g, '""');
+}
+
+function writeHiddenShortcutLauncher({ shortcutPath, target, args, workingDir }) {
+  const dir = path.dirname(shortcutPath);
+  const base = path.basename(shortcutPath, path.extname(shortcutPath));
+  const scriptPath = path.join(dir, `${base}.nagomi-launcher.vbs`);
+  const escapedTarget = escapeVbsString(target);
+  const escapedArgs = escapeVbsString(args || "");
+  const escapedWorkDir = escapeVbsString(workingDir || os.homedir());
+  const script = [
+    'Set shell = CreateObject("WScript.Shell")',
+    `shell.CurrentDirectory = "${escapedWorkDir}"`,
+    `cmd = """" & "${escapedTarget}" & """"`,
+    `If Len("${escapedArgs}") > 0 Then cmd = cmd & " " & "${escapedArgs}"`,
+    "shell.Run cmd, 0, False",
+  ].join("\r\n");
+  fs.writeFileSync(scriptPath, script, "utf8");
+  return scriptPath;
+}
+
+function resolveShortcutRuntimeForWindows({
+  shortcutPath,
+  target,
+  args,
+  workingDir,
+  targetOverridden,
+}) {
+  if (!isWindows()) {
+    return { target, args, workingDir };
+  }
+  if (targetOverridden || !isNodeLauncherTarget(target)) {
+    return { target, args, workingDir };
+  }
+  const nodewPath = resolveNodewPath(target);
+  if (nodewPath) {
+    return { target: nodewPath, args, workingDir };
+  }
+  const wscriptPath = resolveWscriptPath();
+  if (!wscriptPath) {
+    return { target, args, workingDir };
+  }
+  const launcherPath = writeHiddenShortcutLauncher({
+    shortcutPath,
+    target,
+    args,
+    workingDir,
+  });
+  return {
+    target: wscriptPath,
+    args: quoteWindowsArg(launcherPath),
+    workingDir,
+  };
+}
+
 function buildShortcutArgs(baseArgs, sessionId) {
   const args = baseArgs.slice();
   if (sessionId) {
@@ -364,15 +441,23 @@ function shortcutCli(args) {
     parsed.useDesktop = true;
   }
   const shortcutPath = resolveShortcutPath(parsed);
+  const targetOverridden = Boolean(parsed.targetPath);
   const { target, baseArgs } = resolveShortcutInvocation(parsed.targetPath);
   const argsText = buildShortcutArgs(baseArgs, parsed.sessionId);
   ensureShortcutDir(shortcutPath);
+  const shortcutRuntime = resolveShortcutRuntimeForWindows({
+    shortcutPath,
+    target,
+    args: argsText,
+    workingDir: os.homedir(),
+    targetOverridden,
+  });
   try {
     createWindowsShortcut({
       path: shortcutPath,
-      target,
-      args: argsText,
-      workingDir: os.homedir(),
+      target: shortcutRuntime.target,
+      args: shortcutRuntime.args,
+      workingDir: shortcutRuntime.workingDir,
     });
     console.log(`shortcut created: ${shortcutPath}`);
   } catch (err) {

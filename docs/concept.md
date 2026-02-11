@@ -60,6 +60,7 @@
 - G-3: 状態を最小 UI で明確に伝える
 - G-4: 並列作業を迷子にしない
 - G-5: 設定画面と Run 操作の UX を崩さず、実運用中でも編集/追加を止めない
+- G-6: 色付き状態表示（`idle/success=黒`、`running=青`、`need_input=オレンジ`、`failure=赤`）と状態遷移（`idle/success/failure -> need_input` 直行禁止）を常に一致させる
 
 #8. Layering
 | レイヤー | 役割 | 主なモジュール |
@@ -94,3 +95,4 @@
 - Worker: PTY を起動して入出力を扱う
 - HookEvent: フック通知の正規化イベント
 - Judge: 終了候補を success/failure/need_input に判定する機構
+- running gate: `need_input` 確定前に一度 `running` を経由させる遷移ガード

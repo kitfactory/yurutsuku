@@ -23,6 +23,7 @@
 - 選択ウィンドウ交代アニメーションは短時間（縮小 60-100ms / 拡大 80-140ms / 合計 240ms 以下）で完了させ、連続交代時は旧遷移をキャンセルして最新遷移を優先する
 - `未整列` の判定は「起動後未整列」「ユーザー操作による move/resize/maximize」「ウィンドウ増減」で `arranged=false` とし、`Arrange Terminal Windows` 実行時のみ `arranged=true` に戻す
 - Terminal の `:ng` は **Frontend Internal Command Layer** で解釈し、PTY へ送信しない（初期対応は `:ng ping`）
+- Windows ショートカット（`.lnk`）は既定ターゲットが Node.js の場合に `nodew.exe` を優先し、未検出時は `wscript.exe + *.vbs` の非表示ランチャーへ切替えて余分なウィンドウ表示を抑える（最終フォールバックのみ `node.exe`）
 
 #2. concept との対応
 | concept | 実装モジュール | 責務 |
@@ -70,9 +71,11 @@
 
 ### StatusPresentation / Routing
 - 状態は `idle/running/need_input/success/failure/disconnected` を **区別して保持**する
-- UI の色は `idle/success=黒`、`running=青`、`need_input/failure=赤` で固定
+- UI の色は `idle/success=黒`、`running=青`、`need_input=オレンジ`、`failure=赤` で固定
 - **処理ルートは状態ごとに分離**する（アイコン/通知/音/ログなどの出し分けは state によって決める）
 - `need_input` は `running` 経由でのみ確定する（`idle/success/failure -> need_input` の直行をガードし、一度 `running` を挟んで再評価する）
+- codex の hook 未到達時は prompt marker（`for shortcuts` など）を補助信号として扱い、短時間安定後に `need_input` へ遷移する（誤検知抑制のため settle 時間を設ける）
+- codex 起動入力の取りこぼし時は output marker（`for shortcuts` / `context left`）で agent セッションを `running` に補助昇格し、`running` 固着を避ける
 
 ### ToolJudgeRunner
 - 入力: `tool` と `tail`（末尾 1500 字 + 50 行）
@@ -84,7 +87,7 @@
 
 ### DebugSnapshot
 - 入力: UI 上の `save debug snapshot`
-- 出力: `terminal_debug_snapshots.jsonl`（JSONL, `ts_ms` 付与）
+- 出力: `terminal_debug_snapshots.jsonl`（JSONL, `ts_ms` 付与, `state_transitions` を含む）
 
 ### DebugScreenshot
 - 入力: UI 上の `save debug screenshot`
@@ -104,7 +107,8 @@
 1) PTY output → TerminalStateDetector → terminal 状態
 2) Hook → CompletionHook → AgentEventObserver
 3) 終了候補（hook completed/error/need_input or 30s idle）→ ToolJudgeRunner
-4) StateIntegrator → UI（Watcher/tint）
+4) StateIntegrator（`need_input` は `running` 経由ガード適用）→ UI（Watcher/tint）
+5) UI は state-to-color マップ（`idle/success=黒`、`running=青`、`need_input=オレンジ`、`failure=赤`）を単一経路で適用する
 
 #5. ストレージ
 - `settings.json`: 通知/AI判定/Terminal 設定を保存
@@ -169,3 +173,5 @@
 #13. CLI
 - `nagomi.exe` / `nagomi`（launcher）
 - 連続起動は terminal window を追加で開く
+- `nagomi shortcut` は Windows 専用で `.lnk` を生成する（Desktop / Start Menu / 任意パス）
+- `nagomi shortcut` の既定ターゲット解決は `nodew.exe` 優先、未検出時は `wscript.exe + *.vbs` で非表示起動、`--target` 指定時は指定ターゲットをそのまま採用する

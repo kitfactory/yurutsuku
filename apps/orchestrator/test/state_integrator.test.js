@@ -34,6 +34,32 @@ test('mergeWithGuard: idle -> need-input is guarded to running', () => {
   });
 });
 
+test('mergeWithGuard: success -> need-input is guarded to running', () => {
+  const result = integrator.mergeWithGuard(
+    { state: 'success', reason: 'success' },
+    { state: 'success', reason: 'success' },
+    { state: 'need-input', reason: 'hook need_input' }
+  );
+  assert.equal(result.guarded, true);
+  assert.deepEqual(result.next, {
+    state: 'running',
+    reason: 'guard running-before-need-input',
+  });
+});
+
+test('mergeWithGuard: fail -> need-input is guarded to running', () => {
+  const result = integrator.mergeWithGuard(
+    { state: 'fail', reason: 'failure' },
+    { state: 'fail', reason: 'failure' },
+    { state: 'need-input', reason: 'hook need_input' }
+  );
+  assert.equal(result.guarded, true);
+  assert.deepEqual(result.next, {
+    state: 'running',
+    reason: 'guard running-before-need-input',
+  });
+});
+
 test('mergeWithGuard: running -> need-input stays need-input', () => {
   const result = integrator.mergeWithGuard(
     { state: 'running', reason: 'running' },

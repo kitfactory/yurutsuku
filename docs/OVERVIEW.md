@@ -12,6 +12,7 @@
   - Terminal の環境変数をユーザー環境に同期し、PATH 等の差分をなくす
   - Windows 設定画面に `Windows` カテゴリを追加し、terminal 起動方式（CMD / PowerShell / WSL）と WSL distro 選択を分離する
   - Windows 設定画面で整列/選択ショートカット（既定 `Ctrl+Shift+Y/J/K`）を変更できるようにする
+  - Windows ショートカット（Desktop/Start Menu）起動時に余分なランチャー/コンソールウィンドウを出さない
   - テーマは 8 種類（light-sand / light-sage / light-sky / light-mono / dark-ink / dark-ocean / dark-ember / dark-mono）を 1 つの選択UIで提供する
   - 設定画面のレスポンシブを安定化し、狭幅では 1 列、十分な幅で 2 列表示に切り替える
   - Run タイル/Terminal 本文のダブルクリックで、クリック元と同位置に新規ターミナルを開けるようにする

@@ -202,6 +202,28 @@ async function getShellClasses(client) {
   );
 }
 
+async function getStateTransitionDebug(client) {
+  return await client
+    .executeScript(
+      `
+      const api = window.nagomiTest || null;
+      const internal = api && api.getInternalState ? api.getInternalState() : null;
+      const observed = api && api.getObservedState ? api.getObservedState() : null;
+      const badge = document.querySelector('[data-role="terminal-debug-badge"]');
+      const transitionsFromInternal = internal && Array.isArray(internal.stateTransitions) ? internal.stateTransitions : [];
+      const transitionsFromObserved = observed && Array.isArray(observed.transitions) ? observed.transitions : [];
+      const transitions = transitionsFromInternal.length > 0 ? transitionsFromInternal : transitionsFromObserved;
+      return {
+        transitions,
+        internal,
+        observed,
+        badge: badge ? badge.textContent : '',
+      };
+      `
+    )
+    .catch(() => ({ transitions: [], internal: null, observed: null, badge: "" }));
+}
+
 async function sendInput(client, text) {
   return await client.executeScript(
     function (payload) {
@@ -411,6 +433,29 @@ async function main() {
       const classes = await getShellClasses(client);
       return classes.includes("state-need-input");
     }, 3000);
+
+    const transitionDebug = await getStateTransitionDebug(client);
+    const transitions = transitionDebug && Array.isArray(transitionDebug.transitions)
+      ? transitionDebug.transitions
+      : [];
+    if (!Array.isArray(transitions) || transitions.length === 0) {
+      throw new Error(
+        `state transition history is empty badge=${transitionDebug.badge} internal=${JSON.stringify(transitionDebug.internal)} observed=${JSON.stringify(transitionDebug.observed)}`
+      );
+    }
+    const needInputTransitions = transitions.filter((entry) => entry && entry.to === "need-input");
+    if (needInputTransitions.length === 0) {
+      throw new Error(`need-input transition not recorded: ${JSON.stringify(transitions)}`);
+    }
+    const illegalNeedInput = needInputTransitions.find(
+      (entry) =>
+        entry &&
+        entry.from !== "running" &&
+        entry.from !== "need-input"
+    );
+    if (illegalNeedInput) {
+      throw new Error(`illegal need-input transition: ${JSON.stringify(illegalNeedInput)}`);
+    }
 
     await client.executeScript(
       function (payload) {

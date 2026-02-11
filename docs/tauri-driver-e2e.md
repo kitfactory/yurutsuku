@@ -53,6 +53,31 @@ npm run e2e:tint -w apps/orchestrator
 
 ---
 
+## AI状態判定（色付け）確認
+目的は「状態遷移」と「色」が一致していることを確認すること。
+
+- 色マップ（固定）:
+  - `idle/success` = 黒
+  - `running` = 青
+  - `need_input` = オレンジ
+  - `failure` = 赤
+- 遷移ガード:
+  - `idle/success/failure -> need_input` の直行は禁止
+  - `need_input` に入るときは必ず `running` を経由する
+
+### 確認観点（P0最小）
+1. `running -> success`（正常終了）で青→黒になる
+2. `running -> failure`（異常終了）で青→赤になる
+3. `running -> need_input`（入力待ち）で青→オレンジになる
+4. `idle/success/failure` から `need_input` に入るケースで、遷移ログに `running` が必ず挟まる
+
+### 実施方法
+1) `node apps/orchestrator/e2e/terminal.tint.e2e.js` を実行して tint の基本回帰を確認する  
+2) nagomi Terminal で手動確認する（`echo ok` / 異常終了コマンド / 入力待ちコマンド）  
+3) `save debug snapshot` で遷移イベントを保存し、`need_input` 直前に `running` があることを確認する  
+
+---
+
 ## Rust 通知テスト（分離実行）
 `notify_flow` は Rust 側単体テストとして分離し、Node 統合テストとは別で実行する。
 

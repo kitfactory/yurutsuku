@@ -407,6 +407,20 @@ test("terminal_internal_ng_command_intercept", () => {
   assert.ok(rust.includes("\"pong\\r\\n\""));
 });
 
+test("codex_prompt_marker_need_input_fallback", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("AGENT_PROMPT_HINT_SETTLE_MS"));
+  assert.ok(html.includes("looksLikeCodexPromptChunk"));
+  assert.ok(html.includes("looksLikeCodexOutputMarker"));
+  assert.ok(html.includes("promoteAgentSessionFromOutputMarker"));
+  assert.ok(html.includes("agent output marker"));
+  assert.ok(html.includes("agent-output-marker"));
+  assert.ok(html.includes("scheduleAgentPromptHintFromOutput"));
+  assert.ok(html.includes("codex prompt marker"));
+  assert.ok(html.includes("for shortcuts"));
+});
+
 test("settings_character_log_retention", () => {
   const htmlPath = path.join(appRoot, "src", "index.html");
   const html = fs.readFileSync(htmlPath, "utf8");

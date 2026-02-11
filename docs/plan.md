@@ -23,7 +23,7 @@ nagomi の中核である「複数ターミナル並列作業」を、観測ベ�
 ---
 
 ## current（P0）
-対象: future の 6-9（選択切替 / アニメ高速化 / タイトル表示改善 / `:ng` 内蔵コマンド）
+対象: future の 6-10（選択切替 / アニメ高速化 / タイトル表示改善 / `:ng` 内蔵コマンド / AI 状態判定）
 
 ### N-6 選択切替（非選択ターミナルを選んだときの交代 + 拡大表示）
 - [x] N-6.1 文書: 選択切替ルール（どの操作で選択が交代するか、選択時の拡大条件）を `docs/concept.md` / `docs/spec.md` / `docs/architecture.md` に反映する
@@ -52,6 +52,20 @@ nagomi の中核である「複数ターミナル並列作業」を、観測ベ�
 - [x] N-9.3 テスト: ロールバック有効時に `:ng` が通常シェル入力として動作し、入力不能/重複入力が再発しないことを確認する
 - [x] N-9.4 実装: Rust 側の `:ng` 専用インターセプトを撤去し、`terminal_send_input` を通常パススルー中心へ整理する
 - [x] N-9.4 テスト: `cargo test -p nagomi-orchestrator` / `npm test -w apps/orchestrator -- --test-reporter=spec` と目視確認で回帰がないことを確認する
+
+### N-10 AI 状態判定（ターミナル色付け）正確性確認
+- [x] N-10.1 文書: 状態遷移と色対応（`idle/success=黒`、`running=青`、`need_input=オレンジ`、`failure=赤`、`idle/success/failure -> need_input` 直行禁止）を `docs/concept.md` / `docs/spec.md` / `docs/architecture.md` / `docs/tauri-driver-e2e.md` に反映する
+- [x] N-10.1 テスト: docs の記述が一意で矛盾しない（自己レビュー）
+- [x] N-10.2 実装: 観測イベント→状態遷移→tint/watcher 反映の経路を整理し、遷移漏れ/色反映漏れを防ぐ
+- [x] N-10.2 テスト: `cargo test -p nagomi-orchestrator` / `npm test -w apps/orchestrator -- --test-reporter=spec` / 目視E2Eで `running -> need_input -> running -> success/failure` が色と一致することを確認する
+- [x] N-10.3 実装: 誤判定時に追跡できるよう、P0最小のデバッグ可視化（遷移イベントと確定state）を追加する
+- [ ] N-10.3 テスト: `:ng` 有効/無効、codex 通常入力、通常コマンド（`echo` / `dir` / 異常終了）で state と色が一致することを確認する
+
+### N-11 Windows ショートカット起動時の余分なウィンドウ抑止
+- [x] N-11.1 文書: Windows ショートカット起動時のランチャー経路（コンソール非表示の方針、失敗時フォールバック）を `docs/spec.md` / `docs/architecture.md` に反映する
+- [x] N-11.1 テスト: docs の記述が一意で矛盾しない（自己レビュー）
+- [x] N-11.2 実装: `nagomi shortcut` が生成する `.lnk` の起動ターゲットを見直し、ショートカット起動時に余分なランチャー/コンソールウィンドウが表示されないようにする
+- [x] N-11.2 テスト: Desktop ショートカット起動で余分なウィンドウが出ないこと、`--session-id` 指定と通常起動の両方が維持されることを確認する
 
 ---
 
