@@ -129,7 +129,12 @@ impl CompletionHook for CodexCompletionHook {
             };
             let source_session_id = read_any_string_from_values(
                 &[&event, &raw],
-                &["source_session_id", "sourceSessionId", "nagomi_session_id", "NAGOMI_SESSION_ID"],
+                &[
+                    "source_session_id",
+                    "sourceSessionId",
+                    "nagomi_session_id",
+                    "NAGOMI_SESSION_ID",
+                ],
             )
             .or_else(|| read_any_string(&event, &["thread-id", "thread_id", "threadId"]));
             let ts_ms = now_ms();
@@ -278,8 +283,12 @@ impl CompletionHookManager {
         let Some(tool) = next_tool else { return };
         let hook: Box<dyn CompletionHook> = match tool.as_str() {
             "codex" => Box::new(CodexCompletionHook::new(tool_hook_path(base_dir, "codex"))),
-            "claude" => Box::new(ClaudeCodeCompletionHook::new(tool_hook_path(base_dir, "claude"))),
-            "opencode" => Box::new(OpenCodeCompletionHook::new(tool_hook_path(base_dir, "opencode"))),
+            "claude" => Box::new(ClaudeCodeCompletionHook::new(tool_hook_path(
+                base_dir, "claude",
+            ))),
+            "opencode" => Box::new(OpenCodeCompletionHook::new(tool_hook_path(
+                base_dir, "opencode",
+            ))),
             _ => return,
         };
         let mut hook = hook;
@@ -352,7 +361,10 @@ fn codex_event_kind(event: &Value) -> Option<HookEventKind> {
         .unwrap_or("")
         .to_ascii_lowercase();
 
-    if type_name == "agent-turn-complete" || type_name == "turn.completed" || status.contains("complete") {
+    if type_name == "agent-turn-complete"
+        || type_name == "turn.completed"
+        || status.contains("complete")
+    {
         return Some(HookEventKind::Completed);
     }
     if type_name.contains("error") || type_name.contains("fail") || status.contains("error") {

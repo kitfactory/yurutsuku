@@ -5,7 +5,7 @@
 ## 1. セッション/ターン
 1.1 Given: `start_session` を受け取る, When: Orchestrator が処理する, Then: session を作成し既定値（name/worker_id など）を付与する  
 1.2 Given: `send_input` を送信する, When: UI から入力が確定する, Then: phase を thinking に遷移させる  
-1.3 Given: 出力が一定時間止まる, When: 沈黙タイムアウト（既定 30s）に到達, Then: turn_completed 候補を生成する  
+1.3 Given: 出力が一定時間止まる, When: 沈黙タイムアウト（既定 5s）に到達, Then: turn_completed 候補を生成する  
 1.4 Given: exit_code が確定する, When: `exit` を受信する, Then: turn_completed を確定させる  
 1.5 Given: レーンの表示行数が上限に達する, When: 追加出力が来る, Then: 先頭から破棄してスクロールバックを維持する（既定 5,000 行 / 上限 20,000 行）  
 
@@ -20,7 +20,7 @@
 2.8 Given: タイル表示を行う, When: セッションが更新される, Then: 小さな表情/状態/ログがタイル上に表示される  
 2.9 Given: タイルを選択する, When: ピックアップする, Then: 対応するターミナルウィンドウを同じモニタの作業領域内で中央に寄せ、作業領域の約 80% で大きく表示する  
 2.9.0 Given: 複数のターミナルがあり整列済みである, When: 非選択ターミナルをユーザーが選択する（Run タイルの選択 / Terminal 本文クリック）, Then: SelectionState を選択先へ交代し、選択ウィンドウの拡大表示を適用する  
-2.9.1 Given: Run タイルまたは Terminal 本文をダブルクリックする, When: クリック元に対応するターミナル位置が取得できる, Then: クリック元と同じ位置/サイズで新しいターミナルウィンドウを 1 つ追加する（取得できない場合は通常位置で追加する）  
+2.9.1 Given: Terminal 本文で右クリックメニューを開く, When: `新しいターミナルを開く` を選ぶ, Then: クリック元と同じ位置/サイズで新しいターミナルウィンドウを 1 つ追加する（取得できない場合は通常位置で追加する）  
 2.9.2 Given: すでに選択中のターミナルを再選択する, When: 選択操作を受ける, Then: SelectionState は維持し、過剰なフォーカス遷移アニメーションは行わない  
 2.9.3 Given: 選択ウィンドウを交代する, When: 縮小→拡大アニメーションを実行する, Then: 縮小は 60-100ms、拡大は 80-140ms、合計は 240ms 以下を目標にする  
 2.9.4 Given: 連続で選択交代する, When: 先行アニメーションが未完了のまま次の交代が来る, Then: 先行遷移をキャンセルして最新の交代のみを適用し、残像やジャンプを抑える  
@@ -34,6 +34,7 @@
 2.15 Given: success/failure/need_input になる, When: 表情保持時間に到達, Then: idle/thinking に戻す（既定 4s）  
 2.16 Given: Terminal 画面を開く, When: UI を描画する, Then: ターミナル表示領域が初期化される  
 2.16.1 Given: 複数の Terminal window を開く, When: `Open Terminal Window` / `GET /open-terminal` で追加する, Then: window ごとに別 `session_id` を持ち入力/出力は共有されない  
+2.16.2 Given: Terminal window を表示中である, When: 出力テールから CWD を推定できる, Then: **ウィンドウタイトル**は CWD ベースで更新し、通常は末尾フォルダ名を表示する（末尾が汎用名の `src` / `docs` / `tests` の場合は 2 階層の `<parent>/<leaf>` を表示する）  
 2.17 Given: ターミナル入力が行われる, When: 入力が確定する, Then: PTY/Worker に入力が送られる  
 2.17.1 Given: Terminal 画面で入力行の先頭が `:ng` である, When: 入力/Enter を処理する, Then: **UI 内蔵コマンド**として解釈し PTY/Worker へは送信しない（初期対応は `:ng ping` のみ）  
 2.17.2 Given: `:ng` 入力中である, When: 文字入力/削除が行われる, Then: 文字は terminal 画面にローカルエコーで即時表示される（PTY エコー待ちをしない）  
@@ -48,7 +49,7 @@
 2.21.1 Given: P0 既定値を参照する, When: 初回起動で settings が未作成, Then: 既定値を採用する（実装参照: `apps/orchestrator/src-tauri/src/main.rs` の `Settings::default`、UI 参照: `apps/orchestrator/src/index.html` の `terminalSettingsDefaults`）  
 2.21.2 Given: トレイの Settings を開く, When: トレイメニューから設定画面を選ぶ, Then: `view=settings` の設定画面が表示される  
 2.22 Given: IME を使う, When: 変換操作を行う, Then: OS の IME に従って入力できる（専用処理は持たない）  
-2.23 Given: ターミナル画面を表示する, When: 描画する, Then: 画面内の表示は PTY 出力と `:ng` 内蔵コマンドのローカル出力のみで構成し、説明文や装飾テキストは表示しない  
+2.23 Given: ターミナル画面を表示する, When: 描画する, Then: 画面内の基本表示は PTY 出力と `:ng` 内蔵コマンドのローカル出力で構成する（サブワーカーのアドバイスは「次に何を入力するか」を示すローカル出力行として追記する）  
 2.24 Given: ターミナルが表示中, When: 観測（Watcher）を表示する, Then: **全ターミナルを代表する状態**を右下のキャラクターで示す（実装参照: `apps/orchestrator/src/assets/watcher/nagomisan_*.png` / 元データ: `apps/orchestrator/src/assets/watcher/nagomi_fullbody_icons_96_v3.zip`）  
 2.24.1 Given: 観測（Watcher）を表示する, When: 表示設定が ON, Then: **別ウィンドウ（透過）**でフルボディ（96x192）を右下に表示する  
 2.24.2 Given: 観測（Watcher）を表示する, When: 表示設定が OFF, Then: 透過ウィンドウを表示しない  
@@ -56,7 +57,17 @@
 2.24.4 Given: 観測表示を行う, When: 3Dキャラ（VRM）が設定済み, Then: 3D表示を優先する（未設定なら2D画像を表示する）  
 2.25 Given: 観測状態が変化する, When: 状態を適用する, Then: terminal の背景に対して半透明でトーンの揃った tint を重ねて状態を区別する  
 2.25.1 Given: 状態を表示する, When: 表示色を決める, Then: **色は以下で固定**する（黒=idle/success、青=running、オレンジ=need_input、赤=failure）  
+2.25.1.1 Given: `running` 表示を行う, When: 実行主体を区別する, Then: 表示/報告用ステータスは `running`（通常コマンド実行中）/`ai-running`（AI が指示を処理中）/`subworker-running`（サブワーカー稼働中）に分離する（内部状態機械の `running` は維持する）  
 2.25.2 Given: 画面に文言を表示する, When: UI を描画する, Then: 表示文言はリソース管理し **日本語/英語** を用意する  
+2.25.3 Given: サブワーカーが対象ターミナルを支援中である, When: 稼働中表示を行う, Then: 状態色とは別レイヤーで `サブワーカー処理中（Escで抜けます）` を緑表示し、処理終了時に元の状態表示へ戻す  
+2.25.3.1 Given: サブワーカー稼働中表示が出ている, When: ユーザーが `Esc` を押す, Then: `manual-hold` に入り表示ステータスは `idle` になり、ユーザーの `Enter` 確定入力まで自動処理を再開しない  
+2.25.4 Given: サブワーカーが有効である, When: 支援処理を開始する, Then: 進行中メッセージは Terminal 本文へ追記せず、処理完了後の表示に集約する（PTY へは送らない）  
+2.25.4.1 Given: サブワーカー支援が完了する, When: 結果を反映する, Then: Terminal 上に 1 行だけ追記する（入力代行時は入力内容、アドバイス時は「次に何を入力するか」）  
+2.25.4.1.1 Given: サブワーカー結果を Terminal 表示へ 1 行表示する, When: 表示文字列を作る, Then: フォーマットは `[nagomi-subworker(自信度：xxx　アドバイス/代理入力)] (メッセージ)` を使う（スクロールバックに残さない一時表示でよい）  
+2.25.4.2 Given: ターミナルの表示領域を確保したい, When: サブワーカー状態を可視化する, Then: 右上固定の状態パネル（閾値/待機/操作ボタン常時表示）は出さない  
+2.25.4.3 Given: ターミナル幅が狭い, When: サブワーカー結果を表示する, Then: 1 行メッセージを過長にしない（可読性が極端に落ちる長文を抑制する）  
+2.25.5 Given: サブワーカー稼働表示を行う, When: `active=false` になる, Then: 緑表示は即時解除する（遅延保持しない）  
+2.25.6 Given: サブワーカーを運用中である, When: ユーザーが即時操作する, Then: Settings > AI Coding Agent で `一時停止` と `今回だけスキップ` をワンクリックで実行できる  
 2.26 Given: プロセスが終了する, When: exit_code を受信する, Then: 即時に `success`（exit_code=0）または `fail`（exit_code!=0）として確定する  
 2.27 Given: プロセスが生存している, When: 観測を行う, Then: 通常は `running` を維持し、**終了候補イベント**（出力無更新 30s / hook completed|error|need_input）を受けたときのみ Judge を走らせて `success/failure/need_input` に遷移する  
 2.27.1 Given: **AI判定** が OFF, When: hook が来る/出力無更新 30s になる, Then: hook 種別（completed/error/need_input）をそのまま state に反映する（idle は `need_input` とみなす）  
@@ -73,6 +84,7 @@
 3.6 Given: **AI判定** が ON, When: 終了候補イベントを受ける, Then: 選択した **AI Coding Agent**（codex/claudecode/opencode）を JSON 出力指定で実行し `state: success/failure/need_input` と `summary` を得る  
 3.7 Given: **AI判定** が失敗, When: 結果が得られない, Then: Heuristic 結果（3.1〜3.4）にフォールバックする  
 3.8 Given: フック観測で「停止（完了/入力待ち）」を検知, When: **AI判定** が ON, Then: 末尾ログを再判定して最優先で採用する  
+3.9 Given: Judge がフォールバック経路で `success/failure/need_input` を確定する, When: サブワーカー起動判定へ渡す, Then: 判定完了イベントは論理名 `judge-complete` として扱い、`judge_complete_source` に `judge-fallback` を記録する  
 
 ## 4. 通知（OS/音声）
 4.1 Given: turn_completed で failure/need_input, When: 通知設定が ON, Then: OS トーストを送る  
@@ -114,9 +126,24 @@
 7.4.2 Given: 3Dキャラクターを使う, When: VRM を設定する, Then: 3D表示は **VRM** を読み込み、2D画像より優先して表示する  
 7.4.3 Given: 3Dキャラクターで状態ごとのモーションを設定する, When: VRM Animation（`.vrma`）を割り当てる, Then: `idle/success`→`idle`、`running`→`running`、`need_input`→`need_input`、`failure`→`fail` の対応で再生する  
 7.4.4 Given: 状態モーションが未設定, When: 3D表示を行う, Then: `idle` を再生し、`idle` 未設定なら静止にフォールバックする  
-7.5 Given: AI Coding Agent セクションを表示する, When: 設定画面を開く, Then: 「使用ツール」「AIターミナル状態判定」のみを表示する（連携ボタンは表示しない）  
+7.5 Given: AI Coding Agent セクションを表示する, When: 設定画面を開く, Then: 「使用ツール」「AIターミナル状態判定」「サブワーカー設定（モード/閾値/運用操作）」を表示する（連携ボタンは表示しない）  
 7.6 Given: AI Coding Agent を使う, When: 設定を保存する, Then: 使用する AI ツールを 1 つ選択できる（codex/claudecode/opencode）  
 7.7 Given: AI Coding Agent を選択する, When: 設定画面を表示する, Then: 「選択したAIツールは起動コマンド判別とAI判定の対象になる」旨を説明する  
+7.8 Given: サブワーカー機能を使う, When: 設定画面でモードを選ぶ, Then: `ガンガン` / `慎重に` / `アドバイス` の 3 モードを切り替えられる  
+7.8.1 Given: サブワーカーが支援を生成する, When: AI Coding Agent が設定されている, Then: nagomi に設定された AI Coding Agent（codex/claudecode/opencode）を使用する  
+7.8.2 Given: サブワーカーがアドバイスを表示する, When: Terminal 画面に反映する, Then: Terminal 本文に「次に何を入力するか」を追記し、PTY の実行入力/プロセス入出力としては扱わない  
+7.8.3 Given: サブワーカー設定の初期値を適用する, When: 設定未作成で起動する, Then: 既定モードは `慎重に` を使う  
+7.8.4 Given: サブワーカー設定を編集する, When: 設定画面を表示する, Then: 入力代行を許可する `自信度閾値` を編集できる  
+7.8.5 Given: サブワーカー運用を調整する, When: 設定画面を表示する, Then: `一時停止` と `今回だけスキップ` を実行できる  
+7.8.6 Given: サブワーカー機能を制御する, When: 設定画面を表示する, Then: `サブワーカーON/OFF` を切り替えられる（OFF 時は自動支援を実行しない）  
+7.8.7 Given: サブワーカーの診断表示を制御する, When: 設定画面を表示する, Then: `サブワーカーデバッグON/OFF` を切り替えられる（OFF 時は通常出力のみ表示する）  
+7.8.8 Given: サブワーカーの判断/アドバイス内容を調整したい, When: 設定画面を表示する, Then: `サブワーカー用プロンプト（Markdown）` を編集できる（未設定時は既定プロンプトを使う）  
+7.8.8.1 Given: サブワーカー用プロンプトテンプレを適用する, When: プロンプト本文を作る, Then: 出力フォーマット（定型 JSON と schema）は実装側の固定プレフィックスで規定し、ユーザー編集テンプレは `文脈（context）` のみを担う。テンプレ中の `{{judge_state}}/{{judge_summary}}/{{last_user_input}}/{{last_terminal_output}}/{{mode}}/{{threshold}}` を置換して文脈を生成する（互換のため `{{input_preview}}/{{output_preview}}/{{instruction}}` も置換する）。未知のプレースホルダはそのまま残してよい  
+7.8.8.3 Given: サブワーカーデバッグが ON, When: `llm-start/llm-result` を記録する, Then: `subworker_debug_events.jsonl` に `prompt_preview/prompt_context_preview/prompt_vars` と `llm_json` を追記し、入力（プロンプト）と出力（定型JSON）を後から確認できる（秘密っぽい値は `***REDACTED***` にマスクする）  
+7.8.8.4 Given: show_advice を表示する, When: Terminal 表示へ 1 行表示する, Then: アドバイスは短い 1 行プレビューになるため、**先頭に「次に入力: ...」で具体入力**を置き、`1/2` や `y/n` の選択肢がある場合はその入力を明示する（スクロールバックに残さない一時表示でよい）  
+7.8.8.5 Given: サブワーカー結果を Terminal 表示へ 1 行表示する, When: 表示文字列を作る, Then: 1 行プレビューの最大長は 160 文字程度を目安にし、`次に入力:` と最低限の文脈が同一行で見えるようにする（過長は末尾を `…` で省略してよい。スクロールバックに残さない一時表示でよい）  
+7.8.8.2 Given: サブワーカー用プロンプトが長い, When: LLM に問い合わせる, Then: プロンプトは UI 実装側で長さを制限し、極端な長文で性能/挙動が不安定にならないようにする  
+7.8.8.2.1 Given: `last_terminal_output` をサブワーカー文脈として生成する, When: TUI/大量出力を扱う, Then: 末尾の「意味のある出力」から最大 200 行程度/最大 8,000 文字程度を目安に切り出し、プロンプト肥大化を抑える（judge 用の末尾は別途小さく切り出す）  
 7.9 Given: 設定画面を表示する, When: 8種類のテーマのいずれかを選ぶ, Then: 設定画面の背景/カード/文字色を選択テーマに合わせて切り替える  
 7.9.1 Given: AI Coding Agent の設定を表示する, When: 重要度を示す, Then: 設定カードを軽く強調して視認性を上げる  
 
@@ -129,6 +156,9 @@
 - NAGOMI_TOOL_PATH: CLI の実行パス（未指定なら PATH 解決）
 - NAGOMI_TOOL_ARGS: 追加引数（空白区切り）
 - NAGOMI_TOOL_TIMEOUT_MS: 実行タイムアウト(ms）
+- NAGOMI_SUBWORKER_TOOL_ARGS: サブワーカー判断用ツールの追加引数（空白区切り、codex 以外で使用する場合に指定）
+- NAGOMI_SUBWORKER_TOOL_TIMEOUT_MS: サブワーカー判断用ツールの実行タイムアウト(ms）
+- NAGOMI_APP_CONFIG_DIR: app_config_dir を上書きする（E2E などの隔離起動用、未指定時は OS 既定の app_config_dir）
 - NAGOMI_ORCHESTRATOR_PATH: Orchestrator 実行ファイルのパス（未指定なら PATH/開発ビルドを探す）
 - NAGOMI_ORCH_HEALTH_PORT: ヘルスチェックポート（未指定なら 17707）
 - NAGOMI_ENABLE_TEST_ENDPOINTS: テスト用HTTPエンドポイントを有効化（`1` のとき有効、既定: 無効）
@@ -149,6 +179,10 @@
 10.2.1 Given: Orchestrator を起動する, When: `--start-hidden` を付与する, Then: 初期 window は表示しない（tray の `Open Terminal Window` / `Open Settings` から操作する）  
 10.2.2 Given: Orchestrator を起動する, When: `--exit-on-last-terminal` を付与する, Then: 最後の terminal session が停止した時点で Orchestrator は終了する  
 10.2.3 Given: ユーザーが `nagomi` を繰り返し起動する, When: `--session-id` を指定しない, Then: 起動のたびに追加で新しい terminal window を開く  
+10.2.4 Given: ユーザーが `nagomi --restart` を実行する, When: 既存 Orchestrator が稼働中, Then: 既存プロセスを停止して再起動し、更新済みバイナリを確実に反映する  
+10.2.5 Given: ユーザーが `nagomi --status` を実行する, When: 起動可否を確認したい, Then: **起動/停止は行わず**、解決した Orchestrator パスと `running/healthy/health_url` を JSON で表示する  
+10.2.6 Given: ユーザーが `nagomi --debug-paths` を実行する, When: デバッグログの場所を確認したい, Then: **起動/停止は行わず**、app_config_dir と主要ログ/JSONL のパスを JSON で表示する  
+10.2.7 Given: ユーザーが `nagomi debug-tail <kind>` を実行する, When: 直近ログを素早く見たい, Then: **起動/停止は行わず**、`status|subworker|terminal` の各 JSONL の末尾を読みやすく要約して表示する  
 10.3 Given: Orchestrator の起動済み判定を行う, When: プロセス名で検出した後に IPC probe を試す, Then: IPC が応答しない場合は未起動として扱う  
 10.3.1 Given: 起動済み判定を行う, When: CLI から生存確認が必要, Then: `127.0.0.1` のヘルスチェックエンドポイントで確認する  
 10.3.2 Given: ヘルスチェックを行う, When: `GET /health` にアクセスする, Then: `{"status":"ok","pid":<number>}` を返す  
@@ -169,14 +203,11 @@ Invoke-WebRequest "http://127.0.0.1:17707/terminal-send?session_id=codex-test&te
 $env:NAGOMI_ENABLE_TEST_ENDPOINTS = "1"
 nagomi terminal-send --session-id codex-test --text "codex `"ping`"`r`n"
 ```
-10.4 Given: Windows 環境で `worker_backend = wsl`, When: Worker を起動する, Then: Orchestrator は `wsl.exe` 経由で Linux Worker を起動する  
-10.5 Given: Windows 環境で `worker_backend = windows` または未指定, When: Worker を起動する, Then: Orchestrator は Windows Worker を起動する  
-10.6 Given: WSL で Worker を起動する, When: Linux 側コマンドを指定する, Then: `wsl.exe -d <distro> -- <command>` 形式で実行する  
-10.7 Given: WSL ターミナルを対話的に扱う, When: 端末入力/制御を行う, Then: ConPTY を用いて `wsl.exe` を接続する  
-10.7.1 Given: Windows で terminal session を開始する, When: 起動方式が `CMD`, Then: 起動コマンドは `cmd.exe` を使う  
-10.7.2 Given: Windows で terminal session を開始する, When: 起動方式が `PowerShell`, Then: 起動コマンドは `powershell.exe` を使う  
-10.7.3 Given: Windows で terminal session を開始する, When: 起動方式が `WSL` かつディストロ未指定, Then: 起動コマンドは `wsl.exe` を使う  
-10.7.4 Given: Windows で terminal session を開始する, When: 起動方式が `WSL` かつディストロ指定あり, Then: 起動コマンドは `wsl.exe -d <distro>` を使う  
+10.4 Given: Windows で terminal session を開始する, When: 起動方式設定 `terminal_shell_kind` を参照する, Then: 設定値に応じた起動コマンドを使う  
+10.5 Given: Windows で terminal session を開始する, When: 起動方式が `CMD`, Then: 起動コマンドは `cmd.exe` を使う  
+10.6 Given: Windows で terminal session を開始する, When: 起動方式が `PowerShell`, Then: 起動コマンドは `powershell.exe` を使う  
+10.7 Given: Windows で terminal session を開始する, When: 起動方式が `WSL` かつディストロ未指定, Then: 起動コマンドは `wsl.exe` を使う  
+10.7.1 Given: Windows で terminal session を開始する, When: 起動方式が `WSL` かつディストロ指定あり, Then: 起動コマンドは `wsl.exe -d <distro>` を使う  
 10.8 Given: Worker の起動に失敗する, When: 再起動を試みる, Then: 再接続手段を提示しユーザーは再試行できる  
 10.9 Given: Windows で Terminal session を開始する, When: PTY を起動する, Then: 環境変数は「通常の cmd/PowerShell と同等」を目指して同期する（現在の環境を優先しつつ、System/User の環境変数を不足分だけ補完し、PATH は不足分だけ後ろに追加する）  
 10.10 Given: OS が Windows, When: Orchestrator/Worker/PTY を起動する, Then: **余分なコンソールウィンドウを表示せず**、ユーザーには Terminal（+ tray）だけが見える状態を保つ  
@@ -279,6 +310,21 @@ export const NagomiNotify = async ({ $, project, directory }) => {
 12.19 Given: ターミナル監視とエージェント監視が両方ある, When: 状態を統合する, Then: エージェントイベントが来ている間は `agent` 側を優先し、`success/failure/need_input` は次の `running`（新しい実行開始）または `/quit` まで維持する（別コマンドが動作中なら `running` を優先）  
 12.20 Given: 最小状態機械を定義する, When: 状態遷移を行う, Then: `idle -> running`（コマンド開始）, `running -> need_input`（終了候補判定）, `running -> success/failure`（exit_code or Judge）, `need_input -> running`（入力送信）, いつでも `disconnected` へ遷移可能とする  
 12.20.1 Given: 状態遷移を実装する, When: `need_input` を扱う, Then: `idle/success/failure -> need_input` の直接遷移は禁止し、`running` 経由を強制する  
+12.20.2 Given: 状態遷移の正本を参照する, When: 実装/調査で遷移を判定する, Then: 以下の遷移マトリクスを優先して適用する  
+| 現在 state | 受信イベント | ガード/条件 | 次 state | 備考 |
+|---|---|---|---|---|
+| `idle/success/failure` | コマンド入力確定（Enter） | なし | `running` | 新しい実行開始 |
+| `idle/success/failure` | `need_input` 相当イベント（hook/heuristic/prompt-hint） | 直行禁止ガード | `running` | まず `running` に昇格して再評価 |
+| `running` | `judge-complete(state=need_input)` | なし | `need_input` | 入力待ち確定 |
+| `running` | `exit_code=0` または `judge-complete(state=success)` | なし | `success` | 正常完了 |
+| `running` | `exit_code!=0` または `judge-complete(state=failure)` | なし | `failure` | 異常完了 |
+| `need_input` | ユーザー入力確定（Enter） | なし | `running` | 次ターン再開 |
+| `*` | PTY/セッション切断 | なし | `disconnected` | いつでも遷移可 |
+| `disconnected` | セッション再確立/再オープン | なし | `idle` | 観測再開 |
+12.20.3 Given: 表示/報告用ステータス（`status_state`）を決める, When: 同一時刻に複数条件が成立する, Then: 優先順位は `subworker-running` > `ai-running` > `running/need_input/success/failure/idle` とする（`state`/`status_state`/`subworker_phase` と実行時情報 `runtime.subworker` / `runtime.automation` は単一状態オブジェクトで同時更新する）  
+12.20.4 Given: 「操作が固まった」疑いを診断する, When: 状態デバッグログを確認する, Then: 直近イベントを `manual-hold` / `await-first-output` / `judge-complete未到達` の3系統に分類して原因を切り分ける（確認対象: `status_debug_events.jsonl`）  
+12.20.5 Given: `running` が継続して固まり疑いがある, When: 回復操作を行う, Then: まず `Esc` で `manual-hold` にして自動判定/サブワーカーを停止し、表示ステータスを `idle` にしてユーザー入力完了待ちへ遷移する。次にユーザー入力を `Enter` で確定して `need_input -> running` の再開を確認する  
+12.20.6 Given: サブワーカー状態を扱う, When: 実装する, Then: `subworker_phase` だけでなく実行時情報（`runtime.subworker` / `runtime.automation`）も独立変数で管理せず、ターミナル単一状態オブジェクト `terminalState` に含めて一元管理する  
 12.21 Given: 実装に落とす, When: 最小データモデルを持つ, Then: 以下の構造で扱える  
 ```json
 {
@@ -306,17 +352,58 @@ export const NagomiNotify = async ({ $, project, directory }) => {
 12.22 Given: 最小テスト観点を定める, When: P0 の壊れにくさを確認する, Then: PTY 終了（正常/異常/強制 kill/WSL 再起動/SSH 切断）/コマンド終了（exit code 0/非0）/入力待ち遷移/誤検知耐性/復帰の 5 点を確認する  
 12.23 Given: ターミナルを起動する, When: 初期表示する, Then: 状態は `idle`（黒）として扱う  
 12.24 Given: codex を起動する, When: `codex` コマンドだけを入力する, Then: 状態は **変化させない**（idle/success のまま）  
-12.24.1 Given: codex 起動入力の取りこぼしが発生する, When: codex 出力 marker（例: `for shortcuts` / `100% context left`）を検出する, Then: agent セッションを `running` として補助開始する  
+12.24.1 Given: codex 起動入力の取りこぼしが発生する, When: codex 出力 marker（例: `for shortcuts` / `100% context left`）を検出する, Then: agent セッションを補助開始するが、**初回指示がまだなら状態は `idle`（準備完了）を維持**する  
 12.25 Given: codex に作業プロンプトを入力する, When: 処理が開始される, Then: 状態は `running`（青）になる  
+12.25.1 Given: codex セッションが起動済みで初回指示が未送信である, When: 空Enter（空行）だけを送信する, Then: 状態は `idle`（準備完了）を維持し、`running`/`need_input` へ遷移しない  
 12.26 Given: codex の処理が完了する, When: 完了を検知する, Then: 状態は `success`（黒）を **維持**する  
 12.27 Given: codex が入力を要求する, When: input/permission/request を検知する, Then: 状態は `need_input`（オレンジ）になる  
-12.27.1 Given: codex フックが未到達で `running` が継続する, When: codex 出力に prompt marker（例: `for shortcuts`）を検出し短時間（約2.2s）安定する, Then: `need_input`（オレンジ）へ補助遷移する  
+12.27.1 Given: codex フックが未到達で `running` が継続する, When: codex 出力に prompt marker（例: `for shortcuts`）を検出し短時間（約2.2s）安定する, Then: **初回指示がすでに送信済みの場合のみ** `need_input`（オレンジ）へ補助遷移し、`prompt-hint` 理由で Judge を即時起動して AI判定完了へ収束させる（Judge 実行中/直後の間隔ガードに当たった場合は短時間リトライして取りこぼしを防ぐ）  
 12.28 Given: codex を `/quit` で抜ける, When: セッション終了を検知する, Then: 状態は `idle`（黒）になる  
 12.29 Given: 通常コマンドを実行する, When: コマンド入力が確定する, Then: 状態は `running`（青）になる  
 12.30 Given: 通常コマンドが入力要求する, When: prompt を検知する, Then: 状態は `need_input`（オレンジ）になる  
 12.31 Given: 通常コマンドが正常終了する, When: exit_code=0 を検知する, Then: 状態は `success`（黒）を **維持**する  
 12.32 Given: 通常コマンドが異常終了する, When: exit_code!=0 を検知する, Then: 状態は `failure`（赤）になる  
 12.33 Given: `idle/success/failure` の状態にある, When: `need_input` 相当イベントを受ける, Then: `running`（青）を経由してから `need_input`（オレンジ）へ遷移し、色表示と状態が不一致にならない  
+12.34 Given: サブワーカー機能が有効である, When: 対象ターミナルの状況を確認する, Then: 入力代行またはアドバイス表示で次アクションを支援する  
+12.34.0 Given: `subworker_enabled=ON` かつ `llm_enabled=OFF` である, When: Judge 完了（`judge-complete`）が発生する, Then: サブワーカーは実行せず `skip-llm-disabled` をログへ記録する（無音で放置しない）  
+12.34.1 Given: サブワーカーが稼働中である, When: 対象ターミナルを描画する, Then: `サブワーカーで処理中` を緑で表示する  
+12.34.2 Given: サブワーカー処理が終了する, When: UI を更新する, Then: 緑表示を解除し元の状態表示（黒/青/オレンジ/赤）に戻す  
+12.34.3 Given: サブワーカーがアドバイスを提示する, When: Terminal に表示する, Then: Terminal 本文へ「次に何を入力するか」を1行で追記し、実コマンド実行/プロセス入力として扱わない  
+12.34.3.1 Given: CLI が TUI 形式で UI 行（候補/メニュー/枠線）を多く出す, When: サブワーカーが文脈を組み立てる, Then: `last_terminal_output`（直近の意味のある出力群）を主情報として扱い、`output_preview`（末尾1行ヒント）には過度に依存しない  
+12.34.3.1 Given: サブワーカーがアドバイス文を生成する, When: 判定文脈を作る, Then: `ユーザー最終入力` と `最後の出力` の両方を使って内容を決める  
+12.34.3.2 Given: サブワーカーが表示文を作る, When: アドバイス/代理入力を出力する, Then: `[nagomi-subworker(自信度：xxx　アドバイス/代理入力)] (メッセージ)` 形式で 1 行表示する（スクロールバックに残さない一時表示でよい）  
+12.34.3.3 Given: サブワーカーが次アクションを判断する, When: `judge-complete` で起動する, Then: 出力定型（JSON schema と JSON only 指示）は実装側の固定プレフィックスで必ず付与し、`subworker_prompt_template_markdown` は文脈（context）として LLM に渡す。LLM から定型 JSON（`action/confidence/input/advice_markdown/reason`）を取得して最終アクションを決める（表示用テンプレは持たず `advice_markdown` をそのまま表示する）  
+12.34.3.4 Given: サブワーカーがアドバイス表示を行い推奨入力（single-line）を持つ, When: ユーザーが `Tab` を押す, Then: 推奨入力をそのままターミナルへ投入できる（自動送信はせず、`\\r` を含む場合のみ Enter 相当が送られる）  
+12.34.3.5 Given: ユーザーがすでに入力を始めている, When: `Tab` を押す, Then: サブワーカー提案の適用は行わずターミナル側の `Tab`（補完など）を優先する  
+12.34.3.6 Given: ghost 補完候補が表示中である, When: ユーザーが `Tab` 以外のキーを押す, Then: ghost は即時解除し、そのキーは通常入力として処理する（ghost が入力を阻害しない）  
+12.34.3.7 Given: サブワーカーが `llm_tool=codex` で連続判定する, When: 同一 `ipc_session_id` で 2 回目以降の問い合わせを行う, Then: 初回は `codex exec`（fresh）で実行し、以後は保持した Codex セッションIDで `codex exec resume` を使う。`resume` 失敗時は保持IDを破棄し、fresh を 1 回だけ再試行する。さらに、ユーザーが shell で `codex` を新規起動した場合は保持IDをクリアし、`codex resume ...` で起動した場合は保持IDを維持する  
+12.34.4 Given: サブワーカーが次アクションを選ぶ, When: 判定を行う, Then: まずアドバイス本文と推奨入力候補を生成し、その後に最終適用（自動入力/Tab補完表示）を決める  
+12.34.4.1 Given: モードが `ガンガン` または `慎重に` である, When: 最終適用を決める, Then: `confidence >= threshold` なら入力代行、未満ならアドバイス表示（Tab補完）にする  
+12.34.4.2 Given: モードが `アドバイス` である, When: 最終適用を決める, Then: 常にアドバイス表示（Tab補完）にし、自動入力は行わない  
+12.34.5 Given: サブワーカーが入力代行を実行する, When: 実行後の状態を扱う, Then: 状態は通常の終了判定に委ねる（固定の状態強制はしない）  
+12.34.6 Given: サブワーカー支援を継続する, When: 代理入力が連続しうる, Then: 短時間の連続代理入力には上限を設け（例: 20 秒で 3 回まで）、超過時はアドバイス表示へフォールバックして暴走を抑止する  
+12.34.7 Given: サブワーカーが入力代行を行う, When: 実行を記録する, Then: 代行理由を 1 行で残す（少なくとも `confidence` と根拠要約を含む）  
+12.34.8 Given: サブワーカーが判定・実行する, When: ログを保存する, Then: `mode/confidence/action/result` を各回記録する  
+12.34.9 Given: 複数ターミナルが同時に動作する, When: サブワーカー判定を行う, Then: ターミナルごとに独立して判定・実行し、他ターミナル完了待ちをしない  
+12.34.9.1 Given: ターミナル状態が変わっていない, When: 観測更新だけが発生する, Then: サブワーカーの再判定は行わない（状態遷移だけでは判定しない）  
+12.34.9.2 Given: サブワーカー起動条件を評価する, When: 判定トリガーを選ぶ, Then: **AIターミナル状態判定の完了イベント `judge-complete`** でのみ判定する（`judge-result` / `hook-judge` / `judge-fallback` を同等ソースとして正規化する）  
+12.34.9.3 Given: codex や通常コマンドが `running` 中である, When: 完了イベントが未到達, Then: サブワーカーは起動しない  
+12.34.9.4 Given: `need_input` が prompt marker 由来の補助遷移で付与される, When: サブワーカー起動可否を評価する, Then: 補助遷移では起動せず、Judge 完了イベント（論理名 `judge-complete`）を待ってから判定する  
+12.34.9.5 Given: `judge-complete` の完了状態（`success|need_input|failure`）でサブワーカーが有効である, When: 起動判定を実行する, Then: サブワーカーは同一判定サイクル内に `start`（実行）または `skip`（理由付き不実行）のどちらかを必ず記録し、無記録のまま放置しない  
+12.34.9.6 Given: サブワーカー実行制御を実装する, When: 稼働状態を保持する, Then: 制御の正本は単一状態オブジェクト `terminalState`（`unified.subworker_phase`=`idle|running|paused` と `runtime.subworker` / `runtime.automation`）とし、独立した複数フラグや別状態オブジェクトで判定分岐を増やさない  
+12.34.9.7 Given: Orchestrator が内部で LLM ツール（例: codex）を実行する, When: completion-hook を監視している, Then: 内部ツール呼び出しは hooks 出力先を隔離し、hook-event が実行中セッションへ逆流して無限ループしないようにする  
+12.34.9.8 Given: `judge-complete` が短時間に連続到達する（例: `prompt-hint` 再判定や `hook-judge`/`judge-result` の連続）, When: state/reason/最終入力/最終出力が同一文脈である, Then: サブワーカー起動は 1 回に畳み、同一文脈で `llm-start` を重複発火しない（`judge_complete_source` は重複判定キーに含めない）  
+12.34.9.9 Given: ユーザーが `Esc` で手動介入したい, When: 自動判定/サブワーカーの処理中または判定待ちで `Esc` を押す, Then: `manual-hold` を有効化して Judge/SubWorker を停止し、表示ステータスを `idle` に固定する。ユーザーが `Enter` で確定入力するまで自動処理を再開しない（in-flight の結果は破棄してよい）  
+12.34.9.10 Given: AIへ入力を送信した直後である, When: 入力後の最初の **有意な** PTY 出力（prompt断片/`for shortcuts`/`context left` だけのチャンクを除く）がまだ来ていない, Then: Judge は `await-first-output` で保留し、stale tail だけで `need_input` を再確定しない（一定時間超過時はタイムアウトで再開してよい）  
+12.34.9.11 Given: `await-first-output` 保留中に Codex の prompt marker が流れる, When: `scheduleAgentPromptHintFromOutput` が評価される, Then: `prompt-hint` Judge は起動せず、`await-first-output` の解除条件を満たすまで待機する  
+12.34.9.12 Given: Codex が処理中（`agentWorkActive` または `await-first-output`）である, When: サブワーカー入力行プレースホルダ表示可否を評価する, Then: 補完プレースホルダは描画しない（PTY本文出力への割り込みを防ぐ）。`subworker-running` スピナー表示だけは継続してよい  
+12.34.10 Given: サブワーカーを一時停止する, When: ユーザーが Settings > AI Coding Agent の `一時停止` を押す, Then: 解除されるまでそのターミナルの自動支援を停止する  
+12.34.11 Given: サブワーカーを一時停止せずに1回だけ回避したい, When: ユーザーが Settings > AI Coding Agent の `今回だけスキップ` を押す, Then: 次の 1 回の支援実行のみを抑止する  
+12.34.12 Given: ターミナルステータスを報告する, When: `running` 系ステータスを外部へ通知する, Then: `running` / `ai-running` / `subworker-running` を使い分ける（`subworker-running` を優先して報告する）。`ai-running` は「AIツール起動」ではなく「AIへ指示を送って処理中」のときのみ使う（起動直後/入力待ちは `running` or `need_input`）。  
+12.35 Given: モードが `ガンガン` である, When: AI状態判定の完了状態（`success|need_input|failure`）を受ける, Then: サブワーカーを起動し、`confidence>=threshold` のときのみ入力代行する（未満はアドバイス表示）  
+12.36 Given: モードが `慎重に` である, When: AI状態判定の完了状態（`success|need_input|failure`）を受ける, Then: サブワーカーを起動し、`confidence>=threshold` のときのみ入力代行する（未満はアドバイス表示）  
+12.37 Given: モードが `アドバイス` である, When: AI状態判定の完了状態（`success|need_input|failure`）を受ける, Then: サブワーカーを起動し、入力代行は行わずアドバイス表示のみを行う  
+12.37.1 Given: モードが `アドバイス` である, When: サブワーカーがアドバイス表示を行う, Then: ターミナル状態は `need_input` として扱う  
 
 ## 13. デバッグ/開発用機能
 13.1 Given: Terminal 画面でデバッグ UI を扱う, When: `debug ui: on/off` を切り替える, Then: デバッグバッジと保存ボタンの表示を切り替える（表示状態はローカルに保存する）  
@@ -329,4 +416,11 @@ export const NagomiNotify = async ({ $, project, directory }) => {
 13.8 Given: デバッグスクリーンショットを保存する, When: `save debug screenshot` を押す, Then: WebView2 DevTools の `Page.captureScreenshot` で取得し、app_config_dir の `terminal_debug_screenshots/terminal-<ts>.png` に保存する  
 13.9 Given: デバッグスクリーンショットを保存する, When: 取得後に PNG が 3s 以内に生成されない, Then: 失敗として扱い保存を中断する  
 13.10 Given: デバッグスクリーンショットを保存する, When: 取得に失敗する, Then: 可能な範囲で `worker_smoke.log` に失敗理由を記録する  
-
+13.11 Given: サブワーカー判定を追跡する, When: 判定/実行が行われる, Then: `mode/confidence/threshold/action/result/reason` をデバッグログ（またはスナップショット）に記録する  
+13.12 Given: サブワーカーデバッグが ON, When: サブワーカーの `start/skip/result/pause/resume` が発生する, Then: app_config_dir の `subworker_debug_events.jsonl` に JSONL で追記保存する  
+13.13 Given: `subworker_debug_events.jsonl` へ追記する, When: 1 件のイベントを保存する, Then: `ts_ms` と `event_type`、およびサブワーカー現在状態（phase/mode/threshold/action/result など）を同時に記録する  
+13.14 Given: サブワーカーデバッグが ON, When: 初回保存に成功する, Then: Terminal 本文に `subworker-debug-file: <path>` を表示し、解析対象ファイルを即時確認できるようにする  
+13.15 Given: デバッグスナップショット/サブワーカーデバッグを保存する, When: `running` 系ステータスを保存する, Then: `status_state`（`running|ai-running|subworker-running`）と `observed_status` を含めて後追い解析できるようにする（可能なら `agent_work_active` も含める）  
+13.16 Given: サブワーカーデバッグイベントを保存する, When: `start/skip/result` を記録する, Then: `judge_complete_event`（固定 `judge-complete`）と `judge_complete_source`（`judge-result|hook-judge|judge-fallback`）を保存し、`skip` の場合は理由を必須で残す  
+13.17 Given: 状態デバッグログが ON, When: 状態遷移/フック受信/Judge 開始・結果・フォールバック等のイベントが発生する, Then: app_config_dir の `status_debug_events.jsonl` に JSONL で追記保存する  
+13.18 Given: `status_debug_events.jsonl` へ追記する, When: 1 件のイベントを保存する, Then: `ts_ms` と `event_type` に加えて、`terminal_observed/agent_observed/merged_observed/status_state/judge/subworker` を同時に記録し、後から原因解析できるようにする  

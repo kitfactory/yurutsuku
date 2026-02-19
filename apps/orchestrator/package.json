@@ -13,7 +13,12 @@
     "e2e:stress": "node e2e/terminal.stress.e2e.js",
     "e2e:smoke": "node e2e/terminal.smoke.e2e.js",
     "e2e:ipc": "node e2e/ipc.session.e2e.js",
-    "e2e:screenshot": "node e2e/terminal.screenshot.e2e.js"
+    "e2e:screenshot": "node e2e/terminal.screenshot.e2e.js",
+    "e2e:subworker:matrix": "node e2e/subworker.matrix.e2e.js",
+    "e2e:subworker:matrix:template": "node e2e/subworker.matrix.template.e2e.js",
+    "e2e:subworker:advice:format": "node e2e/subworker.advice.format.e2e.js",
+    "e2e:subworker:judge:dedup": "node e2e/subworker.judge.dedup.e2e.js",
+    "e2e:codex:prime-minister": "node e2e/codex.prime-minister.e2e.js"
   },
   "devDependencies": {
     "selenium-webdriver": "^4.40.0",

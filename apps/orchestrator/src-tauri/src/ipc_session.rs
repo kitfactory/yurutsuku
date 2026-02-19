@@ -55,10 +55,7 @@ pub fn init_ipc_session_state<R: Runtime>(app: &AppHandle<R>) {
     });
 }
 
-pub fn touch_ipc_session<R: Runtime>(
-    app: &AppHandle<R>,
-    session_id: &str,
-) -> Result<(), String> {
+pub fn touch_ipc_session<R: Runtime>(app: &AppHandle<R>, session_id: &str) -> Result<(), String> {
     ensure_ipc_session(app, session_id, None)
 }
 
@@ -155,7 +152,10 @@ pub fn ipc_session_echo<R: Runtime>(
         .get_mut(&session_id)
         .ok_or_else(|| "ipc session not found".to_string())?;
     session.last_seen_ms = now_ms();
-    Ok(IpcEchoResponse { session_id, message })
+    Ok(IpcEchoResponse {
+        session_id,
+        message,
+    })
 }
 
 #[tauri::command]

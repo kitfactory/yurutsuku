@@ -33,15 +33,11 @@ async fn connect() -> Result<Client, fantoccini::error::NewSessionError> {
 async fn mode_switch_e2e() -> Result<(), Box<dyn std::error::Error>> {
     let client = connect().await?;
 
-    let chat_main = client
-        .find(Locator::Css("[data-role='chat-main']"))
-        .await?;
+    let chat_main = client.find(Locator::Css("[data-role='chat-main']")).await?;
     let chat_toolbar = client
         .find(Locator::Css("[data-role='chat-toolbar']"))
         .await?;
-    let run_board = client
-        .find(Locator::Css("[data-role='run-board']"))
-        .await?;
+    let run_board = client.find(Locator::Css("[data-role='run-board']")).await?;
     let run_chip = client
         .find(Locator::Css("[data-role='mode-chip'][data-mode='run']"))
         .await?;
@@ -69,7 +65,9 @@ async fn mode_switch_e2e() -> Result<(), Box<dyn std::error::Error>> {
     assert!(run_class.contains("hidden"));
 
     let phase_button = client
-        .find(Locator::Css("[data-role='phase-button'][data-phase='success']"))
+        .find(Locator::Css(
+            "[data-role='phase-button'][data-phase='success']",
+        ))
         .await?;
     phase_button.click().await?;
     tokio::time::sleep(Duration::from_millis(100)).await;

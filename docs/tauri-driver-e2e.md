@@ -41,16 +41,14 @@ node apps/orchestrator/e2e/terminal.screenshot.e2e.js
 node apps/orchestrator/e2e/terminal.stress.e2e.js
 node apps/orchestrator/e2e/codex.hook.e2e.js
 node apps/orchestrator/e2e/terminal.tint.e2e.js
+node apps/orchestrator/e2e/subworker.matrix.e2e.js
+node apps/orchestrator/e2e/subworker.advice.format.e2e.js
+node apps/orchestrator/e2e/subworker.judge.dedup.e2e.js
+node apps/orchestrator/e2e/codex.prime-minister.e2e.js
 ```
 
-Terminal 系 E2E は `applyView('terminal')` で Chat を擬似切替しない。  
-実装は `GET /open-terminal` で **実際の Terminal window（`view=terminal&session_id=...`）** を開き、WebDriver をそのウィンドウへ切り替えて検証する。  
-
-`tauri-driver`（WebView2）では `--start-hidden` で初期ウィンドウが 0 の場合、セッション作成時に  
-`SessionNotCreatedError: DevToolsActivePort file doesn't exist` になる環境があるため、E2E は初期ウィンドウを確保してから Terminal window を開く手順を採用する。
-
 `terminal.tint.e2e.js` は前提不足（例: `msedge` 不在、driver/browser の major 不一致、既存プロセス残存）時に skip を返す。  
-CI などで必ず失敗扱いにしたい場合は `NAGOMI_E2E_STRICT=1` を指定する。  
+CI などで必ず失敗扱いにしたい場合は `NAGOMI_E2E_STRICT=1` を指定する。
 
 ```powershell
 $env:NAGOMI_E2E_STRICT = "1"
@@ -84,6 +82,34 @@ npm run e2e:tint -w apps/orchestrator
 
 ---
 
+## サブワーカー機能確認（先行実装）
+目的は「稼働可視化（緑）」「表示専用アドバイス」「モード別挙動」が要件どおりであることを確認すること。
+
+### 確認観点（P0最小）
+1. サブワーカー稼働中は対象ターミナルに `サブワーカーで処理中` が緑表示される
+2. サブワーカー終了時に緑表示が消え、元の状態色（黒/青/オレンジ/赤）へ戻る
+3. アドバイス表示は Terminal 本文に「次に何を入力するか」を1行で追記し、実コマンド入力/PTY 入出力として扱われない
+4. `ガンガン`: `success` または `need_input` で入力代行またはアドバイスが実行される
+5. `慎重に`: `need_input` のときだけ稼働し、入力代行後の状態は終了判定に追従する
+6. `アドバイス`: 任意状態で稼働するが入力代行せず、アドバイス表示時は `need_input` として扱う
+7. サブワーカー進行中は緑表示のみで可視化され、完了時は Terminal 本文に 1 行だけ追記される（代行時=入力内容、アドバイス時=次入力）
+8. サブワーカー本文出力は `[nagomi-subworker(自信度：xxx　アドバイス/代理入力)] (メッセージ)` 形式で統一される
+9. Settings > AI Coding Agent の `サブワーカーON/OFF` / `サブワーカーデバッグON/OFF` / `一時停止` / `今回だけスキップ` が動作する
+10. 判断ログ（`mode/confidence/action/result/reason`）が追跡できる
+11. 同一 state のまま出力だけ更新されてもサブワーカーが再判定を連打しない
+12. アドバイス生成時に `ユーザー最終入力` と `最後の出力` の文脈を使っていることを確認できる
+
+### 実施方法
+1) 設定画面で `サブワーカーON/OFF` / `サブワーカーデバッグON/OFF` / サブワーカーモード（`ガンガン` / `慎重に` / `アドバイス`）を切り替える  
+2) `自信度閾値` を変更し、入力代行/アドバイス分岐が変わることを確認する  
+3) ターミナルで `success` / `need_input` / `running` を作って、モードごとの稼働条件を確認する  
+4) 稼働中の緑表示と、終了後の状態復帰を目視確認する  
+5) Settings > AI Coding Agent で `一時停止` / `今回だけスキップ` の挙動を確認する  
+6) 端末幅を狭くしてもサブワーカー結果の 1 行表示が読み取れることを確認する  
+7) `save debug snapshot` で `subworker_status` / `subworker_advice` / `subworker_decision` / state の相関を確認する  
+
+---
+
 ## Rust 通知テスト（分離実行）
 `notify_flow` は Rust 側単体テストとして分離し、Node 統合テストとは別で実行する。
 
@@ -98,6 +124,12 @@ npm run test:rust:notify -w apps/orchestrator
 - Windows では npm の shim が PATH にないと `codex` が解決できない
 - Terminal セッションは **通常の cmd/PowerShell と同等の環境変数**を目指している
   - `where codex` が通るかを確認する
+
+### 追加シナリオ（現行）
+- `apps/orchestrator/e2e/codex.prime-minister.e2e.js`: 実問合せで `running -> success` 遷移と hook 経路を確認する
+- `apps/orchestrator/e2e/subworker.matrix.e2e.js`: モード別（慎重/ガンガン/アドバイス）の行列ケースを確認する
+- `apps/orchestrator/e2e/subworker.advice.format.e2e.js`: アドバイス表示形式と Tab 適用を確認する
+- `apps/orchestrator/e2e/subworker.judge.dedup.e2e.js`: `hook-judge`/`judge-result` 連続時の dedup（`llm-start` 重複なし）と非Tabでの ghost 解除を確認する
 
 ---
 

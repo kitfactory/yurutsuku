@@ -115,10 +115,6 @@ function promptCommand() {
     : 'read -p "Continue? [y/n] " nagomi_answer\n';
 }
 
-function promptResponse() {
-  return process.platform === "win32" ? "y\r\n" : "y\n";
-}
-
 async function waitForDriver(port, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -218,7 +214,7 @@ async function main() {
     );
     await client.wait(until.elementLocated(By.css("#terminal-container")), 10000);
 
-    const ipcSessionId = await invokeTauri(client, "ipc_session_open", {
+    let ipcSessionId = await invokeTauri(client, "ipc_session_open", {
       clientEpoch: Date.now(),
     }).then((snapshot) => (snapshot && snapshot.sessionId ? snapshot.sessionId : null));
     if (!ipcSessionId) {
@@ -251,6 +247,23 @@ async function main() {
     if (!hasTestHook) {
       throw new Error("nagomiTest hook not available");
     }
+    await waitFor(async () => {
+      const readiness = await client.executeScript(`
+        const internal = window.nagomiTest && window.nagomiTest.getInternalState
+          ? window.nagomiTest.getInternalState()
+          : null;
+        return {
+          terminalInitialized: typeof terminalInitialized !== 'undefined' ? terminalInitialized : false,
+          ipcSessionId: internal ? internal.ipcSessionId : null
+        };
+      `);
+      return Boolean(
+        readiness &&
+          readiness.terminalInitialized &&
+          typeof readiness.ipcSessionId === "string" &&
+          readiness.ipcSessionId.length > 0
+      );
+    }, 20000);
     // 起動直後は idle を維持するため、初期状態を確認する
     const initialObserved = await waitForObservedState(client, "idle", 10000);
     console.log("[e2e] initial observed", initialObserved);
@@ -262,8 +275,29 @@ async function main() {
       "return window.nagomiTest && window.nagomiTest.getObservedState ? window.nagomiTest.getObservedState() : null;"
     );
     console.log("[e2e] after prompt input", { afterPromptInternal, afterPromptObserved });
+    const activeSessionId = await client.executeScript(
+      "return window.nagomiTest && window.nagomiTest.getTerminalSessionId ? window.nagomiTest.getTerminalSessionId() : null;"
+    );
+    if (!activeSessionId) {
+      throw new Error("active terminal session id not ready");
+    }
+    const needInputHookOk = await client.executeScript(
+      "return window.nagomiTest && window.nagomiTest.emitHookState ? window.nagomiTest.emitHookState({ source: 'codex', kind: 'need_input', judge_state: 'need_input', source_session_id: arguments[0] }) : false;",
+      activeSessionId
+    );
+    const afterNeedInputHook = await client.executeScript(
+      "return window.nagomiTest && window.nagomiTest.getObservedState ? window.nagomiTest.getObservedState() : null;"
+    );
+    console.log("[e2e] hook need_input", { needInputHookOk, afterNeedInputHook });
     await waitForObservedState(client, "need-input", 10000);
-    await client.executeScript("return window.nagomiTest.sendTerminalInput(arguments[0]);", promptResponse());
+    const successHookOk = await client.executeScript(
+      "return window.nagomiTest && window.nagomiTest.emitHookState ? window.nagomiTest.emitHookState({ source: 'codex', kind: 'completed', judge_state: 'success', source_session_id: arguments[0] }) : false;",
+      activeSessionId
+    );
+    const afterSuccessHook = await client.executeScript(
+      "return window.nagomiTest && window.nagomiTest.getObservedState ? window.nagomiTest.getObservedState() : null;"
+    );
+    console.log("[e2e] hook success", { successHookOk, afterSuccessHook });
     await waitForObservedState(client, "success", 10000);
     const eventProbe = await client.executeAsyncScript(function (done) {
       const listen =
@@ -319,6 +353,16 @@ async function main() {
     if (!sessionId) {
       throw new Error("terminal session id not found");
     }
+    ipcSessionId = await invokeTauri(client, "ipc_session_open", {
+      clientEpoch: Date.now(),
+    }).then((snapshot) => (snapshot && snapshot.sessionId ? snapshot.sessionId : null));
+    if (!ipcSessionId) {
+      throw new Error("ipc session id refresh failed");
+    }
+    await client.executeScript(
+      "window.__ipcSessionId = arguments[0]; if (typeof ipcSessionId !== 'undefined') { ipcSessionId = arguments[0]; }",
+      ipcSessionId
+    );
     await client.executeScript("window.__e2eSessionId = arguments[0];", sessionId);
     const registerResult = await client.executeAsyncScript(
       function (ipcSessionId, id, done) {

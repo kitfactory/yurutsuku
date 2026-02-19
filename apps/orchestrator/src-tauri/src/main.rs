@@ -1,23 +1,26 @@
-﻿use anyhow::Result;
-use serde::{Deserialize, Serialize};
+﻿use crate::completion_hook::{hooks_base_dir, CompletionHookManager, HookEvent, HookEventKind};
+use anyhow::Result;
 #[cfg(windows)]
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 #[cfg(windows)]
 use base64::Engine;
+use nagomi_protocol::Message;
+use serde::{Deserialize, Serialize};
+use socket2::{Domain, Protocol, Socket, Type};
 #[cfg(windows)]
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 #[cfg(windows)]
 use std::ffi::OsStr;
+use std::fs;
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
 #[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
-use std::process::{Command, Stdio};
-use std::fs;
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -28,12 +31,6 @@ use tauri::{
     AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, Position, Runtime, Size,
     WebviewUrl, WebviewWindowBuilder,
 };
-use nagomi_protocol::Message;
-use crate::completion_hook::{CompletionHookManager, HookEvent, HookEventKind, hooks_base_dir};
-#[cfg(windows)]
-use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, REG_EXPAND_SZ, REG_SZ};
-#[cfg(windows)]
-use winreg::RegKey;
 #[cfg(windows)]
 use webview2_com::CallDevToolsProtocolMethodCompletedHandler;
 #[cfg(windows)]
@@ -41,21 +38,25 @@ use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2CallDevToolsProt
 #[cfg(windows)]
 use windows::core::PCWSTR;
 #[cfg(windows)]
-use windows_sys::Win32::System::Environment::ExpandEnvironmentStringsW;
-#[cfg(windows)]
 use windows_sys::Win32::Foundation::RECT;
 #[cfg(windows)]
 use windows_sys::Win32::Graphics::Gdi::{
-    BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, GetDC,
+    BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC, GetDIBits,
     ReleaseDC, SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, CAPTUREBLT, DIB_RGB_COLORS,
     SRCCOPY,
 };
 #[cfg(windows)]
+use windows_sys::Win32::System::Environment::ExpandEnvironmentStringsW;
+#[cfg(windows)]
 use windows_sys::Win32::UI::WindowsAndMessaging::GetClientRect;
+#[cfg(windows)]
+use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, REG_EXPAND_SZ, REG_SZ};
+#[cfg(windows)]
+use winreg::RegKey;
 
+mod completion_hook;
 mod ipc_session;
 mod judge;
-mod completion_hook;
 mod notify;
 mod worker;
 
@@ -69,6 +70,11 @@ const TERMINAL_SHELL_WSL: &str = "wsl";
 const TERMINAL_KEYBIND_ARRANGE_DEFAULT: &str = "Ctrl+Shift+Y";
 const TERMINAL_KEYBIND_FOCUS_NEXT_DEFAULT: &str = "Ctrl+Shift+J";
 const TERMINAL_KEYBIND_FOCUS_PREV_DEFAULT: &str = "Ctrl+Shift+K";
+const SUBWORKER_ENABLED_DEFAULT: bool = true;
+const SUBWORKER_DEBUG_ENABLED_DEFAULT: bool = false;
+const SUBWORKER_MODE_CAREFUL: &str = "careful";
+const SUBWORKER_CONFIDENCE_THRESHOLD_DEFAULT: f32 = 0.8;
+const STATUS_DEBUG_ENABLED_DEFAULT: bool = false;
 
 #[cfg(windows)]
 thread_local! {
@@ -85,6 +91,19 @@ struct Settings {
     silence_timeout_ms: u64,
     llm_enabled: bool,
     llm_tool: String,
+    #[serde(default = "default_subworker_enabled")]
+    subworker_enabled: bool,
+    #[serde(default = "default_subworker_debug_enabled")]
+    subworker_debug_enabled: bool,
+    #[serde(default = "default_subworker_mode")]
+    subworker_mode: String,
+    #[serde(default = "default_subworker_confidence_threshold")]
+    subworker_confidence_threshold: f32,
+    // NOTE: Backward compatible alias for the previous display-template setting key.
+    // NOTE: 莉･蜑阪・陦ｨ遉ｺ逕ｨ繝・Φ繝励Ξ險ｭ螳壹く繝ｼ・・ubworker_advice_template_markdown・峨°繧峨・遘ｻ陦後ｒ蜿励￠繧九・    #[serde(default, alias = "subworker_advice_template_markdown")]
+    subworker_prompt_template_markdown: String,
+    #[serde(default = "default_status_debug_enabled")]
+    status_debug_enabled: bool,
     character_id: String,
     log_retention_lines: u32,
     terminal_watcher_enabled: bool,
@@ -136,6 +155,26 @@ fn default_terminal_keybind_focus_next() -> String {
 
 fn default_terminal_keybind_focus_prev() -> String {
     TERMINAL_KEYBIND_FOCUS_PREV_DEFAULT.to_string()
+}
+
+fn default_subworker_mode() -> String {
+    SUBWORKER_MODE_CAREFUL.to_string()
+}
+
+fn default_subworker_enabled() -> bool {
+    SUBWORKER_ENABLED_DEFAULT
+}
+
+fn default_subworker_debug_enabled() -> bool {
+    SUBWORKER_DEBUG_ENABLED_DEFAULT
+}
+
+fn default_subworker_confidence_threshold() -> f32 {
+    SUBWORKER_CONFIDENCE_THRESHOLD_DEFAULT
+}
+
+fn default_status_debug_enabled() -> bool {
+    STATUS_DEBUG_ENABLED_DEFAULT
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -190,6 +229,15 @@ struct CodexHookSetupResult {
 struct ToolJudgeResult {
     state: String,
     summary: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SubworkerLlmDecision {
+    action: String,
+    confidence: f32,
+    input: String,
+    advice_markdown: String,
+    reason: String,
 }
 
 struct WorkerState {
@@ -278,6 +326,11 @@ struct CompletionHookState {
     manager: Mutex<CompletionHookManager>,
 }
 
+#[derive(Default)]
+struct SubworkerCodexSessionState {
+    by_ipc_session: Mutex<HashMap<String, String>>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct WindowRect {
     x: i32,
@@ -306,9 +359,17 @@ impl Default for Settings {
             notifications_enabled: true,
             audio_enabled: true,
             volume: 0.8,
-            silence_timeout_ms: 30000,
+            // Default idle time before running the AI terminal state judge.
+            // AI繧ｿ繝ｼ繝溘リ繝ｫ迥ｶ諷句愛螳壹ｒ襍ｰ繧峨○繧九∪縺ｧ縺ｮ豐磯ｻ呎凾髢薙・譌｢螳壼､縲・
+            silence_timeout_ms: 5000,
             llm_enabled: false,
             llm_tool: "codex".to_string(),
+            subworker_enabled: default_subworker_enabled(),
+            subworker_debug_enabled: default_subworker_debug_enabled(),
+            subworker_mode: default_subworker_mode(),
+            subworker_confidence_threshold: default_subworker_confidence_threshold(),
+            subworker_prompt_template_markdown: String::new(),
+            status_debug_enabled: default_status_debug_enabled(),
             character_id: "default".to_string(),
             log_retention_lines: 20_000,
             terminal_watcher_enabled: false,
@@ -389,33 +450,46 @@ fn build_windows_terminal_command(settings: &Settings) -> String {
     }
 }
 
-fn settings_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
-    // 險ｭ螳壹ヵ繧｡繧､繝ｫ縺ｯ app_config_dir 縺ｫ鄂ｮ縺・/ Store settings under app_config_dir.
+fn app_config_dir<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
+    if let Ok(value) = std::env::var("NAGOMI_APP_CONFIG_DIR") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
     app.path()
         .app_config_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
-        .join("settings.json")
+}
+
+fn settings_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
+    // Store settings under app_config_dir (supports env override for E2E isolation).
+    // 險ｭ螳壹ヵ繧｡繧､繝ｫ縺ｯ app_config_dir 縺ｫ菫晏ｭ倥☆繧具ｼ・2E髫秘屬逕ｨ縺ｫ env override 繧偵し繝昴・繝医☆繧具ｼ峨・
+    app_config_dir(app).join("settings.json")
 }
 
 fn worker_log_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
-    app.path()
-        .app_config_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join("worker_smoke.log")
+    app_config_dir(app).join("worker_smoke.log")
 }
 
 fn terminal_debug_snapshot_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
-    app.path()
-        .app_config_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join("terminal_debug_snapshots.jsonl")
+    app_config_dir(app).join("terminal_debug_snapshots.jsonl")
+}
+
+fn status_debug_events_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
+    app_config_dir(app).join("status_debug_events.jsonl")
+}
+
+fn subworker_debug_events_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
+    app_config_dir(app).join("subworker_debug_events.jsonl")
+}
+
+fn subworker_io_events_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
+    app_config_dir(app).join("subworker_io_events.jsonl")
 }
 
 fn terminal_debug_screenshot_dir<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
-    app.path()
-        .app_config_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join("terminal_debug_screenshots")
+    app_config_dir(app).join("terminal_debug_screenshots")
 }
 
 fn terminal_debug_screenshot_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
@@ -424,6 +498,32 @@ fn terminal_debug_screenshot_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
         .unwrap_or_default()
         .as_millis();
     terminal_debug_screenshot_dir(app).join(format!("terminal-{}.png", now_ms))
+}
+
+fn append_jsonl_entry(path: &Path, payload: serde_json::Value) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let mut entry = payload;
+    if let Some(obj) = entry.as_object_mut() {
+        let stamped = u64::try_from(now_ms).unwrap_or(u64::MAX);
+        obj.insert(
+            "ts_ms".to_string(),
+            serde_json::Value::Number(stamped.into()),
+        );
+    }
+    let raw = serde_json::to_string(&entry).map_err(|err| err.to_string())?;
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|err| err.to_string())?;
+    writeln!(file, "{}", raw).map_err(|err| err.to_string())?;
+    Ok(())
 }
 
 fn codex_config_path() -> Option<PathBuf> {
@@ -470,7 +570,9 @@ fn codex_notify_script_body() -> String {
 }
 
 fn toml_escape_path(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/").replace('"', "\\\"")
+    path.to_string_lossy()
+        .replace('\\', "/")
+        .replace('"', "\\\"")
 }
 
 fn url_decode(input: &str) -> String {
@@ -522,7 +624,12 @@ fn parse_query_pairs(query: &str) -> HashMap<String, String> {
 }
 
 fn test_endpoints_enabled() -> bool {
-    matches!(std::env::var("NAGOMI_ENABLE_TEST_ENDPOINTS").ok().as_deref(), Some("1"))
+    matches!(
+        std::env::var("NAGOMI_ENABLE_TEST_ENDPOINTS")
+            .ok()
+            .as_deref(),
+        Some("1")
+    )
 }
 
 #[cfg(windows)]
@@ -530,21 +637,15 @@ fn expand_environment_strings(value: &str) -> String {
     let wide: Vec<u16> = OsStr::new(value).encode_wide().chain(Some(0)).collect();
     let mut buffer: Vec<u16> = vec![0; 32768];
     unsafe {
-        let mut len = ExpandEnvironmentStringsW(
-            wide.as_ptr(),
-            buffer.as_mut_ptr(),
-            buffer.len() as u32,
-        );
+        let mut len =
+            ExpandEnvironmentStringsW(wide.as_ptr(), buffer.as_mut_ptr(), buffer.len() as u32);
         if len == 0 {
             return value.to_string();
         }
         if len as usize > buffer.len() {
             buffer.resize(len as usize, 0);
-            len = ExpandEnvironmentStringsW(
-                wide.as_ptr(),
-                buffer.as_mut_ptr(),
-                buffer.len() as u32,
-            );
+            len =
+                ExpandEnvironmentStringsW(wide.as_ptr(), buffer.as_mut_ptr(), buffer.len() as u32);
             if len == 0 {
                 return value.to_string();
             }
@@ -565,7 +666,10 @@ fn decode_reg_value(value: &winreg::RegValue) -> Option<String> {
             units.push(u16::from_le_bytes([chunk[0], chunk[1]]));
         }
     }
-    let len = units.iter().position(|&unit| unit == 0).unwrap_or(units.len());
+    let len = units
+        .iter()
+        .position(|&unit| unit == 0)
+        .unwrap_or(units.len());
     let mut text = String::from_utf16_lossy(&units[..len]);
     if value.vtype == REG_EXPAND_SZ {
         text = expand_environment_strings(&text);
@@ -739,9 +843,7 @@ fn build_windows_terminal_env(_session_id: &str) -> HashMap<String, String> {
 }
 
 fn has_header_terminator(buffer: &[u8]) -> bool {
-    buffer
-        .windows(4)
-        .any(|slice| slice == b"\r\n\r\n")
+    buffer.windows(4).any(|slice| slice == b"\r\n\r\n")
         || buffer.windows(2).any(|slice| slice == b"\n\n")
 }
 
@@ -838,7 +940,8 @@ fn ensure_codex_config(script_path: &Path, legacy_py: &Path) -> Result<(String, 
     let mut current = String::new();
     if config_path.exists() {
         let mut file = fs::File::open(&config_path).map_err(|err| err.to_string())?;
-        file.read_to_string(&mut current).map_err(|err| err.to_string())?;
+        file.read_to_string(&mut current)
+            .map_err(|err| err.to_string())?;
     }
     let mut has_notify = false;
     let mut has_legacy = false;
@@ -898,7 +1001,10 @@ fn ensure_codex_config(script_path: &Path, legacy_py: &Path) -> Result<(String, 
     next.push_str("# added by nagomi\n");
     next.push_str(&format!("{notify_line}\n"));
     fs::write(&config_path, next).map_err(|err| err.to_string())?;
-    Ok(("installed".to_string(), "codex notify configured".to_string()))
+    Ok((
+        "installed".to_string(),
+        "codex notify configured".to_string(),
+    ))
 }
 
 fn start_health_server<R: Runtime>(app: AppHandle<R>) {
@@ -908,13 +1014,50 @@ fn start_health_server<R: Runtime>(app: AppHandle<R>) {
         .unwrap_or(17707);
     thread::spawn(move || {
         let addr = format!("127.0.0.1:{port}");
-        let listener = match TcpListener::bind(&addr) {
-            Ok(listener) => listener,
+        let sock_addr = match addr.parse::<std::net::SocketAddr>() {
+            Ok(value) => value,
             Err(err) => {
-                let _ = log_worker_event(&app, &format!("health bind failed: {err}"));
+                let _ = log_worker_event(&app, &format!("health addr parse failed: {err}"));
                 return;
             }
         };
+
+        // On Windows, rapid restarts can hit `os error 10048` (address in use) even when the
+        // previous process has just exited. Enable reuse and retry for a short window.
+        // Windows 縺ｧ縺ｯ騾｣邯壼・襍ｷ蜍輔〒 10048 縺悟・繧・☆縺・・縺ｧ縲〉euse 繧呈怏蜉ｹ縺ｫ縺励※遏ｭ譎る俣繝ｪ繝医Λ繧､縺吶ｋ縲・
+        let mut listener: Option<TcpListener> = None;
+        for attempt in 0..80u32 {
+            let bound =
+                Socket::new(Domain::IPV4, Type::STREAM, Some(Protocol::TCP)).and_then(|socket| {
+                    let _ = socket.set_reuse_address(true);
+                    socket.bind(&sock_addr.into())?;
+                    socket.listen(128)?;
+                    Ok::<TcpListener, std::io::Error>(socket.into())
+                });
+            match bound {
+                Ok(bound) => {
+                    listener = Some(bound);
+                    break;
+                }
+                Err(err) => {
+                    if attempt == 0 || attempt % 10 == 9 {
+                        let _ = log_worker_event(
+                            &app,
+                            &format!("health bind failed (attempt={}): {err}", attempt + 1),
+                        );
+                    }
+                    thread::sleep(Duration::from_millis(250));
+                }
+            }
+        }
+        let listener = match listener {
+            Some(listener) => listener,
+            None => {
+                let _ = log_worker_event(&app, "health bind failed: giving up after retries");
+                return;
+            }
+        };
+        let _ = log_worker_event(&app, &format!("health listening: {addr}"));
         for stream in listener.incoming() {
             let stream = match stream {
                 Ok(stream) => stream,
@@ -983,12 +1126,19 @@ fn builtin_local_display_text(pending: &str) -> Option<String> {
     None
 }
 
-fn append_local_echo_delta(capture: &mut TerminalInputCaptureState, next_text: Option<String>, out: &mut String) {
+fn append_local_echo_delta(
+    capture: &mut TerminalInputCaptureState,
+    next_text: Option<String>,
+    out: &mut String,
+) {
     let previous: Vec<char> = capture.echoed_display.chars().collect();
     let next = next_text.unwrap_or_default();
     let next_chars: Vec<char> = next.chars().collect();
     let mut common = 0usize;
-    while common < previous.len() && common < next_chars.len() && previous[common] == next_chars[common] {
+    while common < previous.len()
+        && common < next_chars.len()
+        && previous[common] == next_chars[common]
+    {
         common += 1;
     }
     for _ in common..previous.len() {
@@ -1204,7 +1354,12 @@ fn handle_health_connection<R: Runtime>(mut stream: TcpStream, app: &AppHandle<R
                     break;
                 }
             }
-            Err(err) if matches!(err.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {
+            Err(err)
+                if matches!(
+                    err.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) =>
+            {
                 if started_at.elapsed() > Duration::from_secs(2) {
                     break;
                 }
@@ -1266,7 +1421,7 @@ fn handle_health_connection<R: Runtime>(mut stream: TcpStream, app: &AppHandle<R
             return;
         }
         if path.starts_with("/terminal-send") {
-            // Test-only endpoint guarded by env flag. / テスト用エンドポイント（環境変数で有効化）
+            // Test-only endpoint guarded by env flag. / 繝・せ繝育畑繧ｨ繝ｳ繝峨・繧､繝ｳ繝茨ｼ育腸蠅・､画焚縺ｧ譛牙柑蛹厄ｼ・
             if !test_endpoints_enabled() {
                 let body = r#"{"status":"forbidden"}"#;
                 let response = format!(
@@ -1347,8 +1502,33 @@ fn read_settings(path: &Path) -> Result<Settings> {
         return Ok(Settings::default());
     }
     let raw = fs::read_to_string(path)?;
-    let settings = serde_json::from_str(&raw)?;
-    Ok(settings)
+    // Windows PowerShell can write UTF-8 with BOM. serde_json rejects BOM, so strip it.
+    // Windows PowerShell 縺ｯ UTF-8 BOM 莉倥″縺ｧ菫晏ｭ倥＠縺後■縺ｧ縲《erde_json 縺悟ｼｾ縺上◆繧・勁蜴ｻ縺吶ｋ縲・
+    let raw = raw.trim_start_matches('\u{feff}');
+    if raw.trim().is_empty() {
+        return Ok(Settings::default());
+    }
+    match serde_json::from_str(raw) {
+        Ok(settings) => Ok(settings),
+        Err(_) => {
+            // Recover from corrupted settings instead of failing app startup.
+            // 險ｭ螳壹ヵ繧｡繧､繝ｫ遐ｴ謳阪〒繧りｵｷ蜍輔〒縺阪ｋ繧医≧縺ｫ蠕ｩ譌ｧ縺吶ｋ・磯驕ｿ縺励※譌｢螳壼､縺ｫ謌ｻ縺呻ｼ峨・
+            let ts_ms = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_else(|_| Duration::from_millis(0))
+                .as_millis();
+            if let Some(parent) = path.parent() {
+                let file_name = path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("settings.json");
+                let backup = parent.join(format!("{file_name}.corrupt.{ts_ms}.json"));
+                // Best-effort backup. Ignore errors; we still want to boot.
+                let _ = fs::write(&backup, raw.as_bytes());
+            }
+            Ok(Settings::default())
+        }
+    }
 }
 
 fn write_settings(path: &Path, settings: &Settings) -> Result<()> {
@@ -1400,7 +1580,7 @@ fn list_wsl_distros<R: Runtime>(
             .args(["-l", "-q"])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        // Hide helper console window while probing distros. / ディストロ取得時の補助コンソール表示を抑止。
+        // Hide helper console window while probing distros. / 繝・ぅ繧ｹ繝医Ο蜿門ｾ玲凾縺ｮ陬懷勧繧ｳ繝ｳ繧ｽ繝ｼ繝ｫ陦ｨ遉ｺ繧呈椛豁｢縲・
         const CREATE_NO_WINDOW_FLAG: u32 = 0x08000000;
         command.creation_flags(CREATE_NO_WINDOW_FLAG);
         let output = command.output().map_err(|err| err.to_string())?;
@@ -1503,6 +1683,122 @@ fn tool_judge<R: Runtime>(
     run_tool_judge(&tool, &tail).map_err(|err| err.to_string())
 }
 
+#[tauri::command]
+fn subworker_codex_session_started<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+    resume: bool,
+) -> Result<(), String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    if resume {
+        let _ = log_worker_event(&app, "subworker codex session sync: resume (kept)");
+        return Ok(());
+    }
+    if let Ok(mut guard) = app
+        .state::<SubworkerCodexSessionState>()
+        .by_ipc_session
+        .lock()
+    {
+        guard.remove(&ipc_session_id);
+    }
+    let _ = log_worker_event(&app, "subworker codex session sync: fresh (cleared)");
+    Ok(())
+}
+
+#[tauri::command]
+async fn subworker_llm_decide<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+    tool: String,
+    prompt: String,
+) -> Result<SubworkerLlmDecision, String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    let normalized_tool = tool.trim().to_ascii_lowercase();
+    let prior_codex_session = if normalized_tool == "codex" {
+        app.state::<SubworkerCodexSessionState>()
+            .by_ipc_session
+            .lock()
+            .ok()
+            .and_then(|guard| guard.get(&ipc_session_id).cloned())
+    } else {
+        None
+    };
+
+    let normalized_tool_for_worker = normalized_tool.clone();
+    let prior_codex_session_for_worker = prior_codex_session.clone();
+    let run_result = tauri::async_runtime::spawn_blocking(
+        move || -> Result<(SubworkerToolRunOutput, bool), String> {
+            let run_once = |resume_session_id: Option<String>| {
+                run_tool_subworker_decide(&tool, &prompt, resume_session_id.as_deref())
+            };
+
+            let first_result = run_once(prior_codex_session_for_worker.clone());
+            match first_result {
+                Ok(output) => Ok((output, false)),
+                Err(err) => {
+                    // If resume fails, retry fresh once and mark stale session for cleanup.
+                    // resume 失敗時は fresh を 1 回だけ再試行し、古いセッションを後で破棄する。
+                    if normalized_tool_for_worker == "codex"
+                        && prior_codex_session_for_worker.is_some()
+                    {
+                        let retry_output = run_once(None).map_err(|retry_err| {
+                            format!(
+                                "codex resume failed and fresh retry failed: resume={err}; fresh={retry_err}"
+                            )
+                        })?;
+                        Ok((retry_output, true))
+                    } else {
+                        Err(err.to_string())
+                    }
+                }
+            }
+        },
+    )
+    .await
+    .map_err(|err| format!("subworker worker task failed: {err}"))?;
+
+    let (outcome, clear_stale_session) = match run_result {
+        Ok(value) => value,
+        Err(err) => {
+            if normalized_tool == "codex" && prior_codex_session.is_some() {
+                if let Ok(mut guard) = app
+                    .state::<SubworkerCodexSessionState>()
+                    .by_ipc_session
+                    .lock()
+                {
+                    guard.remove(&ipc_session_id);
+                }
+            }
+            return Err(err);
+        }
+    };
+
+    if normalized_tool == "codex" {
+        if clear_stale_session {
+            if let Ok(mut guard) = app
+                .state::<SubworkerCodexSessionState>()
+                .by_ipc_session
+                .lock()
+            {
+                guard.remove(&ipc_session_id);
+            }
+        }
+        if let Some(next_session_id) = outcome.codex_thread_id.as_deref() {
+            if !next_session_id.trim().is_empty() {
+                if let Ok(mut guard) = app
+                    .state::<SubworkerCodexSessionState>()
+                    .by_ipc_session
+                    .lock()
+                {
+                    guard.insert(ipc_session_id, next_session_id.to_string());
+                }
+            }
+        }
+    }
+
+    Ok(outcome.decision)
+}
+
 fn apply_completion_hook_tool<R: Runtime>(app: &AppHandle<R>, tool: Option<&str>) {
     let base_dir = hooks_base_dir();
     let _ = fs::create_dir_all(&base_dir);
@@ -1564,6 +1860,52 @@ fn run_tool_judge(tool: &str, tail: &str) -> Result<ToolJudgeResult> {
     Ok(fallback_tool_judge(tail))
 }
 
+struct SubworkerToolRunOutput {
+    decision: SubworkerLlmDecision,
+    codex_thread_id: Option<String>,
+}
+
+fn run_tool_subworker_decide(
+    tool: &str,
+    prompt: &str,
+    codex_session_id: Option<&str>,
+) -> Result<SubworkerToolRunOutput> {
+    let tool_key = tool.trim().to_ascii_lowercase();
+    let tool_path = resolve_tool_command(&tool_key);
+    let env_args = std::env::var("NAGOMI_SUBWORKER_TOOL_ARGS")
+        .ok()
+        .unwrap_or_default();
+    let timeout_ms = std::env::var("NAGOMI_SUBWORKER_TOOL_TIMEOUT_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(45000);
+    let timeout = Duration::from_millis(timeout_ms);
+
+    if env_args.trim().is_empty() && tool_key == "codex" {
+        return run_codex_subworker_decide_with_session(
+            &tool_path,
+            prompt,
+            timeout,
+            codex_session_id,
+        );
+    }
+
+    if env_args.trim().is_empty() {
+        return Err(anyhow::anyhow!(
+            "subworker tool args missing (set NAGOMI_SUBWORKER_TOOL_ARGS)"
+        ));
+    }
+
+    let args = split_tool_args(&env_args);
+    let output = run_tool_command_stdout(&tool_path, &args, prompt, timeout)?;
+    let decision = parse_subworker_llm_output_relaxed(&output)
+        .ok_or_else(|| anyhow::anyhow!("invalid subworker llm output"))?;
+    Ok(SubworkerToolRunOutput {
+        decision,
+        codex_thread_id: None,
+    })
+}
+
 fn resolve_tool_command(tool_key: &str) -> String {
     let direct = std::env::var("NAGOMI_TOOL_PATH")
         .ok()
@@ -1602,15 +1944,54 @@ Keep summary short (1-2 lines).\n\
     prompt
 }
 
+fn build_tool_command(tool_path: &str, args: &[String]) -> Command {
+    #[cfg(windows)]
+    {
+        use std::path::Path;
+        let ext = Path::new(tool_path)
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if ext == "exe" || ext == "com" {
+            let mut command = Command::new(tool_path);
+            command.args(args);
+            return command;
+        }
+        // codex / npm global installs are often .cmd on Windows. Use cmd.exe to resolve PATHEXT.
+        // codex / npm 縺ｮ繧ｰ繝ｭ繝ｼ繝舌Ν繧､繝ｳ繧ｹ繝医・繝ｫ縺ｯ Windows 縺ｧ縺ｯ .cmd 縺ｫ縺ｪ繧翫′縺｡縺ｪ縺ｮ縺ｧ縲…md.exe 邨檎罰縺ｧ隗｣豎ｺ縺吶ｋ縲・
+        let mut command = Command::new("cmd.exe");
+        command.arg("/c").arg(tool_path).args(args);
+        return command;
+    }
+
+    #[cfg(not(windows))]
+    {
+        let mut command = Command::new(tool_path);
+        command.args(args);
+        command
+    }
+}
+
+fn internal_hooks_dir() -> PathBuf {
+    std::env::temp_dir().join("nagomi-internal-hooks")
+}
+
+fn apply_internal_tool_env(command: &mut Command) {
+    // Prevent internal tool invocations (judge/subworker) from emitting completion-hook events
+    // that loop back into the currently observed Terminal session.
+    // 蜀・Κ繝・・繝ｫ蜻ｼ縺ｳ蜃ｺ縺暦ｼ・udge/subworker・峨′ completion-hook 繧堤匱轣ｫ縺輔○縲・    // 螳溯｡御ｸｭ繧ｻ繝・す繝ｧ繝ｳ縺ｸ騾・ｵ√☆繧九Ν繝ｼ繝励ｒ驕ｿ縺代ｋ縲・
+    command.env("NAGOMI_HOOKS_DIR", internal_hooks_dir());
+}
+
 fn run_tool_command_stdout(
     tool_path: &str,
     args: &[String],
     prompt: &str,
     timeout: Duration,
 ) -> Result<String> {
-    let mut command = Command::new(tool_path);
+    let mut command = build_tool_command(tool_path, args);
     command
-        .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -1650,9 +2031,9 @@ fn run_codex_judge(tool_path: &str, tail: &str, timeout: Duration) -> Result<Too
     args.push("--skip-git-repo-check".to_string());
 
     let prompt = build_tool_prompt(tail);
-    let mut command = Command::new(tool_path);
+    let mut command = build_tool_command(tool_path, &args);
+    apply_internal_tool_env(&mut command);
     command
-        .args(&args)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
@@ -1678,7 +2059,240 @@ fn run_codex_judge(tool_path: &str, tail: &str, timeout: Duration) -> Result<Too
     Ok(fallback_tool_judge(tail))
 }
 
-fn wait_with_timeout(child: &mut std::process::Child, timeout: Duration) -> Result<std::process::ExitStatus> {
+fn run_codex_subworker_decide_with_session(
+    tool_path: &str,
+    prompt: &str,
+    timeout: Duration,
+    codex_session_id: Option<&str>,
+) -> Result<SubworkerToolRunOutput> {
+    if let Some(existing_session_id) = codex_session_id.map(str::trim).filter(|v| !v.is_empty()) {
+        return run_codex_subworker_decide_resume(tool_path, existing_session_id, prompt, timeout);
+    }
+    run_codex_subworker_decide_fresh(tool_path, prompt, timeout)
+}
+
+fn run_codex_subworker_decide_fresh(
+    tool_path: &str,
+    prompt: &str,
+    timeout: Duration,
+) -> Result<SubworkerToolRunOutput> {
+    let schema = r#"{"type":"object","properties":{"action":{"type":"string","enum":["delegate_input","show_advice","noop"]},"confidence":{"type":"number","minimum":0,"maximum":0.99},"input":{"type":"string"},"advice_markdown":{"type":"string"},"reason":{"type":"string"}},"required":["action","confidence","input","advice_markdown","reason"],"additionalProperties":false}"#;
+    let schema_path = create_temp_file("nagomi-subworker-schema", "json", schema)?;
+    let output_path = create_temp_path("nagomi-subworker-output", "json");
+    let mut args = Vec::new();
+    args.push("exec".to_string());
+    args.push("--json".to_string());
+    args.push("--output-schema".to_string());
+    args.push(schema_path.to_string_lossy().to_string());
+    args.push("--output-last-message".to_string());
+    args.push(output_path.to_string_lossy().to_string());
+    args.push("--color".to_string());
+    args.push("never".to_string());
+    args.push("--sandbox".to_string());
+    args.push("read-only".to_string());
+    args.push("--skip-git-repo-check".to_string());
+
+    let mut command = build_tool_command(tool_path, &args);
+    apply_internal_tool_env(&mut command);
+    command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command.spawn()?;
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(prompt.as_bytes());
+    }
+    let status = wait_with_timeout(&mut child, timeout)?;
+    let mut stderr = String::new();
+    if let Some(mut reader) = child.stderr.take() {
+        let _ = reader.read_to_string(&mut stderr);
+    }
+    let mut stdout = String::new();
+    if let Some(mut reader) = child.stdout.take() {
+        let _ = reader.read_to_string(&mut stdout);
+    }
+    let raw = fs::read_to_string(&output_path).unwrap_or_default();
+    let _ = fs::remove_file(&schema_path);
+    let _ = fs::remove_file(&output_path);
+    if !status.success() {
+        return Err(anyhow::anyhow!("tool failed: {stderr}"));
+    }
+    let (thread_id, last_agent_message) = parse_codex_exec_jsonl_stdout(&stdout);
+    let primary_payload = if raw.trim().is_empty() {
+        last_agent_message.unwrap_or_default()
+    } else {
+        raw
+    };
+    if let Some(decision) = parse_subworker_llm_output_relaxed(&primary_payload) {
+        return Ok(SubworkerToolRunOutput {
+            decision,
+            codex_thread_id: thread_id,
+        });
+    }
+    Err(anyhow::anyhow!(
+        "subworker tool output parse failed (fresh): stdout={}",
+        truncate_error_text(&stdout, 300)
+    ))
+}
+
+fn run_codex_subworker_decide_resume(
+    tool_path: &str,
+    session_id: &str,
+    prompt: &str,
+    timeout: Duration,
+) -> Result<SubworkerToolRunOutput> {
+    let mut args = Vec::new();
+    args.push("exec".to_string());
+    args.push("resume".to_string());
+    args.push("--json".to_string());
+    args.push("--skip-git-repo-check".to_string());
+    args.push(session_id.to_string());
+    args.push("-".to_string());
+
+    let mut command = build_tool_command(tool_path, &args);
+    apply_internal_tool_env(&mut command);
+    command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command.spawn()?;
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(prompt.as_bytes());
+    }
+    let status = wait_with_timeout(&mut child, timeout)?;
+    let mut stderr = String::new();
+    if let Some(mut reader) = child.stderr.take() {
+        let _ = reader.read_to_string(&mut stderr);
+    }
+    let mut stdout = String::new();
+    if let Some(mut reader) = child.stdout.take() {
+        let _ = reader.read_to_string(&mut stdout);
+    }
+    if !status.success() {
+        return Err(anyhow::anyhow!(
+            "codex resume failed: {stderr}; stdout={}",
+            truncate_error_text(&stdout, 260)
+        ));
+    }
+    let (thread_id, last_agent_message) = parse_codex_exec_jsonl_stdout(&stdout);
+    let raw = last_agent_message.ok_or_else(|| {
+        anyhow::anyhow!(
+            "codex resume output missing agent message: stdout={}",
+            truncate_error_text(&stdout, 320)
+        )
+    })?;
+    let decision = parse_subworker_llm_output_relaxed(&raw).ok_or_else(|| {
+        anyhow::anyhow!(
+            "subworker tool output parse failed (resume): message={}",
+            truncate_error_text(&raw, 260)
+        )
+    })?;
+    Ok(SubworkerToolRunOutput {
+        decision,
+        codex_thread_id: thread_id.or_else(|| Some(session_id.to_string())),
+    })
+}
+
+fn parse_codex_exec_jsonl_stdout(stdout: &str) -> (Option<String>, Option<String>) {
+    let mut thread_id: Option<String> = None;
+    let mut last_agent_message: Option<String> = None;
+    for raw_line in stdout.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if !line.starts_with('{') {
+            continue;
+        }
+        let parsed: serde_json::Value = match serde_json::from_str(line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let event_type = parsed
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+        if event_type == "thread.started" {
+            if let Some(value) = parsed.get("thread_id").and_then(|v| v.as_str()) {
+                let normalized = value.trim();
+                if !normalized.is_empty() {
+                    thread_id = Some(normalized.to_string());
+                }
+            }
+            continue;
+        }
+        if event_type == "item.completed" {
+            let item = match parsed.get("item").and_then(|v| v.as_object()) {
+                Some(item) => item,
+                None => continue,
+            };
+            let item_type = item
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .trim()
+                .to_ascii_lowercase();
+            if item_type == "agent_message" {
+                if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
+                    let normalized = text.trim();
+                    if !normalized.is_empty() {
+                        last_agent_message = Some(normalized.to_string());
+                    }
+                }
+            }
+        }
+    }
+    (thread_id, last_agent_message)
+}
+
+fn parse_subworker_llm_output(raw: &str) -> Option<SubworkerLlmDecision> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let candidate = trimmed
+        .lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or(trimmed);
+    let parsed: serde_json::Value = serde_json::from_str(candidate).ok()?;
+    Some(SubworkerLlmDecision {
+        action: parsed.get("action")?.as_str()?.to_string(),
+        confidence: parsed.get("confidence")?.as_f64()? as f32,
+        input: parsed.get("input")?.as_str()?.to_string(),
+        advice_markdown: parsed.get("advice_markdown")?.as_str()?.to_string(),
+        reason: parsed.get("reason")?.as_str()?.to_string(),
+    })
+}
+
+fn parse_subworker_llm_output_relaxed(raw: &str) -> Option<SubworkerLlmDecision> {
+    if let Some(parsed) = parse_subworker_llm_output(raw) {
+        return Some(parsed);
+    }
+    let trimmed = raw.trim();
+    let start = trimmed.find('{')?;
+    let end = trimmed.rfind('}')?;
+    if end < start {
+        return None;
+    }
+    parse_subworker_llm_output(&trimmed[start..=end])
+}
+
+fn truncate_error_text(text: &str, max_len: usize) -> String {
+    let normalized = text.trim().replace('\r', " ").replace('\n', " ");
+    if normalized.len() <= max_len {
+        return normalized;
+    }
+    let keep = max_len.saturating_sub(1);
+    let mut out = normalized.chars().take(keep).collect::<String>();
+    out.push('.');
+    out
+}
+
+fn wait_with_timeout(
+    child: &mut std::process::Child,
+    timeout: Duration,
+) -> Result<std::process::ExitStatus> {
     let start = Instant::now();
     loop {
         if let Some(status) = child.try_wait()? {
@@ -1721,7 +2335,10 @@ fn parse_tool_judge_output(raw: &str) -> Option<ToolJudgeResult> {
         .unwrap_or(trimmed);
     let parsed: serde_json::Value = serde_json::from_str(candidate).ok()?;
     let state_value = parsed.get("state")?.as_str()?;
-    let summary_value = parsed.get("summary").and_then(|val| val.as_str()).unwrap_or("");
+    let summary_value = parsed
+        .get("summary")
+        .and_then(|val| val.as_str())
+        .unwrap_or("");
     let state = normalize_judge_state(state_value)?;
     Some(ToolJudgeResult {
         state,
@@ -1946,11 +2563,11 @@ fn compute_terminal_window_layout<R: Runtime>(
 }
 
 fn layout_order_from_rects(layout: &HashMap<String, WindowRect>) -> Vec<String> {
-    let mut items: Vec<(String, WindowRect)> =
-        layout.iter().map(|(label, rect)| (label.clone(), *rect)).collect();
-    items.sort_by(|(a_label, a), (b_label, b)| {
-        (a.y, a.x, a_label).cmp(&(b.y, b.x, b_label))
-    });
+    let mut items: Vec<(String, WindowRect)> = layout
+        .iter()
+        .map(|(label, rect)| (label.clone(), *rect))
+        .collect();
+    items.sort_by(|(a_label, a), (b_label, b)| (a.y, a.x, a_label).cmp(&(b.y, b.x, b_label)));
     items.into_iter().map(|(label, _)| label).collect()
 }
 
@@ -1959,9 +2576,17 @@ fn get_or_recompute_terminal_layout<R: Runtime>(
     monitors: &[tauri::Monitor],
     windows: Vec<tauri::WebviewWindow<R>>,
 ) -> (HashMap<String, WindowRect>, Vec<String>) {
-    let labels: HashSet<String> = windows.iter().map(|window| window.label().to_string()).collect();
+    let labels: HashSet<String> = windows
+        .iter()
+        .map(|window| window.label().to_string())
+        .collect();
     let state = app.state::<TerminalWindowLayoutState>();
-    let arranged = state.arranged.lock().ok().map(|guard| *guard).unwrap_or(false);
+    let arranged = state
+        .arranged
+        .lock()
+        .ok()
+        .map(|guard| *guard)
+        .unwrap_or(false);
 
     if let (Ok(layout_guard), Ok(order_guard)) = (state.layout.lock(), state.order.lock()) {
         let labels_covered = labels.iter().all(|label| layout_guard.contains_key(label));
@@ -2037,9 +2662,17 @@ fn arranged_layout_for_pickup<R: Runtime>(
     app: &AppHandle<R>,
     windows: &[tauri::WebviewWindow<R>],
 ) -> Option<HashMap<String, WindowRect>> {
-    let labels: HashSet<String> = windows.iter().map(|window| window.label().to_string()).collect();
+    let labels: HashSet<String> = windows
+        .iter()
+        .map(|window| window.label().to_string())
+        .collect();
     let state = app.state::<TerminalWindowLayoutState>();
-    let arranged = state.arranged.lock().ok().map(|guard| *guard).unwrap_or(false);
+    let arranged = state
+        .arranged
+        .lock()
+        .ok()
+        .map(|guard| *guard)
+        .unwrap_or(false);
     let layout = state.layout.lock().ok().map(|guard| guard.clone())?;
     let labels_match =
         layout.len() == labels.len() && labels.iter().all(|label| layout.contains_key(label));
@@ -2052,7 +2685,7 @@ fn arranged_layout_for_pickup<R: Runtime>(
     let positions_match = if labels_match {
         layout.iter().all(|(label, expected)| {
             if selected_label.as_deref() == Some(label.as_str()) {
-                // 選択中ウィンドウは拡大表示でタイル外にいる場合があるため、この1件だけ不一致を許容する / The currently selected window may be expanded off-tile, so allow this single mismatch.
+                // 驕ｸ謚樔ｸｭ繧ｦ繧｣繝ｳ繝峨え縺ｯ諡｡螟ｧ陦ｨ遉ｺ縺ｧ繧ｿ繧､繝ｫ螟悶↓縺・ｋ蝣ｴ蜷医′縺ゅｋ縺溘ａ縲√％縺ｮ1莉ｶ縺縺台ｸ堺ｸ閾ｴ繧定ｨｱ螳ｹ縺吶ｋ / The currently selected window may be expanded off-tile, so allow this single mismatch.
                 return true;
             }
             app.get_webview_window(label)
@@ -2072,7 +2705,11 @@ fn arranged_layout_for_pickup<R: Runtime>(
     Some(layout)
 }
 
-fn apply_window_rect<R: Runtime>(app: &AppHandle<R>, window: &tauri::WebviewWindow<R>, rect: WindowRect) {
+fn apply_window_rect<R: Runtime>(
+    app: &AppHandle<R>,
+    window: &tauri::WebviewWindow<R>,
+    rect: WindowRect,
+) {
     mark_internal_layout_change(app, 350);
     let _ = window.unmaximize();
     let _ = window.set_position(Position::Physical(PhysicalPosition::new(rect.x, rect.y)));
@@ -2085,7 +2722,10 @@ fn apply_window_rect<R: Runtime>(app: &AppHandle<R>, window: &tauri::WebviewWind
 
 fn current_window_rect<R: Runtime>(window: &tauri::WebviewWindow<R>) -> Option<WindowRect> {
     let position = window.outer_position().ok()?;
-    let size = window.inner_size().ok().or_else(|| window.outer_size().ok())?;
+    let size = window
+        .inner_size()
+        .ok()
+        .or_else(|| window.outer_size().ok())?;
     Some(WindowRect {
         x: position.x,
         y: position.y,
@@ -2189,7 +2829,13 @@ fn start_focus_transition<R: Runtime>(
     thread::spawn(move || {
         let is_cancelled = |label: &str, token: u64| -> bool {
             app.try_state::<WindowAnimationState>()
-                .and_then(|state| state.active.lock().ok().map(|guard| guard.get(label).copied()))
+                .and_then(|state| {
+                    state
+                        .active
+                        .lock()
+                        .ok()
+                        .map(|guard| guard.get(label).copied())
+                })
                 .flatten()
                 != Some(token)
         };
@@ -2349,10 +2995,14 @@ fn normalize_observed_state(raw: &str) -> String {
         return "idle".to_string();
     }
     match value.as_str() {
+        "subworker_running" | "subworker-running" | "subworkerrunning" => {
+            "subworker-running".to_string()
+        }
+        "ai_running" | "ai-running" | "airunning" => "ai-running".to_string(),
+        "running" => "running".to_string(),
         "need_input" | "need-input" | "needinput" => "need-input".to_string(),
         "fail" | "failure" | "error" => "fail".to_string(),
         "success" => "success".to_string(),
-        "running" => "running".to_string(),
         "idle" => "idle".to_string(),
         _ => value,
     }
@@ -2361,11 +3011,15 @@ fn normalize_observed_state(raw: &str) -> String {
 fn aggregate_observed_state(states: &HashMap<String, String>) -> String {
     let mut has_need_input = false;
     let mut has_fail = false;
+    let mut has_ai_running = false;
+    let mut has_subworker_running = false;
     let mut has_running = false;
     for state in states.values() {
         match state.as_str() {
             "need-input" => has_need_input = true,
             "fail" => has_fail = true,
+            "subworker-running" => has_subworker_running = true,
+            "ai-running" => has_ai_running = true,
             "running" => has_running = true,
             "success" | "idle" => {}
             _ => {}
@@ -2376,6 +3030,12 @@ fn aggregate_observed_state(states: &HashMap<String, String>) -> String {
     }
     if has_fail {
         return "fail".to_string();
+    }
+    if has_subworker_running {
+        return "subworker-running".to_string();
+    }
+    if has_ai_running {
+        return "ai-running".to_string();
     }
     if has_running {
         return "running".to_string();
@@ -3001,9 +3661,8 @@ fn open_terminal_window_inner<R: Runtime>(
     let theme_mode = normalize_terminal_theme_mode(&settings.terminal_theme);
     let theme_palette =
         normalize_terminal_theme_palette(theme_mode, &settings.terminal_theme_palette);
-    let query = format!(
-        "view=terminal&session_id={session_id}&theme={theme_mode}&palette={theme_palette}"
-    );
+    let query =
+        format!("view=terminal&session_id={session_id}&theme={theme_mode}&palette={theme_palette}");
     create_window(&app, &label, &title, &query).map_err(|err| err.to_string())?;
     mark_terminal_layout_arranged(&app, false);
     let _ = register_terminal_window(&app, &session_id, &label);
@@ -3028,6 +3687,19 @@ fn register_terminal_session<R: Runtime>(
         &format!("terminal session register: {session_id} label={label}"),
     );
     register_terminal_window(&app, &session_id, &label)
+}
+
+#[tauri::command]
+fn set_current_window_title<R: Runtime>(
+    window: tauri::WebviewWindow<R>,
+    ipc_session_id: String,
+    title: String,
+) -> Result<(), String> {
+    ipc_session::touch_ipc_session_for_window(&window, &ipc_session_id)?;
+    window
+        .set_title(title.trim())
+        .map_err(|err| err.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -3073,29 +3745,44 @@ fn append_terminal_debug_snapshot<R: Runtime>(
 ) -> Result<(), String> {
     ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
     let path = terminal_debug_snapshot_path(&app);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
-    }
-    let now_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis();
-    let mut entry = payload;
-    if let Some(obj) = entry.as_object_mut() {
-        let stamped = u64::try_from(now_ms).unwrap_or(u64::MAX);
-        obj.insert(
-            "ts_ms".to_string(),
-            serde_json::Value::Number(stamped.into()),
-        );
-    }
-    let raw = serde_json::to_string(&entry).map_err(|err| err.to_string())?;
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .map_err(|err| err.to_string())?;
-    writeln!(file, "{}", raw).map_err(|err| err.to_string())?;
+    append_jsonl_entry(&path, payload)?;
     Ok(())
+}
+
+#[tauri::command]
+fn append_status_debug_event<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+    payload: serde_json::Value,
+) -> Result<String, String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    let path = status_debug_events_path(&app);
+    append_jsonl_entry(&path, payload)?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn append_subworker_debug_event<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+    payload: serde_json::Value,
+) -> Result<String, String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    let path = subworker_debug_events_path(&app);
+    append_jsonl_entry(&path, payload)?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn append_subworker_io_event<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+    payload: serde_json::Value,
+) -> Result<String, String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    let path = subworker_io_events_path(&app);
+    append_jsonl_entry(&path, payload)?;
+    Ok(path.to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -3356,9 +4043,10 @@ fn create_window<R: Runtime>(
         format!("view={query}")
     };
     let url = format!("index.html?{normalized_query}");
-    let mut builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into())).title(title);
+    let mut builder =
+        WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into())).title(title);
     if label == WINDOW_SETTINGS {
-        // Settings は初期表示で横スクロールしない幅を確保する / Ensure initial width avoids horizontal scroll.
+        // Settings 縺ｯ蛻晄悄陦ｨ遉ｺ縺ｧ讓ｪ繧ｹ繧ｯ繝ｭ繝ｼ繝ｫ縺励↑縺・ｹ・ｒ遒ｺ菫昴☆繧・/ Ensure initial width avoids horizontal scroll.
         let mut width: f64 = 1200.0;
         let mut height: f64 = 860.0;
         if let Ok(Some(monitor)) = app.primary_monitor() {
@@ -3477,7 +4165,7 @@ fn log_worker_event<R: Runtime>(app: &AppHandle<R>, message: &str) -> Result<()>
 }
 
 #[cfg(windows)]
-// WebView2 capture avoids black screenshots from GDI / WebView2 で GDI 黒塗りを回避する
+// WebView2 capture avoids black screenshots from GDI / WebView2 縺ｧ GDI 鮟貞｡励ｊ繧貞屓驕ｿ縺吶ｋ
 fn save_webview2_screenshot<R: Runtime>(window: &tauri::Window<R>, path: &Path) -> Result<()> {
     let webview = window
         .webviews()
@@ -3499,13 +4187,14 @@ fn save_webview2_screenshot<R: Runtime>(window: &tauri::Window<R>, path: &Path) 
                         .CoreWebView2()
                         .map_err(|err| anyhow::anyhow!("CoreWebView2 failed: {err}"))?
                 };
-                let method_wide: Vec<u16> =
-                    "Page.captureScreenshot".encode_utf16().chain(Some(0)).collect();
-                let params_wide: Vec<u16> =
-                    "{\"format\":\"png\",\"fromSurface\":true}"
-                        .encode_utf16()
-                        .chain(Some(0))
-                        .collect();
+                let method_wide: Vec<u16> = "Page.captureScreenshot"
+                    .encode_utf16()
+                    .chain(Some(0))
+                    .collect();
+                let params_wide: Vec<u16> = "{\"format\":\"png\",\"fromSurface\":true}"
+                    .encode_utf16()
+                    .chain(Some(0))
+                    .collect();
                 let output_path = path_for_webview.clone();
                 let app_handle = app_handle.clone();
                 let handler = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(
@@ -3564,9 +4253,7 @@ fn save_webview2_screenshot<R: Runtime>(window: &tauri::Window<R>, path: &Path) 
 
             if let Err(err) = capture_result {
                 let _ = fs::remove_file(&cleanup_for_webview);
-                let _ = log_worker_event(&app_handle, &format!(
-                    "debug screenshot failed: {err}"
-                ));
+                let _ = log_worker_event(&app_handle, &format!("debug screenshot failed: {err}"));
             }
         })
         .map_err(|err| anyhow::anyhow!("webview access failed: {err}"))?;
@@ -3725,7 +4412,7 @@ fn start_worker_reader<R: Runtime>(app: AppHandle<R>) {
             chunks: Vec<String>,
         }
 
-        // Terminal output coalescing defaults / 繧ｿ繝ｼ繝溘リ繝ｫ蜃ｺ蜉帛粋菴薙・譌｢螳壼､
+        // Terminal output coalescing defaults / 郢ｧ・ｿ郢晢ｽｼ郢晄ｺ倥Μ郢晢ｽｫ陷・ｽｺ陷牙ｸ帷ｲ玖抄阮吶・隴鯉ｽ｢陞ｳ螢ｼﾂ・､
         const OUTPUT_BUSY_THRESHOLD_BYTES: usize = 256 * 1024;
         const OUTPUT_FLUSH_DELAY_NORMAL: Duration = Duration::from_millis(16);
         const OUTPUT_FLUSH_BYTES_NORMAL: usize = 64 * 1024;
@@ -3809,11 +4496,7 @@ fn start_worker_reader<R: Runtime>(app: AppHandle<R>) {
                                 }
                             }
                             if !matched {
-                                notify_smoke_error(
-                                    &app,
-                                    &exit.session_id,
-                                    "exit before token: 0",
-                                );
+                                notify_smoke_error(&app, &exit.session_id, "exit before token: 0");
                             }
                         } else {
                             notify_smoke_error(
@@ -4013,7 +4696,7 @@ fn start_terminal_worker_reader<R: Runtime>(
             chunks: Vec<String>,
         }
 
-        // Terminal output coalescing defaults / 繧ｿ繝ｼ繝溘リ繝ｫ蜃ｺ蜉帛粋菴薙・譌｢螳壼､
+        // Terminal output coalescing defaults / 郢ｧ・ｿ郢晢ｽｼ郢晄ｺ倥Μ郢晢ｽｫ陷・ｽｺ陷牙ｸ帷ｲ玖抄阮吶・隴鯉ｽ｢陞ｳ螢ｼﾂ・､
         const OUTPUT_BUSY_THRESHOLD_BYTES: usize = 256 * 1024;
         const OUTPUT_FLUSH_DELAY_NORMAL: Duration = Duration::from_millis(16);
         const OUTPUT_FLUSH_BYTES_NORMAL: usize = 64 * 1024;
@@ -4291,6 +4974,8 @@ fn main() {
             report_terminal_observation,
             ensure_codex_hook,
             tool_judge,
+            subworker_codex_session_started,
+            subworker_llm_decide,
             open_terminal_window,
             open_terminal_window_by_index_same_position,
             open_terminal_window_same_position_selected,
@@ -4304,6 +4989,7 @@ fn main() {
             terminal_resize,
             stop_terminal_session,
             register_terminal_session,
+            set_current_window_title,
             ipc_session::ipc_session_open,
             ipc_session::ipc_session_probe,
             ipc_session::ipc_session_echo,
@@ -4311,6 +4997,9 @@ fn main() {
             debug_emit_terminal_broadcast,
             debug_emit_terminal_output,
             append_terminal_debug_snapshot,
+            append_status_debug_event,
+            append_subworker_debug_event,
+            append_subworker_io_event,
             save_debug_screenshot,
             terminal_smoke
         ])
@@ -4341,13 +5030,13 @@ fn main() {
                 exit_on_last_terminal: should_exit_on_last_terminal(),
             });
             let hook_handle = handle.clone();
-            let hook_callback: Arc<dyn Fn(HookEvent) + Send + Sync> =
-                Arc::new(move |event| {
-                    handle_hook_event(&hook_handle, event);
-                });
+            let hook_callback: Arc<dyn Fn(HookEvent) + Send + Sync> = Arc::new(move |event| {
+                handle_hook_event(&hook_handle, event);
+            });
             handle.manage(CompletionHookState {
                 manager: Mutex::new(CompletionHookManager::new(hook_callback)),
             });
+            handle.manage(SubworkerCodexSessionState::default());
             start_worker_reader(handle.clone());
             start_terminal_worker_reader(handle.clone(), terminal_rx);
             if !should_start_hidden() {
@@ -4393,6 +5082,12 @@ mod tests {
             silence_timeout_ms: 4000,
             llm_enabled: false,
             llm_tool: "codex".to_string(),
+            subworker_enabled: true,
+            subworker_debug_enabled: false,
+            subworker_mode: "careful".to_string(),
+            subworker_confidence_threshold: 0.82,
+            subworker_prompt_template_markdown: "### prompt\n{{last_terminal_output}}\n".to_string(),
+            status_debug_enabled: false,
             character_id: "test".to_string(),
             log_retention_lines: 100,
             terminal_watcher_enabled: true,
@@ -4424,6 +5119,15 @@ mod tests {
         let path = temp_settings_path("missing");
         let loaded = read_settings(&path).expect("read settings");
         assert_eq!(loaded, Settings::default());
+    }
+
+    #[test]
+    fn settings_default_when_empty_file() {
+        let path = temp_settings_path("empty");
+        fs::write(&path, "").expect("write empty settings");
+        let loaded = read_settings(&path).expect("read settings");
+        assert_eq!(loaded, Settings::default());
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
@@ -4527,10 +5231,12 @@ mod tests {
     #[test]
     fn process_terminal_input_chunk_supports_chunked_internal_command() {
         let mut capture = TerminalInputCaptureState::default();
-        let (forward1, invocations1, local_echo1) = process_terminal_input_chunk(&mut capture, ":ng ");
+        let (forward1, invocations1, local_echo1) =
+            process_terminal_input_chunk(&mut capture, ":ng ");
         let (forward2, invocations2, local_echo2) =
             process_terminal_input_chunk(&mut capture, "ping\r");
-        let (forward3, invocations3, local_echo3) = process_terminal_input_chunk(&mut capture, "\n");
+        let (forward3, invocations3, local_echo3) =
+            process_terminal_input_chunk(&mut capture, "\n");
         assert_eq!(forward1, "");
         assert!(invocations1.is_empty());
         assert_eq!(local_echo1, ":ng ");
@@ -4567,6 +5273,38 @@ mod tests {
             }]
         );
         assert_eq!(local_echo2, "ping\r\n");
+    }
+
+    #[test]
+    fn parse_codex_exec_jsonl_stdout_extracts_thread_and_latest_agent_message() {
+        let stdout = r#"{"type":"session.configured"}
+{"type":"thread.started","thread_id":"thread_abc123"}
+{"type":"item.completed","item":{"type":"tool_call","text":"ignored"}}
+{"type":"item.completed","item":{"type":"agent_message","text":"first message"}}
+{"type":"item.completed","item":{"type":"agent_message","text":"final message"}}
+"#;
+        let (thread_id, last_agent_message) = parse_codex_exec_jsonl_stdout(stdout);
+        assert_eq!(thread_id.as_deref(), Some("thread_abc123"));
+        assert_eq!(last_agent_message.as_deref(), Some("final message"));
+    }
+
+    #[test]
+    fn parse_subworker_llm_output_relaxed_extracts_embedded_json_object() {
+        let raw = r#"debug prefix: start
+{"action":"show_advice","confidence":0.77,"input":"","advice_markdown":"- try this","reason":"need clarification"}
+debug suffix: end"#;
+        let parsed = parse_subworker_llm_output_relaxed(raw).expect("parsed decision");
+        assert_eq!(parsed.action, "show_advice");
+        assert!((parsed.confidence - 0.77).abs() < f32::EPSILON);
+        assert_eq!(parsed.input, "");
+        assert_eq!(parsed.advice_markdown, "- try this");
+        assert_eq!(parsed.reason, "need clarification");
+    }
+
+    #[test]
+    fn parse_subworker_llm_output_relaxed_returns_none_for_invalid_payload() {
+        let raw = "this is not a json response";
+        assert!(parse_subworker_llm_output_relaxed(raw).is_none());
     }
 
     #[test]
@@ -4629,7 +5367,10 @@ mod tests {
         assert_eq!(build_windows_terminal_command(&settings), "wsl.exe");
 
         settings.terminal_wsl_distro = "Ubuntu".to_string();
-        assert_eq!(build_windows_terminal_command(&settings), "wsl.exe -d \"Ubuntu\"");
+        assert_eq!(
+            build_windows_terminal_command(&settings),
+            "wsl.exe -d \"Ubuntu\""
+        );
     }
 }
 

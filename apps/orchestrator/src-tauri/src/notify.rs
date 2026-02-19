@@ -68,7 +68,10 @@ impl NotifyCooldown {
         let guard = self.last_sent.lock().expect("cooldown lock");
         match *guard {
             None => true,
-            Some(last) => now.duration_since(last).map(|d| d >= self.cooldown).unwrap_or(false),
+            Some(last) => now
+                .duration_since(last)
+                .map(|d| d >= self.cooldown)
+                .unwrap_or(false),
         }
     }
 
@@ -113,7 +116,11 @@ pub fn notify_flow<T: ToastSink, A: AudioSink>(
         JudgeState::Success => "success",
         JudgeState::NeedInput => "need_input",
     };
-    let body = if summary.is_empty() { "no summary" } else { summary };
+    let body = if summary.is_empty() {
+        "no summary"
+    } else {
+        summary
+    };
 
     if settings.toast_enabled {
         notify_toast(toast, title, body)?;

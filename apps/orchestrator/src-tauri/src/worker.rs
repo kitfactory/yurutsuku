@@ -1,13 +1,15 @@
-﻿use anyhow::{Context, Result};
+use anyhow::{Context, Result};
+use nagomi_protocol::{
+    parse_line, serialize_message, Message, Resize, SendInput, StartSession, StopSession,
+};
 use std::io::{BufRead, BufReader, Write};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
-use nagomi_protocol::{parse_line, serialize_message, Message, Resize, SendInput, StartSession, StopSession};
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
 
 pub struct WorkerProcess {
     child: Child,
@@ -18,7 +20,10 @@ pub struct WorkerProcess {
 impl WorkerProcess {
     pub fn spawn(worker_path: &Path) -> Result<Self> {
         let mut command = Command::new(worker_path);
-        command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit());
+        command
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit());
         #[cfg(windows)]
         {
             // 余分なコンソールウィンドウを出さない / Hide extra console window.
@@ -96,7 +101,10 @@ impl WorkerProcess {
 
 fn workspace_root() -> Option<PathBuf> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir.ancestors().nth(3).map(|path| path.to_path_buf())
+    manifest_dir
+        .ancestors()
+        .nth(3)
+        .map(|path| path.to_path_buf())
 }
 
 fn worker_exe_name() -> &'static str {
@@ -131,9 +139,9 @@ pub fn resolve_worker_path() -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nagomi_protocol::Output;
     use std::sync::OnceLock;
     use std::time::{Duration, Instant};
-    use nagomi_protocol::Output;
 
     fn build_worker_binary() -> Result<PathBuf> {
         static WORKER_PATH: OnceLock<PathBuf> = OnceLock::new();
@@ -204,7 +212,11 @@ mod tests {
             })
             .expect("resize");
 
-        let payload = if cfg!(windows) { "echo ok\r\n" } else { "echo ok\n" };
+        let payload = if cfg!(windows) {
+            "echo ok\r\n"
+        } else {
+            "echo ok\n"
+        };
         worker
             .send_input(SendInput {
                 session_id: session_id.to_string(),
@@ -336,8 +348,7 @@ mod tests {
 
         let mut saw_output = false;
         let mut saw_exit = false;
-        let deadline =
-            Instant::now() + Duration::from_secs(if cfg!(windows) { 12 } else { 5 });
+        let deadline = Instant::now() + Duration::from_secs(if cfg!(windows) { 12 } else { 5 });
         while Instant::now() < deadline {
             if let Some(message) = wait_for_message(&worker, Duration::from_millis(300)) {
                 match message {
@@ -362,4 +373,3 @@ mod tests {
         worker.stop().expect("stop worker");
     }
 }
-

@@ -171,7 +171,7 @@ test("send_start_send_input_resize_stop", async () => {
         1000
       );
     } catch {
-      // 出力待ちが間に合わない場合は stop_session を優先する / Prefer stop_session if output is late.
+      // Output can be delayed; prefer stop_session if output is late.
     }
 
     worker.send({
@@ -214,7 +214,7 @@ test("recv_output_exit_error", async () => {
 
       worker.send(baseStartSession(sessionId, shellCommand()));
       // Shell startup timing on ConPTY can vary; wait briefly before the first command.
-      // ConPTY の起動タイミングは変動するため、最初の入力前に短く待機する。
+      // ConPTY startup can be delayed; wait briefly before first input.
       await sleep(process.platform === "win32" ? 120 : 40);
       worker.send({
         type: "send_input",
@@ -315,6 +315,295 @@ test("settings_terminal_runtime", () => {
   assert.ok(html.includes('data-role="settings-keybind-focus-prev"'));
 });
 
+test("subworker_ui_and_settings", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes('data-role="settings-subworker-enabled-toggle"'));
+  assert.ok(html.includes('data-role="settings-subworker-debug-toggle"'));
+  assert.ok(html.includes('data-role="settings-status-debug-toggle"'));
+  assert.ok(html.includes('data-role="settings-subworker-mode"'));
+  assert.ok(html.includes('data-role="settings-subworker-threshold"'));
+  assert.ok(html.includes('data-role="settings-subworker-prompt-template"'));
+  assert.ok(html.includes('data-role="settings-subworker-prompt-template-reset"'));
+  assert.ok(html.includes('data-role="subworker-pause-toggle"'));
+  assert.ok(html.includes('data-role="subworker-skip-once"'));
+  assert.ok(html.includes("subworker-active-overlay"));
+  assert.ok(html.includes('data-role="subworker-advice-overlay"'));
+  assert.ok(html.includes("recordSubworkerDecision"));
+  assert.ok(html.includes("[nagomi-subworker("));
+
+  const tauriMain = path.join(appRoot, "src-tauri", "src", "main.rs");
+  const rust = fs.readFileSync(tauriMain, "utf8");
+  assert.ok(rust.includes("subworker_enabled"));
+  assert.ok(rust.includes("subworker_debug_enabled"));
+  assert.ok(rust.includes("subworker_mode"));
+  assert.ok(rust.includes("subworker_confidence_threshold"));
+  assert.ok(rust.includes("subworker_prompt_template_markdown"));
+  assert.ok(rust.includes("status_debug_enabled"));
+  assert.ok(rust.includes("default_subworker_mode"));
+});
+
+test("subworker_runs_only_after_ai_judge_completion", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("function queueSubworkerOnJudgeCompleted(observedState, observedReason, trigger)"));
+  // When LLM features are disabled, the subworker must not run, but should still record a skip.
+  assert.ok(html.includes("skip-llm-disabled"));
+  assert.ok(html.includes("normalizedTrigger === 'judge-result'"));
+  assert.ok(html.includes("normalizedTrigger === 'hook-judge'"));
+  assert.ok(html.includes("normalizedTrigger === 'judge-fallback'"));
+  assert.ok(html.includes("queueSubworkerOnJudgeCompleted(observed.state, observed.reason, 'hook-judge');"));
+  assert.ok(html.includes("queueSubworkerOnJudgeCompleted(normalized, title, 'judge-result');"));
+  assert.ok(html.includes("queueSubworkerOnJudgeCompleted(TerminalObservation.needInput, fallbackReason, 'judge-fallback')"));
+  assert.ok(html.includes("maybeRunSubworker('judge-complete'"));
+  assert.ok(html.includes("judgeCompleteSource"));
+});
+
+test("subworker_judge_complete_dedup_and_ghost_key_behavior", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("SUBWORKER_JUDGE_COMPLETE_DEDUP_MS"));
+  assert.ok(html.includes("last_judge_complete_signature"));
+  assert.ok(html.includes("terminalState.runtime.subworker.last_judge_complete_signature"));
+  assert.ok(html.includes("function buildSubworkerJudgeCompleteDedupSignature({"));
+  assert.ok(html.includes("function buildSubworkerRunDedupSignature({"));
+  assert.ok(html.includes("skip-judge-complete-dedup"));
+  assert.ok(html.includes("kind: 'judge-complete-dedup'"));
+  assert.ok(html.includes("Source is intentionally ignored"));
+  assert.ok(html.includes("dedup_signature: truncateDebugText(dedupSignature, 260)"));
+  assert.ok(html.includes("function shouldDismissSubworkerGhostOnDomKey(key)"));
+  assert.ok(html.includes("function maybeDismissSubworkerGhostOnKey(key, reason = 'user-key')"));
+  assert.ok(html.includes("inline_ghost_visible: false,"));
+  assert.ok(html.includes("inline_ghost_cell_count: 0,"));
+  assert.ok(html.includes("ghost_prefill_active: false,"));
+  assert.ok(html.includes("function splitSubworkerSuggestedInputForPrefill(input)"));
+  assert.ok(html.includes("function rollbackSubworkerGhostPrefill(reason)"));
+  assert.ok(html.includes("function ensureSubworkerGhostPrefill(input, signature, reason)"));
+  assert.ok(html.includes("function subworkerCellWidth(text)"));
+  assert.ok(html.includes("const chunk = ansiMessage"));
+  assert.ok(html.includes(": `\\x1b[0m\\x1b[K${sgr}${message}\\x1b[0m`;"));
+  assert.ok(html.includes("if (isSuggestedPreviewLine) {"));
+  assert.ok(html.includes("ensureSubworkerGhostPrefill("));
+  assert.ok(html.includes("enqueueTerminalInput('\\x7f'.repeat(count));"));
+  assert.ok(html.includes("terminalState.runtime.subworker.inline_ghost_cell_count === ghostCells"));
+  assert.ok(html.includes("const passiveClear = clearReason === 'pty-output';"));
+  assert.ok(html.includes("if (hadInlineGhost && !passiveClear) {"));
+  assert.ok(html.includes("const moveLeft = ghostCells > 0 ? `\\x1b[${ghostCells}D` : '';"));
+  assert.ok(html.includes("enqueueTerminalOutput(`${moveLeft}\\x1b[0m\\x1b[K`);"));
+  assert.ok(html.includes("maybeDismissSubworkerGhostOnKey(String(event.key || ''), 'user-key-pre');"));
+  assert.ok(html.includes("maybeDismissSubworkerGhostOnKey(key, 'user-key')"));
+  assert.ok(html.includes("maybeDismissSubworkerGhostOnKey(key, 'user-key-global')"));
+});
+
+test("subworker_resize_restore_recomputes_placeholder", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("function restoreSubworkerOutputIfMissing(reason)"));
+  assert.ok(html.includes("refreshSubworkerOverlayPlaceholder(`restore-${reason || 'resize'}`);"));
+  // Resize restore must not replay stale display text directly.
+  assert.ok(!html.includes("writeSubworkerOverlayLine(terminalState.runtime.subworker.last_display_line);"));
+});
+
+test("subworker_prompt_has_fixed_json_preamble", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("SUBWORKER_PROMPT_FIXED_PREAMBLE"));
+  assert.ok(html.includes("SUBWORKER_PROMPT_FIXED_EPILOGUE"));
+  assert.ok(html.includes("Return a single JSON object"));
+  assert.ok(html.includes("delegate_input|show_advice|noop"));
+  assert.ok(html.includes("advice_markdown"));
+});
+
+test("subworker_runtime_phase_unified_state", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("const SubworkerRuntimePhase = Object.freeze({"));
+  assert.ok(html.includes("const terminalState = {"));
+  assert.ok(html.includes("unified: {"));
+  assert.ok(html.includes("subworker_phase: 'idle'"));
+  assert.ok(html.includes("function currentSubworkerRuntimePhase()"));
+  assert.ok(!html.includes("let subworkerRuntimePhase = SubworkerRuntimePhase.idle;"));
+  assert.ok(html.includes("function setSubworkerRuntimePhase(nextPhase)"));
+  assert.ok(html.includes("function isSubworkerRuntimeRunning()"));
+  assert.ok(html.includes("function isSubworkerRuntimePaused()"));
+  assert.ok(html.includes("syncTerminalUnifiedState(currentObservedState, currentReason);"));
+  assert.ok(html.includes("setSubworkerActive(active)"));
+  assert.ok(html.includes("setSubworkerRuntimePhase(active ? SubworkerRuntimePhase.running : SubworkerRuntimePhase.idle);"));
+});
+
+test("subworker_modes_share_trigger_and_split_only_on_final_apply", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("function subworkerCanRunForState(_mode, state)"));
+  assert.ok(html.includes("state === TerminalObservation.success"));
+  assert.ok(html.includes("state === TerminalObservation.needInput"));
+  assert.ok(html.includes("state === TerminalObservation.fail"));
+  assert.ok(html.includes("function finalizeSubworkerDecision({"));
+  assert.ok(html.includes("if (mode !== SubworkerMode.advice)"));
+  assert.ok(html.includes("if (canDelegate && normalizedConfidence < threshold)"));
+  assert.ok(html.includes("action = 'delegate_input';"));
+  assert.ok(html.includes("action = 'show_advice';"));
+  assert.ok(!html.includes("guard: state not need_input"));
+});
+
+test("subworker_running_placeholder_progress", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("SUBWORKER_RUNNING_SPINNER_FRAMES"));
+  assert.ok(html.includes("SUBWORKER_RUNNING_SPINNER_INTERVAL_MS"));
+  assert.ok(html.includes("function currentSubworkerRunningSpinnerFrame()"));
+  assert.ok(html.includes("function buildSubworkerRunningSpinnerLineSpec()"));
+  assert.ok(html.includes("function scheduleSubworkerRunningSpinnerTick()"));
+  assert.ok(html.includes("function syncSubworkerRunningSpinner(active, phaseChanged = false)"));
+  assert.ok(html.includes("const prefixChars = Array.from(String(prefix || ''));"));
+  assert.ok(html.includes("const activePrefixIndex = prefixChars.length > 0 ? frame % prefixChars.length : -1;"));
+  assert.ok(html.includes("if (isSubworkerRuntimeRunning()) return true;"));
+  assert.ok(html.includes("refreshSubworkerOverlayPlaceholder('subworker-running-tick');"));
+  assert.ok(html.includes("if (subworkerOverlayFlashTimer && !isSubworkerRuntimeRunning()) return;"));
+  assert.ok(html.includes("if (isSubworkerRuntimeRunning()) {"));
+  assert.ok(html.includes("ansiMessage"));
+  assert.ok(html.includes("renderKey"));
+  assert.ok(html.includes("t('subworker.processing.prefix')"));
+  assert.ok(html.includes("'subworker.processing.prefix': 'サブワーカー処理中（Escで抜けます）'"));
+  assert.ok(html.includes("'subworker.processing.prefix': 'subworker processing (Esc to hold)'"));
+  assert.ok(html.includes("if (agentWorkActive || agentAwaitingFirstOutput) return false;"));
+  assert.ok(html.includes("state === TerminalObservation.running &&"));
+  assert.ok(html.includes("!agentWorkActive &&"));
+});
+
+test("running_status_split_for_ai_and_subworker", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  const tauriMain = path.join(appRoot, "src-tauri", "src", "main.rs");
+  const rust = fs.readFileSync(tauriMain, "utf8");
+  assert.ok(html.includes("const TerminalStatusState = Object.freeze({"));
+  assert.ok(html.includes("running: 'running'"));
+  assert.ok(html.includes("aiRunning: 'ai-running'"));
+  assert.ok(html.includes("subworkerRunning: 'subworker-running'"));
+  assert.ok(html.includes("function resolveTerminalStatusState(state)"));
+  assert.ok(html.includes("const unifiedStatusState = syncTerminalUnifiedState("));
+  assert.ok(html.includes("status_state: unifiedStatusState"));
+  assert.ok(html.includes("terminal_unified: {"));
+  assert.ok(html.includes("observed_status: resolveTerminalStatusState("));
+  assert.ok(rust.includes("\"ai-running\""));
+  assert.ok(rust.includes("\"running\""));
+  assert.ok(rust.includes("\"subworker-running\""));
+});
+
+test("subworker_debug_execution_logs", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  const tauriMain = path.join(appRoot, "src-tauri", "src", "main.rs");
+  const rust = fs.readFileSync(tauriMain, "utf8");
+  assert.ok(html.includes("subworker start: event="));
+  assert.ok(html.includes("subworker skip: disabled"));
+  assert.ok(html.includes("subworker skip: mode="));
+  assert.ok(html.includes("subworker skip: runtime already running"));
+  assert.ok(html.includes("subworker skip: dedup window"));
+  assert.ok(html.includes("function appendSubworkerDebugEvent(eventType, details = {})"));
+  assert.ok(html.includes("invokeWithSession('append_subworker_debug_event', { payload })"));
+  assert.ok(html.includes("subworker-debug-file:"));
+  assert.ok(html.includes("buildSubworkerResultMessage(decision.confidence, threshold, decision.action, result)"));
+  assert.ok(rust.includes("fn subworker_debug_events_path"));
+  assert.ok(rust.includes("subworker_debug_events.jsonl"));
+  assert.ok(rust.includes("append_subworker_debug_event"));
+});
+
+test("subworker_advice_suggestion_tab_accept", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("function isTerminalInteractionEnabled()"));
+  assert.ok(html.includes("last_suggested_input: ''"));
+  assert.ok(html.includes("'subworker.advice.tab_hint'"));
+  assert.ok(html.includes("return `${t('subworker.advice.tab_hint')}${inputPreview}`;"));
+  assert.ok(html.includes("isSuggestionLine: hasSuggestion"));
+  assert.ok(html.includes("suggestionPreview,"));
+  assert.ok(html.includes("const isSuggestionLineByOption = Boolean(options && options.isSuggestionLine);"));
+  assert.ok(html.includes("const effectiveSuggestedPreview = suggestedPreviewFromOption || suggestedPreview;"));
+  assert.ok(html.includes("isSuggestionLineByOption ||"));
+  assert.ok(html.includes("render-suggestion-no-prefill"));
+  assert.ok(html.includes("function acceptSubworkerSuggestedInput(trigger)"));
+  assert.ok(html.includes("if (!isTerminalInteractionEnabled()) return false;"));
+  assert.ok(html.includes("appendSubworkerDebugEvent('suggestion'"));
+  assert.ok(html.includes("key === 'tab'"));
+  assert.ok(html.includes("acceptSubworkerSuggestedInput('tab'"));
+  assert.ok(html.includes("acceptSubworkerSuggestedInput('tab-global'"));
+});
+
+test("subworker_need_input_instruction_has_priority_over_shortcuts_hint", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  const fnIndex = html.indexOf("function subworkerAdviceInputInstruction(state, hint, outputTail)");
+  assert.ok(fnIndex >= 0);
+  const needInputIndex = html.indexOf(
+    "if (state === TerminalObservation.needInput) return t('subworker.advice.input_need_input');",
+    fnIndex
+  );
+  const shortcutsIndex = html.indexOf(
+    "if (hasShortcutsMarker && !meaningfulOutput) {",
+    fnIndex
+  );
+  assert.ok(needInputIndex >= 0);
+  assert.ok(shortcutsIndex >= 0);
+  assert.ok(needInputIndex < shortcutsIndex);
+});
+
+test("codex_typing_does_not_show_running", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("avoid showing running/need-input"));
+  assert.ok(html.includes("normalized === TerminalStatusState.needInput || normalized === TerminalStatusState.running"));
+  assert.ok(html.includes("Date.now() - terminalLastUserInputAt < 1200"));
+});
+
+test("global_key_forward_when_terminal_unfocused", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("function terminalDomKeyToInputChunk(key)"));
+  assert.ok(html.includes("function shouldForwardGlobalKeyToTerminal(event)"));
+  assert.ok(html.includes("function maybeForwardGlobalKeyToTerminal(event, key)"));
+  assert.ok(html.includes("setLastTerminalEvent('global-key-forward', key);"));
+  assert.ok(html.includes("if (maybeForwardGlobalKeyToTerminal(event, key)) return;"));
+});
+
+test("manual_hold_blocks_judge_and_subworker_until_enter", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("const AutomationGateState = Object.freeze({"));
+  assert.ok(html.includes("manualHold: 'manual-hold'"));
+  assert.ok(html.includes("function isAutomationManualHoldActive()"));
+  assert.ok(html.includes("function enterAutomationManualHold(reason = 'escape')"));
+  assert.ok(html.includes("function releaseAutomationManualHold(reason = 'user-enter')"));
+  assert.ok(html.includes("function maybeEnterAutomationManualHoldFromEsc(trigger)"));
+  assert.ok(html.includes("function maybeReleaseAutomationManualHoldOnEnter(trigger)"));
+  assert.ok(html.includes("if (isAutomationManualHoldActive()) return;"));
+  assert.ok(html.includes("if (isAutomationManualHoldActive()) {"));
+  assert.ok(html.includes("return TerminalStatusState.idle;"));
+  assert.ok(html.includes("kind: 'manual-hold'"));
+  assert.ok(html.includes("skip-manual-hold"));
+  assert.ok(html.includes("maybeEnterAutomationManualHoldFromEsc('terminal-onkey');"));
+  assert.ok(html.includes("maybeEnterAutomationManualHoldFromEsc('global-keydown');"));
+  assert.ok(html.includes("maybeReleaseAutomationManualHoldOnEnter('terminal-onkey');"));
+  assert.ok(html.includes("maybeReleaseAutomationManualHoldOnEnter('global-keydown-forward');"));
+});
+
+test("status_debug_execution_logs", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  const tauriMain = path.join(appRoot, "src-tauri", "src", "main.rs");
+  const rust = fs.readFileSync(tauriMain, "utf8");
+  assert.ok(html.includes("function appendStatusDebugEvent(eventType, details = {})"));
+  assert.ok(html.includes("terminal_unified: {"));
+  assert.ok(html.includes("base_state: terminalState.unified.base_state"));
+  assert.ok(html.includes("status_state: terminalState.unified.status_state"));
+  assert.ok(html.includes("subworker_phase: terminalState.unified.subworker_phase"));
+  assert.ok(html.includes("invokeWithSession('append_status_debug_event', { payload })"));
+  assert.ok(html.includes("status-debug-file:"));
+  assert.ok(rust.includes("fn status_debug_events_path"));
+  assert.ok(rust.includes("status_debug_events.jsonl"));
+  assert.ok(rust.includes("append_status_debug_event"));
+});
+
 test("settings_theme_single_selector", () => {
   const htmlPath = path.join(appRoot, "src", "index.html");
   const html = fs.readFileSync(htmlPath, "utf8");
@@ -330,19 +619,30 @@ test("settings_theme_single_selector", () => {
   assert.ok(html.includes('value="dark-mono"'));
 });
 
-test("run_tile_double_click_same_position", () => {
+test("terminal_context_menu_open_new_window", () => {
   const htmlPath = path.join(appRoot, "src", "index.html");
   const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes('data-role="terminal-context-menu"'));
+  assert.ok(html.includes('data-role="terminal-context-open-new"'));
+  assert.ok(html.includes("'terminal.context.open_new': '新しいターミナルを開く'"));
+  assert.ok(html.includes("'terminal.context.open_new': 'Open New Terminal Window'"));
   assert.ok(html.includes("singleClickDelayMs"));
   assert.ok(html.includes("event.detail !== 1"));
-  assert.ok(html.includes("addEventListener('dblclick'"));
   assert.ok(html.includes("clearTileSingleClickTimer(tile)"));
+  assert.ok(html.includes("isTerminalContextMenuEnabled()"));
+  assert.ok(html.includes("isWithinTerminalShell(event && event.target)"));
+  assert.ok(html.includes("'contextmenu'"));
+  assert.ok(html.includes("showTerminalContextMenuAt("));
+  assert.ok(html.includes("handleTerminalContextOpenNew"));
+  assert.ok(html.includes("terminalContextOpenNewButton.addEventListener('click'"));
+  assert.ok(html.includes("window.addEventListener("));
+  assert.ok(html.includes("'pointerdown'"));
+  assert.ok(html.includes("open_terminal_window_same_position_selected"));
   assert.ok(html.includes("open_terminal_window_same_position_for_session"));
-  assert.ok(html.includes("open_terminal_window_by_index_same_position"));
-  assert.ok(html.includes("terminalSurfaceDoubleClickCooldownMs"));
+  assert.ok(html.includes("hasTerminalSessionIdParam"));
   assert.ok(html.includes("terminalSurfaceSpawnInFlight"));
   assert.ok(html.includes("if (!isTerminalView) return;"));
-  assert.ok(html.includes("event.detail >= 2"));
+  assert.ok(!html.includes("addEventListener('dblclick'"));
 });
 
 test("terminal_selection_handoff_pickup", () => {
@@ -407,17 +707,68 @@ test("terminal_internal_ng_command_intercept", () => {
   assert.ok(rust.includes("\"pong\\r\\n\""));
 });
 
+test("terminal_input_ime_composition_guard", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("function isImeComposingKeyEvent(event)"));
+  assert.ok(html.includes("if (isImeComposingKeyEvent(domEvent)) return;"));
+  assert.ok(html.includes("if (isImeComposingKeyEvent(event)) return;"));
+  assert.ok(html.includes("if (event && event.isComposing) return;"));
+});
+
+test("terminal_tool_detection_includes_codex_even_when_unconfigured", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("function detectToolCommand(line, toolNames)"));
+  assert.ok(html.includes("matchedToolName = detectToolCommand"));
+  assert.ok(html.includes("'codex'"));
+  assert.ok(html.includes("'claudecode'"));
+  assert.ok(html.includes("'opencode'"));
+});
+
+test("subworker_codex_session_sync_on_user_tool_start", () => {
+  const htmlPath = path.join(appRoot, "src", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("function isCodexResumeStartLine(line)"));
+  assert.ok(html.includes("function syncSubworkerCodexSessionOnToolStart(toolName, line)"));
+  assert.ok(html.includes("invokeWithSession('subworker_codex_session_started', { resume })"));
+  assert.ok(html.includes("syncSubworkerCodexSessionOnToolStart(matchedToolName, trimmed);"));
+  assert.ok(html.includes("token === 'resume'"));
+  assert.ok(html.includes("token.startsWith('--resume')"));
+
+  const tauriMain = path.join(appRoot, "src-tauri", "src", "main.rs");
+  const rust = fs.readFileSync(tauriMain, "utf8");
+  assert.ok(rust.includes("fn subworker_codex_session_started"));
+  assert.ok(rust.includes("subworker codex session sync: fresh (cleared)"));
+  assert.ok(rust.includes("subworker codex session sync: resume (kept)"));
+});
+
 test("codex_prompt_marker_need_input_fallback", () => {
   const htmlPath = path.join(appRoot, "src", "index.html");
   const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("AGENT_INPUT_AWAIT_FIRST_OUTPUT_MS"));
+  assert.ok(html.includes("let agentAwaitingFirstOutput = false;"));
+  assert.ok(html.includes("let agentAwaitingFirstOutputPromptChunkCount = 0;"));
   assert.ok(html.includes("AGENT_PROMPT_HINT_SETTLE_MS"));
   assert.ok(html.includes("looksLikeCodexPromptChunk"));
   assert.ok(html.includes("looksLikeCodexOutputMarker"));
+  assert.ok(html.includes("isCodexPromptMetadataLine"));
+  assert.ok(html.includes("isMeaningfulAgentOutputChunk"));
   assert.ok(html.includes("promoteAgentSessionFromOutputMarker"));
   assert.ok(html.includes("agent output marker"));
   assert.ok(html.includes("agent-output-marker"));
   assert.ok(html.includes("scheduleAgentPromptHintFromOutput"));
+  assert.ok(html.includes("if (agentAwaitingFirstOutput) return;"));
+  assert.ok(html.includes("schedulePromptHintJudgeRetry"));
+  assert.ok(html.includes("kind: 'await-first-output'"));
+  assert.ok(html.includes("prompt_chunk_count"));
+  assert.ok(html.includes("scheduleIdleJudge('await-first-output', retryMs);"));
+  assert.ok(html.includes("appendStatusDebugEvent('agent-first-output'"));
+  assert.ok(html.includes("appendStatusDebugEvent('agent-first-output-skip'"));
+  assert.ok(html.includes("kind: 'prompt-only-chunk'"));
+  assert.ok(html.includes("isPromptHintJudge"));
   assert.ok(html.includes("codex prompt marker"));
+  assert.ok(html.includes("triggerJudge('prompt-hint', null);"));
   assert.ok(html.includes("for shortcuts"));
 });
 
@@ -433,3 +784,4 @@ test("settings_persist", () => {
   const docsPlan = path.join(appRoot, "..", "..", "docs", "plan.md");
   assert.ok(fs.existsSync(docsPlan));
 });
+

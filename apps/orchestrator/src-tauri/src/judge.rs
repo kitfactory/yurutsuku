@@ -40,8 +40,7 @@ impl Default for JudgeConfig {
     fn default() -> Self {
         Self {
             silence_timeout_ms: 3500,
-            regex_set: RegexSet::new(Self::default_patterns())
-                .expect("default regex patterns"),
+            regex_set: RegexSet::new(Self::default_patterns()).expect("default regex patterns"),
         }
     }
 }
