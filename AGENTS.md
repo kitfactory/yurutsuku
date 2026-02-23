@@ -54,5 +54,9 @@
 - 成功例: `bon --dir ./project --lang ts --editor codex`
 - 失敗例: `bon --editor unknown` → `[bon][E_EDITOR_UNSUPPORTED] Unsupported editor: unknown`
 
+## ビルド後手順
+- `apps/orchestrator` をビルドしたら、必ずグローバル `nagomi` コマンドも更新する（例: `npm install -g .\\packages\\cli --force`）。
+- 更新後に `nagomi --help` と `nagomi --status` で反映確認する。
+
 ## 詳細は OVERVIEW を正とする
 `docs/OVERVIEW.md` を参照する。

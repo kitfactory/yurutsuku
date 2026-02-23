@@ -667,7 +667,7 @@ function printLauncherUsage() {
       "  nagomi --restart --session-id <id>",
       "  nagomi --status",
       "  nagomi --debug-paths",
-      "  nagomi debug-tail [status|subworker|subworker-io|terminal] [--n <count>]",
+      "  nagomi debug-tail [status|watcher|subworker|subworker-io] [--n <count>]",
       "  nagomi terminal-send --session-id <id> --text \"<command>\"",
       "  nagomi terminal-send --session-id <id> --text-file <path>",
       "  nagomi shortcut --desktop",
@@ -770,11 +770,9 @@ function collectDebugPaths() {
   return {
     app_config_dir: configDir || "",
     worker_smoke_log: configDir ? path.join(configDir, "worker_smoke.log") : "",
-    terminal_debug_snapshots_jsonl: configDir ? path.join(configDir, "terminal_debug_snapshots.jsonl") : "",
     subworker_debug_events_jsonl: configDir ? path.join(configDir, "subworker_debug_events.jsonl") : "",
     subworker_io_events_jsonl: configDir ? path.join(configDir, "subworker_io_events.jsonl") : "",
     status_debug_events_jsonl: configDir ? path.join(configDir, "status_debug_events.jsonl") : "",
-    terminal_debug_screenshots_dir: configDir ? path.join(configDir, "terminal_debug_screenshots") : "",
   };
 }
 
@@ -787,7 +785,8 @@ function resolveDebugLogPath(kind) {
   const raw = String(kind || "").trim().toLowerCase();
   if (raw === "subworker-io" || raw === "subworker_io" || raw === "io") return paths.subworker_io_events_jsonl;
   if (raw === "subworker") return paths.subworker_debug_events_jsonl;
-  if (raw === "terminal") return paths.terminal_debug_snapshots_jsonl;
+  if (raw === "terminal") return paths.status_debug_events_jsonl;
+  if (raw === "watcher") return paths.status_debug_events_jsonl;
   // default: status
   return paths.status_debug_events_jsonl;
 }
@@ -823,9 +822,9 @@ function printDebugTailUsage() {
       "usage:",
       "  nagomi debug-tail",
       "  nagomi debug-tail status",
+      "  nagomi debug-tail watcher",
       "  nagomi debug-tail subworker",
       "  nagomi debug-tail subworker-io",
-      "  nagomi debug-tail terminal",
       "  nagomi debug-tail status --n 80",
     ].join("\n")
   );
@@ -892,6 +891,41 @@ function summarizeStatusEntry(entry) {
     return `${ts} ${eventType} state=${state} applied=${applied} raw=${rawState} hook_kind=${hookKind}${unifiedPart} reason=${reason}`;
   }
   return `${ts} event=${eventType} status=${statusState} merged=${mergedState}${unifiedPart}`;
+}
+
+function isWatcherStatusEntry(entry) {
+  if (!entry || typeof entry !== "object") return false;
+  const eventType = entry.event_type ? String(entry.event_type).toLowerCase() : "";
+  if (eventType.startsWith("watcher-")) return true;
+  return false;
+}
+
+function summarizeWatcherStatusEntry(entry) {
+  const ts = formatLocalTimeFromTsMs(entry && entry.ts_ms);
+  const eventType = entry && entry.event_type ? String(entry.event_type) : "watcher-event";
+  const details = entry && entry.details && typeof entry.details === "object" ? entry.details : {};
+  const detailParts = [];
+  const pushIfPresent = (label, key) => {
+    if (!Object.prototype.hasOwnProperty.call(details, key)) return;
+    const raw = details[key];
+    if (raw == null || raw === "") return;
+    detailParts.push(`${label}=${truncateText(String(raw), 120)}`);
+  };
+  pushIfPresent("reason", "reason");
+  pushIfPresent("attempt", "attempt");
+  pushIfPresent("elapsed_ms", "elapsed_ms");
+  pushIfPresent("retry_in_ms", "retry_in_ms");
+  pushIfPresent("timeout", "timeout");
+  pushIfPresent("stage", "stage");
+  pushIfPresent("model", "model_path");
+  pushIfPresent("vrm", "vrm_path");
+  pushIfPresent("deps", "deps_source");
+  pushIfPresent("message", "message");
+  if (Array.isArray(details.candidates) && details.candidates.length > 0) {
+    detailParts.push(`candidates=${details.candidates.join(",")}`);
+  }
+  const suffix = detailParts.length > 0 ? ` ${detailParts.join(" ")}` : "";
+  return `${ts} ${eventType}${suffix}`.trim();
 }
 
 function summarizeSubworkerEntry(entry) {
@@ -998,22 +1032,32 @@ async function debugTailCli(args) {
     return;
   }
   const summaries = [];
+  const normalizedKind = String(kind).toLowerCase();
   for (const line of lines) {
     try {
       const obj = JSON.parse(line);
-      const normalizedKind = String(kind).toLowerCase();
+      if (normalizedKind === "watcher" && !isWatcherStatusEntry(obj)) {
+        continue;
+      }
       if (normalizedKind === "subworker") {
         summaries.push(summarizeSubworkerEntry(obj));
       } else if (normalizedKind === "subworker-io" || normalizedKind === "subworker_io" || normalizedKind === "io") {
         summaries.push(summarizeSubworkerIoEntry(obj));
       } else if (normalizedKind === "terminal") {
-        summaries.push(summarizeTerminalSnapshotEntry(obj));
+        summaries.push(summarizeStatusEntry(obj));
+      } else if (normalizedKind === "watcher") {
+        summaries.push(summarizeWatcherStatusEntry(obj));
       } else {
         summaries.push(summarizeStatusEntry(obj));
       }
     } catch {
       summaries.push(line);
     }
+  }
+  if (summaries.length === 0 && normalizedKind === "watcher") {
+    console.error("no watcher log entries in selected range");
+    process.exitCode = 1;
+    return;
   }
   console.log(summaries.join("\n"));
 }

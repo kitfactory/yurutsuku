@@ -87,6 +87,8 @@
         --terminal-state-success: 0, 0, 0;
         --terminal-state-fail: 220, 80, 80;
         --terminal-state-subworker: 72, 184, 94;
+        --watcher-width: 256px;
+        --watcher-height: 512px;
       }
 
       html[data-theme='dark'] {
@@ -547,6 +549,19 @@
         overflow: hidden;
       }
 
+      .watcher-board {
+        display: none;
+        background: transparent;
+        border: none;
+      }
+
+      .watcher-shell {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+      }
+
       .terminal-shell::after {
         content: '';
         position: absolute;
@@ -687,8 +702,8 @@
         position: absolute;
         right: 18px;
         bottom: 18px;
-        width: 96px;
-        height: 192px;
+        width: var(--watcher-width);
+        height: var(--watcher-height);
         display: none;
         background: transparent;
         border: none;
@@ -696,13 +711,70 @@
         z-index: 4;
         user-select: none;
         pointer-events: none;
+        transform: none;
       }
 
       .terminal-watcher img {
-        width: 96px;
-        height: 192px;
+        width: var(--watcher-width);
+        height: var(--watcher-height);
         display: block;
         image-rendering: auto;
+      }
+
+      .terminal-watcher-3d {
+        width: var(--watcher-width);
+        height: var(--watcher-height);
+        display: none;
+        overflow: hidden;
+      }
+
+      .terminal-watcher-3d canvas {
+        width: var(--watcher-width);
+        height: var(--watcher-height);
+        display: block;
+      }
+
+      .terminal-watcher.is-3d img {
+        display: none;
+      }
+
+      .terminal-watcher.is-3d .terminal-watcher-3d {
+        display: block;
+      }
+
+      .terminal-watcher.is-3d-loading img {
+        display: none;
+      }
+
+      .terminal-watcher.is-3d-loading .terminal-watcher-3d {
+        display: block;
+      }
+
+      .terminal-watcher-loading {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background: rgba(7, 16, 34, 0.58);
+        color: rgba(241, 245, 249, 0.96);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+        pointer-events: none;
+        z-index: 2;
+      }
+
+      .terminal-watcher.is-preparing img,
+      .terminal-watcher.is-preparing .terminal-watcher-3d {
+        display: none;
+      }
+
+      .terminal-watcher.is-preparing .terminal-watcher-loading {
+        display: flex;
       }
 
       html.watcher-only,
@@ -725,8 +797,6 @@
       body.watcher-only .settings-board,
       body.watcher-only .mode-switch,
       body.watcher-only #terminal-container,
-      body.watcher-only .terminal-debug-badge,
-      body.watcher-only .terminal-debug-action,
       body.watcher-only .terminal-context-menu,
       body.watcher-only .subworker-active-overlay,
       body.watcher-only .subworker-advice-overlay,
@@ -735,12 +805,12 @@
         display: none !important;
       }
 
-      body.watcher-only .terminal-board {
+      body.watcher-only .watcher-board {
         display: block !important;
         background: transparent;
       }
 
-      body.watcher-only .terminal-shell {
+      body.watcher-only .watcher-shell {
         background: transparent;
         border: none;
         box-shadow: none;
@@ -749,77 +819,45 @@
       body.watcher-only .terminal-watcher {
         display: block;
         position: fixed;
-        right: 16px;
-        bottom: 16px;
+        right: 0;
+        bottom: 0;
+        pointer-events: auto;
       }
 
-      .terminal-debug-badge {
-        position: absolute;
-        left: 18px;
-        right: 140px;
-        bottom: 18px;
-        padding: 6px 8px;
-        border-radius: 10px;
-        background: rgba(15, 23, 42, 0.8);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        color: #e2e8f0;
-        font-size: 10px;
-        font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-          'Liberation Mono', 'Courier New', monospace;
-        max-width: calc(100% - 180px);
-        z-index: 5;
-        pointer-events: none;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+      body.watcher-only:not(.character-debug-mode) .terminal-watcher {
+        left: 0;
+        top: 0;
+        right: auto;
+        bottom: auto;
+        width: 100vw;
+        height: 100vh;
       }
 
-      .terminal-debug-action {
-        position: absolute;
-        left: 18px;
-        top: 18px;
-        padding: 6px 10px;
-        border-radius: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        background: rgba(15, 23, 42, 0.7);
-        color: #e2e8f0;
-        font-size: 11px;
-        font-family: 'Space Grotesk', sans-serif;
-        cursor: pointer;
-        z-index: 5;
+      body.watcher-only .terminal-watcher img,
+      body.watcher-only .terminal-watcher-3d,
+      body.watcher-only .terminal-watcher-3d canvas {
+        pointer-events: auto;
       }
 
-      .terminal-debug-action[data-role='terminal-debug-screenshot'] {
-        top: 52px;
+      body.watcher-only:not(.character-debug-mode) .terminal-watcher img,
+      body.watcher-only:not(.character-debug-mode) .terminal-watcher-3d,
+      body.watcher-only:not(.character-debug-mode) .terminal-watcher-3d canvas,
+      body.watcher-only:not(.character-debug-mode) .terminal-watcher-loading {
+        width: 100vw;
+        height: 100vh;
       }
 
-      .terminal-debug-action:active {
-        transform: translateY(1px);
+      body.watcher-only:not(.character-debug-mode) .terminal-watcher-loading {
+        border: none;
+        border-radius: 0;
       }
 
-      .terminal-debug-toggle {
-        position: absolute;
-        right: 18px;
-        top: 18px;
-        z-index: 8;
-        border-radius: 999px;
-        padding: 6px 10px;
-        font-size: 11px;
-        font-weight: 600;
-        border: 1px solid rgba(142, 138, 120, 0.6);
-        background: rgba(25, 26, 24, 0.78);
-        color: #f7f2e6;
-        cursor: pointer;
-        letter-spacing: 0.01em;
-      }
-
-      .terminal-debug-toggle:hover {
-        background: rgba(36, 38, 33, 0.92);
-      }
-
-      .terminal-shell.debug-ui-hidden .terminal-debug-badge,
-      .terminal-shell.debug-ui-hidden .terminal-debug-action {
-        display: none;
+      body.watcher-only.character-debug-mode .terminal-watcher {
+        right: auto;
+        bottom: auto;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
       }
 
       #terminal-container {
@@ -1058,6 +1096,13 @@
         background: var(--settings-panel);
         font-size: 12px;
         color: var(--settings-ink-soft);
+      }
+
+      .character-card.active {
+        border-style: solid;
+        border-color: var(--settings-accent);
+        box-shadow: inset 0 0 0 1px var(--settings-accent-border);
+        color: var(--settings-ink);
       }
 
       .character {
@@ -1452,7 +1497,7 @@
 
       <section class="terminal-board hidden" data-role="terminal-board">
         <h2 data-i18n="terminal.title">terminal</h2>
-        <div class="terminal-shell">
+        <div class="terminal-shell" data-role="terminal-shell">
           <div id="terminal-container" data-role="terminal-container"></div>
           <div class="terminal-context-menu hidden" data-role="terminal-context-menu" role="menu">
             <button
@@ -1474,40 +1519,28 @@
           >
             サブワーカーで処理中
           </div>
+        </div>
+      </section>
+
+      <section class="watcher-board hidden" data-role="watcher-board">
+        <div class="watcher-shell" data-role="watcher-shell">
           <div class="terminal-watcher" data-role="terminal-watcher" title="running">
+            <div class="terminal-watcher-3d" data-role="terminal-watcher-3d"></div>
+            <div
+              class="terminal-watcher-loading"
+              data-role="terminal-watcher-loading"
+              data-i18n="watcher.preparing"
+            >
+              準備中...
+            </div>
             <img
               data-role="terminal-watcher-image"
               alt="watcher"
               src="assets/watcher/nagomisan_full_idle.png"
-              width="96"
-              height="192"
+              width="256"
+              height="512"
             />
           </div>
-          <div class="terminal-debug-badge" data-role="terminal-debug-badge">state=idle</div>
-          <button
-            class="terminal-debug-action"
-            data-role="terminal-debug-save"
-            data-i18n="debug.save_snapshot"
-            type="button"
-          >
-            save debug snapshot
-          </button>
-          <button
-            class="terminal-debug-action"
-            data-role="terminal-debug-screenshot"
-            data-i18n="debug.save_screenshot"
-            type="button"
-          >
-            save debug screenshot
-          </button>
-          <button
-            class="terminal-debug-toggle"
-            data-role="terminal-debug-toggle"
-            data-i18n="debug.ui_on"
-            type="button"
-          >
-            debug ui: on
-          </button>
         </div>
       </section>
 
@@ -1877,6 +1910,30 @@
                 </span>
               </button>
             </div>
+            <div class="settings-row">
+              <span data-i18n="settings.character.debug_toggle">
+                キャラクター3Dプレビュー（デバッグ窓）
+              </span>
+              <button
+                class="toggle toggle-switch"
+                data-role="settings-character-debug-toggle"
+                type="button"
+              >
+                <span class="toggle-state" data-role="settings-character-debug-state">off</span>
+                <span class="toggle-track" aria-hidden="true">
+                  <span class="toggle-thumb"></span>
+                </span>
+              </button>
+            </div>
+            <div class="settings-row">
+              <span data-i18n="settings.character.renderer">renderer</span>
+              <select data-role="settings-character-renderer">
+                <option value="2d" data-i18n="settings.character.renderer.2d">2D</option>
+                <option value="3d" data-i18n="settings.character.renderer.3d">
+                  3D (prototype)
+                </option>
+              </select>
+            </div>
             <div class="settings-upload">
               <span data-i18n="settings.character.upload">upload bundle (.zip)</span>
               <input type="file" accept=".zip" data-role="settings-character-upload" />
@@ -1884,6 +1941,39 @@
                 no upload
               </span>
             </div>
+            <div class="settings-upload">
+              <span data-i18n="settings.character.vrm_upload">upload VRM (.vrm)</span>
+              <input type="file" accept=".vrm,model/vrm" data-role="settings-character-vrm-upload" />
+              <span
+                data-role="settings-character-vrm-uploaded"
+                data-i18n="settings.character.vrm_no_upload"
+              >
+                no vrm
+              </span>
+            </div>
+            <div class="settings-row">
+              <span data-i18n="settings.character.scale">3D scale</span>
+              <input
+                type="number"
+                min="0.2"
+                max="3"
+                step="0.1"
+                value="1.0"
+                data-role="settings-character-3d-scale"
+              />
+            </div>
+            <div class="settings-row">
+              <span data-i18n="settings.character.yaw">3D yaw (deg)</span>
+              <input
+                type="number"
+                min="-180"
+                max="180"
+                step="1"
+                value="0"
+                data-role="settings-character-3d-yaw"
+              />
+            </div>
+            <p class="settings-note" data-role="settings-character-3d-status"></p>
             <div class="settings-row">
               <span data-i18n="settings.character.log_retention">log retention (lines)</span>
               <input
@@ -1983,13 +2073,6 @@
           'subworker.advice.tab_hint': '(Tabで補完)',
           'subworker.output.action.advice': 'アドバイス',
           'subworker.output.action.delegate': '代理入力',
-          'debug.save_snapshot': 'デバッグスナップショット保存',
-          'debug.save_screenshot': 'デバッグスクショ保存',
-          'debug.ui_on': 'debug ui: on',
-          'debug.ui_off': 'debug ui: off',
-          'debug.status.saving': '保存中...',
-          'debug.status.saved': '保存済み',
-          'debug.status.failed': '失敗',
           'settings.title': '設定',
           'settings.appearance.title': '外観',
           'settings.appearance.theme': 'テーマ',
@@ -2062,8 +2145,31 @@
           'settings.notifications.silence': '無音 (ms)',
           'settings.character.title': 'キャラクター',
           'settings.character.watcher': 'ターミナルキャラクター表示',
+          'settings.character.debug_toggle': 'キャラクター3Dプレビュー（デバッグ窓）',
+          'settings.character.debug_open': 'キャラクター3Dプレビューを開く',
+          'settings.character.debug_close': 'キャラクター3Dプレビューを閉じる',
+          'watcher.debug.frame_title': 'キャラクター3Dプレビュー',
+          'watcher.debug.close_hint': '閉じるボタン または 右上の×で閉じる',
+          'watcher.debug.close_button': '閉じる',
+          'watcher.preparing': '準備中...',
+          'settings.character.renderer': 'レンダラー',
+          'settings.character.renderer.2d': '2D',
+          'settings.character.renderer.3d': '3D (プロトタイプ)',
           'settings.character.upload': 'バンドルアップロード (.zip)',
           'settings.character.no_upload': '未アップロード',
+          'settings.character.vrm_upload': 'VRMアップロード (.vrm)',
+          'settings.character.vrm_no_upload': '未アップロード',
+          'settings.character.scale': '3Dスケール',
+          'settings.character.yaw': '3D向き (度)',
+          'settings.character.3d_status_loading': '3Dモデルを読み込み中...',
+          'settings.character.3d_status_ready': '3Dキャラクターを表示中',
+          'settings.character.3d_status_missing_vrm': '3Dを有効化するにはVRMをアップロードしてください',
+          'settings.character.3d_status_debug_only':
+            '3Dは通常Watcherでも表示できます（デバッグ窓で大きめプレビュー可能）',
+          'settings.character.3d_status_fallback': '3D描画不可のため2D表示へフォールバックしました',
+          'settings.character.3d_status_error': '3Dモデルの読み込みに失敗しました',
+          'settings.character.3d_status_prototype':
+            'VRM読み込みに失敗したため3Dプロトタイプ表示へ切り替えました',
           'settings.character.log_retention': 'ログ保持 (行)',
           'settings.character.default': 'デフォルト',
           'toggle.on': 'ON',
@@ -2142,13 +2248,6 @@
           'subworker.advice.tab_hint': '(Tab to complete) ',
           'subworker.output.action.advice': 'advice',
           'subworker.output.action.delegate': 'delegate input',
-          'debug.save_snapshot': 'save debug snapshot',
-          'debug.save_screenshot': 'save debug screenshot',
-          'debug.ui_on': 'debug ui: on',
-          'debug.ui_off': 'debug ui: off',
-          'debug.status.saving': 'saving...',
-          'debug.status.saved': 'saved',
-          'debug.status.failed': 'failed',
           'settings.title': 'Settings',
           'settings.appearance.title': 'appearance',
           'settings.appearance.theme': 'theme',
@@ -2220,8 +2319,31 @@
           'settings.notifications.silence': 'silence (ms)',
           'settings.character.title': 'character',
           'settings.character.watcher': 'terminal character',
+          'settings.character.debug_toggle': 'character 3D preview (debug window)',
+          'settings.character.debug_open': 'open character 3D preview',
+          'settings.character.debug_close': 'close character 3D preview',
+          'watcher.debug.frame_title': 'character 3D preview',
+          'watcher.debug.close_hint': 'Use the close button or the title-bar X',
+          'watcher.debug.close_button': 'Close',
+          'watcher.preparing': 'Preparing...',
+          'settings.character.renderer': 'renderer',
+          'settings.character.renderer.2d': '2D',
+          'settings.character.renderer.3d': '3D (prototype)',
           'settings.character.upload': 'upload bundle (.zip)',
           'settings.character.no_upload': 'no upload',
+          'settings.character.vrm_upload': 'upload VRM (.vrm)',
+          'settings.character.vrm_no_upload': 'no upload',
+          'settings.character.scale': '3D scale',
+          'settings.character.yaw': '3D yaw (deg)',
+          'settings.character.3d_status_loading': 'loading 3D model...',
+          'settings.character.3d_status_ready': '3D character active',
+          'settings.character.3d_status_missing_vrm': 'upload a VRM to enable 3D mode',
+          'settings.character.3d_status_debug_only':
+            '3D is available in the normal watcher (debug window gives a larger preview)',
+          'settings.character.3d_status_fallback': 'failed to render 3D, fell back to 2D',
+          'settings.character.3d_status_error': 'failed to load 3D model',
+          'settings.character.3d_status_prototype':
+            'VRM load failed; switched to 3D prototype view',
           'settings.character.log_retention': 'log retention (lines)',
           'settings.character.default': 'default',
           'toggle.on': 'ON',
@@ -2258,6 +2380,7 @@
           if (!key) return;
           node.setAttribute('value', t(key));
         });
+        setCharacterDebugToggleLabel();
       }
 
       const output = document.getElementById('output');
@@ -2277,16 +2400,20 @@
       const settingsBoard = document.querySelector('[data-role="settings-board"]');
       const settingsWindowsCard = document.querySelector('[data-role="settings-windows-card"]');
       const terminalBoard = document.querySelector('[data-role="terminal-board"]');
+      const watcherBoard = document.querySelector('[data-role="watcher-board"]');
+      const watcherShell = document.querySelector('[data-role="watcher-shell"]');
       const terminalContainer = document.querySelector('[data-role="terminal-container"]');
       const terminalWatcher = document.querySelector('[data-role="terminal-watcher"]');
       const terminalWatcherImage = document.querySelector('[data-role="terminal-watcher-image"]');
-      const terminalShell = document.querySelector('.terminal-shell');
-      const terminalDebugBadge = document.querySelector('[data-role="terminal-debug-badge"]');
-      const terminalDebugSave = document.querySelector('[data-role="terminal-debug-save"]');
-      const terminalDebugScreenshot = document.querySelector(
-        '[data-role="terminal-debug-screenshot"]'
+      const terminalWatcher3dHost = document.querySelector('[data-role="terminal-watcher-3d"]');
+      const characterDebugFrame = document.querySelector('[data-role="character-debug-frame"]');
+      const characterDebugFrameCloseButton = document.querySelector(
+        '[data-role="character-debug-frame-close"]'
       );
-      const terminalDebugToggle = document.querySelector('[data-role="terminal-debug-toggle"]');
+      const characterDebugFrameResizeHandle = document.querySelector(
+        '[data-role="character-debug-frame-resize"]'
+      );
+      const terminalShell = document.querySelector('[data-role="terminal-shell"]');
       const terminalContextMenu = document.querySelector('[data-role="terminal-context-menu"]');
       const terminalContextOpenNewButton = document.querySelector(
         '[data-role="terminal-context-open-new"]'
@@ -2340,12 +2467,32 @@
       const characterUploaded = document.querySelector(
         '[data-role="settings-character-uploaded"]'
       );
+      const characterVrmUpload = document.querySelector('[data-role="settings-character-vrm-upload"]');
+      const characterVrmUploaded = document.querySelector(
+        '[data-role="settings-character-vrm-uploaded"]'
+      );
+      const characterRendererSelect = document.querySelector(
+        '[data-role="settings-character-renderer"]'
+      );
+      const character3dScaleInput = document.querySelector(
+        '[data-role="settings-character-3d-scale"]'
+      );
+      const character3dYawInput = document.querySelector(
+        '[data-role="settings-character-3d-yaw"]'
+      );
+      const character3dStatus = document.querySelector('[data-role="settings-character-3d-status"]');
       const characterList = document.querySelector('[data-role="settings-character-list"]');
       const characterWatcherToggle = document.querySelector(
         '[data-role="settings-character-watcher"]'
       );
       const characterWatcherState = document.querySelector(
         '[data-role="settings-character-watcher-state"]'
+      );
+      const characterDebugToggleButton = document.querySelector(
+        '[data-role="settings-character-debug-toggle"]'
+      );
+      const characterDebugToggleState = document.querySelector(
+        '[data-role="settings-character-debug-state"]'
       );
       const terminalTheme = document.querySelector('[data-role="settings-terminal-theme"]');
       const terminalFont = document.querySelector('[data-role="settings-terminal-font"]');
@@ -2378,6 +2525,10 @@
       const terminalCopyToggle = document.querySelector('[data-role="settings-terminal-copy"]');
       const terminalCopyState = document.querySelector('[data-role="settings-terminal-copy-state"]');
       const isWindowsRuntime = /windows/i.test(navigator.userAgent || '');
+      let characterDebugWindowOpen = false;
+      let characterDebugFallbackUsingWatcher = false;
+      let characterDebugFallbackPreviousWatcherEnabled = null;
+      const CHARACTER_DEBUG_TOGGLE_TIMEOUT_MS = 2200;
 
       applyI18n();
 
@@ -2392,15 +2543,59 @@
       let notifyEnabled = true;
       let audioEnabled = true;
       let llmEnabled = false;
+      let settingsHydrated = false;
+      let watcherPreparing = false;
+      let watcherPreparingSinceMs = 0;
+      let watcherPreparingReason = '';
+      let watcherPreparingWatchdogToken = 0;
+      let lastWatcherVisibilityLogged = '';
       let terminalCopyOnSelect = true;
       let terminalWatcherEnabled = false;
       let watcherReadyNotified = false;
+      let watcherWindowFrameState = null;
+      let watcherWindowFrameDesiredState = null;
+      let watcherWindowFrameSyncInFlight = false;
+      let watcherWindowBlurSyncTimer = 0;
+      let watcherWindowNativeFrameIgnoreBlurUntilMs = 0;
+      let watcherPointerInside = false;
+      let watcherResizeDrag = null;
+      let watcherResizeDragRaf = 0;
+      let watcherResizeApplyInFlight = false;
+      let watcherResizePendingSize = null;
+      const WATCHER_WINDOW_BLUR_SYNC_DELAY_MS = 140;
+      const WATCHER_DEBUG_WINDOW_BLUR_SYNC_DELAY_MS = 320;
+      const WATCHER_WINDOW_NATIVE_FRAME_BLUR_GUARD_MS = 260;
+      const WATCHER_RESIZE_MIN_WIDTH = 192;
+      const WATCHER_RESIZE_MIN_HEIGHT = 384;
+      const WATCHER_RESIZE_MAX_WIDTH = 1400;
+      const WATCHER_RESIZE_MAX_HEIGHT = 1800;
+      const WATCHER_PREPARING_STUCK_WARN_MS = 12000;
       let wslDistrosLoaded = false;
       let wslDistrosLoading = false;
       const urlQuery = new URLSearchParams(window.location.search);
+      const queryFlag = (name) => {
+        const raw = String(urlQuery.get(name) || '')
+          .trim()
+          .toLowerCase();
+        return raw === '1' || raw === 'true' || raw === 'on' || raw === 'yes';
+      };
+      const queryNumber = (name, fallback, min, max) => {
+        const parsed = Number(urlQuery.get(name));
+        const base = Number.isFinite(parsed) ? parsed : fallback;
+        return Math.min(max, Math.max(min, Math.round(base)));
+      };
       const viewParam = urlQuery.get('view');
       const isTerminalView = viewParam === 'terminal';
       const isWatcherView = viewParam === 'watcher';
+      const characterDebugModeEnabled = isWatcherView && queryFlag('character_debug');
+      const characterDebugForce3d = characterDebugModeEnabled && queryFlag('character_debug_force_3d');
+      const characterDebugWidth = queryNumber('character_debug_width', 480, 96, 1400);
+      const characterDebugHeight = queryNumber('character_debug_height', 960, 192, 1800);
+      const characterDebugState = String(urlQuery.get('character_debug_state') || '').trim();
+      if (characterDebugModeEnabled) {
+        document.documentElement.style.setProperty('--watcher-width', `${characterDebugWidth}px`);
+        document.documentElement.style.setProperty('--watcher-height', `${characterDebugHeight}px`);
+      }
       const terminalSessionIdParam = urlQuery.get('session_id');
       const terminalSessionId = terminalSessionIdParam || `session-${Date.now()}`;
       const hasTerminalSessionIdParam = Boolean(terminalSessionIdParam);
@@ -3117,46 +3312,1088 @@
       }
 
       function updateTerminalDebugBadge() {
-        if (!terminalDebugBadge) return;
-        const toolName = normalizeToolName(settingsState.llm_tool || 'codex') || '-';
-        const stateLabel = resolveTerminalStatusState(
-          terminalState.observed.merged && terminalState.observed.merged.state ? terminalState.observed.merged.state : TerminalObservation.idle
-        );
-        const eventType = lastTerminalEvent.type || '-';
-        const eventDetail = truncateDebugText(lastTerminalEvent.detail || '');
-        const linePreview = truncateDebugText(lastInputLine || '');
-        const keyPreview = truncateDebugText(lastKeyLabel || '');
-        const lastChunk =
-          inputChunkHistory.length > 0
-            ? truncateDebugText(inputChunkHistory[inputChunkHistory.length - 1].preview || '')
-            : '';
-        const transitionPreview = truncateDebugText(
-          recentStateTransitions(4)
-            .map((entry) => `${entry.from}->${entry.to}${entry.guarded ? '*' : ''}`)
-            .join(' > '),
-          88
-        );
-        const subworkerMode = normalizeSubworkerMode(settingsState.subworker_mode || 'careful');
-        const subworkerEnabled = normalizeSubworkerEnabled(settingsState.subworker_enabled);
-        const subworkerDebug = normalizeSubworkerDebugEnabled(settingsState.subworker_debug_enabled);
-        const subworkerThreshold = normalizeSubworkerConfidenceThreshold(
-          settingsState.subworker_confidence_threshold
-        );
-        const subworkerConfidence = formatSubworkerConfidence(terminalState.runtime.subworker.last_confidence);
-        const automationState = isAutomationManualHoldActive() ? 'manual-hold' : 'auto';
-        const automationReason = isAutomationManualHoldActive()
-          ? truncateDebugText(terminalState.runtime.automation.reason || '', 24)
-          : '';
-        terminalDebugBadge.textContent = `state=${stateLabel} | agent=${agentSessionActive ? 'on' : 'off'} | tool=${toolName} | cap=${inputCaptureMode} | data=${dataInputLineActive ? 'on' : 'off'} | buf=${inputLineBuffer.length}/${keyInputBuffer.length} | key=${keyPreview} | chunk=${lastChunk} | event=${eventType} ${eventDetail} | trans=${transitionPreview || '-'} | sw=${subworkerEnabled ? 'on' : 'off'}:${subworkerDebug ? 'dbg' : 'nodbg'}:${subworkerMode}:${subworkerConfidence}/${formatSubworkerConfidence(
-          subworkerThreshold
-        )}:${terminalState.runtime.subworker.last_action}:${isSubworkerRuntimePaused() ? 'paused' : 'run'} | auto=${automationState}${
-          automationReason ? `:${automationReason}` : ''
-        } | line=${linePreview}`;
+        // Debug UI badge was removed; diagnostics are written to JSONL logs.
+        // デバッグUIバッジは廃止し、診断は JSONL ログへ集約する。
       }
 
-      function applyTerminalWatcherVisibility() {
+      const WATCHER_3D_DEPENDENCY_CANDIDATES = Object.freeze([
+        {
+          name: 'esm.sh',
+          three: 'https://esm.sh/three@0.160.0',
+          gltfLoader: 'https://esm.sh/three@0.160.0/examples/jsm/loaders/GLTFLoader.js',
+          threeVrm: 'https://esm.sh/@pixiv/three-vrm@2.1.2?deps=three@0.160.0',
+        },
+        {
+          name: 'jsdelivr',
+          three: 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js',
+          gltfLoader:
+            'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js',
+          threeVrm:
+            'https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.2/lib/three-vrm.module.min.js',
+        },
+      ]);
+      const CharacterMotionBaseState = Object.freeze({
+        neutral: 'neutral',
+        processing: 'processing',
+        waiting: 'waiting',
+        needUser: 'need-user',
+      });
+      const CharacterMotionTriggerState = Object.freeze({
+        none: 'none',
+        completion: 'completion',
+        errorAlert: 'error-alert',
+      });
+      const CHARACTER_MOTION_NEUTRAL_BOOT_MS = 1800;
+      const CHARACTER_MOTION_TRIGGER_DURATION_MS = Object.freeze({
+        [CharacterMotionTriggerState.completion]: 900,
+        [CharacterMotionTriggerState.errorAlert]: 700,
+      });
+      const CHARACTER_MOTION_ERROR_COOLDOWN_MS = 3000;
+      const WATCHER_3D_MAX_PIXEL_RATIO = 1;
+      const WATCHER_3D_RENDER_INTERVAL_MS = 33;
+      const WATCHER_3D_VIEWPORT_SYNC_INTERVAL_MS = 240;
+      const WATCHER_3D_DEPENDENCY_TIMEOUT_MS = 8000;
+      const WATCHER_3D_MODEL_LOAD_TIMEOUT_MS = 15000;
+      const WATCHER_3D_PROTOTYPE_TIMEOUT_MS = 5000;
+
+      const watcher3dState = {
+        deps: null,
+        depsLoading: null,
+        modelLoading: null,
+        modelLoadingPath: '',
+        modelLoadingStartedAtMs: 0,
+        renderer: null,
+        scene: null,
+        camera: null,
+        clock: null,
+        modelRoot: null,
+        vrm: null,
+        viewportWidth: 0,
+        viewportHeight: 0,
+        active: false,
+        rafId: 0,
+        time: 0,
+        currentStatus: TerminalStatusState.idle,
+        loadedModelPath: '',
+        lastLoadFailed: false,
+        depsSource: '',
+        bootStartedAtMs: Date.now(),
+        baseState: CharacterMotionBaseState.neutral,
+        triggerState: CharacterMotionTriggerState.none,
+        triggerEndsAtMs: 0,
+        lastErrorTriggerAtMs: 0,
+        modelFacingYawOffsetDeg: 0,
+        lastRenderAtMs: 0,
+        lastViewportSyncAtMs: 0,
+        refreshToken: 0,
+      };
+
+      function setCharacter3dStatusByKey(key) {
+        if (!character3dStatus) return;
+        character3dStatus.textContent = key ? t(key) : '';
+      }
+
+      function setWatcherPreparing(next, reason = '') {
+        const nextPreparing = Boolean(next);
+        const reasonText = String(reason || '').trim();
+        const prevPreparing = watcherPreparing;
+        const prevReason = watcherPreparingReason;
+        watcherPreparing = nextPreparing;
         if (!terminalWatcher) return;
-        terminalWatcher.style.display = isWatcherView ? 'block' : 'none';
+        terminalWatcher.classList.toggle('is-preparing', watcherPreparing);
+        if (nextPreparing) {
+          if (!prevPreparing) {
+            watcherPreparingSinceMs = Date.now();
+            watcherPreparingWatchdogToken += 1;
+            const token = watcherPreparingWatchdogToken;
+            watcherPreparingReason = reasonText || prevReason || '';
+            appendWatcherDebugEvent('preparing-enter', {
+              reason: watcherPreparingReason || '',
+              refresh_token: Number(watcher3dState.refreshToken || 0),
+            });
+            window.setTimeout(() => {
+              if (!isWatcherView) return;
+              if (!watcherPreparing) return;
+              if (token !== watcherPreparingWatchdogToken) return;
+              appendWatcherDebugEvent('preparing-stuck', {
+                reason: watcherPreparingReason || '',
+                elapsed_ms: Math.max(0, Date.now() - Number(watcherPreparingSinceMs || 0)),
+                refresh_token: Number(watcher3dState.refreshToken || 0),
+                renderer: normalizeCharacterRenderer(settingsState.character_renderer),
+                has_vrm_path: Boolean(String(settingsState.character_3d_vrm_path || '').trim()),
+                vrm_path: summarizePathForDebug(settingsState.character_3d_vrm_path),
+                deps_source: String(watcher3dState.depsSource || ''),
+                model_loading_path: summarizePathForDebug(watcher3dState.modelLoadingPath),
+                model_loading_age_ms:
+                  watcher3dState.modelLoadingStartedAtMs > 0
+                    ? Math.max(0, Date.now() - watcher3dState.modelLoadingStartedAtMs)
+                    : 0,
+              });
+            }, WATCHER_PREPARING_STUCK_WARN_MS);
+          } else if (reasonText && reasonText !== prevReason) {
+            watcherPreparingReason = reasonText;
+            appendWatcherDebugEvent('preparing-update', {
+              reason: watcherPreparingReason,
+              elapsed_ms: Math.max(0, Date.now() - Number(watcherPreparingSinceMs || Date.now())),
+            });
+          }
+          return;
+        }
+        if (!prevPreparing) return;
+        watcherPreparingWatchdogToken += 1;
+        const elapsedMs = watcherPreparingSinceMs
+          ? Math.max(0, Date.now() - watcherPreparingSinceMs)
+          : 0;
+        appendWatcherDebugEvent('preparing-exit', {
+          reason: reasonText || prevReason || '',
+          previous_reason: prevReason || '',
+          elapsed_ms: elapsedMs,
+        });
+        watcherPreparingSinceMs = 0;
+        watcherPreparingReason = '';
+      }
+
+      async function promiseWithTimeout(promise, timeoutMs, label) {
+        const timeout = Math.max(200, Number(timeoutMs) || 0);
+        let timer = null;
+        try {
+          return await Promise.race([
+            promise,
+            new Promise((_, reject) => {
+              timer = setTimeout(() => {
+                reject(new Error(`[watcher-3d] timeout: ${label || 'unknown'}`));
+              }, timeout);
+            }),
+          ]);
+        } finally {
+          if (timer) {
+            clearTimeout(timer);
+          }
+        }
+      }
+
+      function convertCharacterAssetPathToUrl(rawPath) {
+        const value = String(rawPath || '').trim();
+        if (!value) return '';
+        if (/^(https?:|data:|blob:|asset:|tauri:)/i.test(value)) {
+          return value;
+        }
+        const core = window.__TAURI__ && window.__TAURI__.core ? window.__TAURI__.core : null;
+        if (core && typeof core.convertFileSrc === 'function') {
+          try {
+            return core.convertFileSrc(value);
+          } catch {
+            // fall through
+          }
+        }
+        if (/^[a-zA-Z]:\\/.test(value)) {
+          return `file:///${value.replace(/\\/g, '/')}`;
+        }
+        return value;
+      }
+
+      async function ensureWatcher3dDependencies() {
+        if (watcher3dState.deps) {
+          appendWatcherDebugEvent('deps-cache-hit', {
+            source: String(watcher3dState.depsSource || ''),
+          });
+          return watcher3dState.deps;
+        }
+        if (watcher3dState.depsLoading) {
+          appendWatcherDebugEvent('deps-join-inflight', {});
+          return watcher3dState.depsLoading;
+        }
+        appendWatcherDebugEvent('deps-start', {
+          candidates: WATCHER_3D_DEPENDENCY_CANDIDATES.map((candidate) => candidate.name),
+        });
+        watcher3dState.depsLoading = (async () => {
+          let lastError = null;
+          for (const candidate of WATCHER_3D_DEPENDENCY_CANDIDATES) {
+            const candidateStartedAtMs = Date.now();
+            appendWatcherDebugEvent('deps-candidate-start', {
+              candidate: candidate.name,
+            });
+            try {
+              const [threeModule, gltfLoaderModule, threeVrmModule] = await promiseWithTimeout(
+                Promise.all([
+                  import(candidate.three),
+                  import(candidate.gltfLoader),
+                  import(candidate.threeVrm),
+                ]),
+                WATCHER_3D_DEPENDENCY_TIMEOUT_MS,
+                `deps:${candidate.name}`
+              );
+              const loaderCtor =
+                gltfLoaderModule.GLTFLoader ||
+                (gltfLoaderModule.default && gltfLoaderModule.default.GLTFLoader) ||
+                gltfLoaderModule.default ||
+                null;
+              const vrmModule = threeVrmModule.default || threeVrmModule;
+              const deps = {
+                THREE: threeModule,
+                GLTFLoader: loaderCtor,
+                VRMLoaderPlugin: vrmModule.VRMLoaderPlugin || null,
+                VRMUtils: vrmModule.VRMUtils || null,
+              };
+              if (!deps.THREE || !deps.GLTFLoader) {
+                throw new Error(`invalid 3D dependency exports: ${candidate.name}`);
+              }
+              watcher3dState.deps = deps;
+              watcher3dState.depsSource = candidate.name;
+              appendWatcherDebugEvent('deps-candidate-success', {
+                candidate: candidate.name,
+                elapsed_ms: Math.max(0, Date.now() - candidateStartedAtMs),
+              });
+              return deps;
+            } catch (error) {
+              lastError = error;
+              appendWatcherDebugEvent('deps-candidate-fail', {
+                candidate: candidate.name,
+                elapsed_ms: Math.max(0, Date.now() - candidateStartedAtMs),
+                message: summarizeStatusDebugError(error),
+              });
+            }
+          }
+          appendWatcherDebugEvent('deps-fail', {
+            message: summarizeStatusDebugError(lastError),
+          });
+          throw lastError || new Error('failed to load 3D dependencies');
+        })();
+        try {
+          return await watcher3dState.depsLoading;
+        } finally {
+          watcher3dState.depsLoading = null;
+        }
+      }
+
+      function resolveWatcherViewportSize() {
+        const hostWidth = terminalWatcher3dHost
+          ? Math.round(terminalWatcher3dHost.clientWidth || 0)
+          : 0;
+        const hostHeight = terminalWatcher3dHost
+          ? Math.round(terminalWatcher3dHost.clientHeight || 0)
+          : 0;
+        const watcherWidth = terminalWatcher ? Math.round(terminalWatcher.clientWidth || 0) : 0;
+        const watcherHeight = terminalWatcher ? Math.round(terminalWatcher.clientHeight || 0) : 0;
+        const fallbackWidth = characterDebugModeEnabled ? characterDebugWidth : 96;
+        const fallbackHeight = characterDebugModeEnabled ? characterDebugHeight : 192;
+        const width = Math.max(96, hostWidth || watcherWidth || fallbackWidth);
+        const height = Math.max(192, hostHeight || watcherHeight || fallbackHeight);
+        return { width, height };
+      }
+
+      function syncWatcher3dViewport(force = false) {
+        if (!watcher3dState.renderer || !watcher3dState.camera) return;
+        const next = resolveWatcherViewportSize();
+        if (
+          !force &&
+          next.width === watcher3dState.viewportWidth &&
+          next.height === watcher3dState.viewportHeight
+        ) {
+          return;
+        }
+        watcher3dState.viewportWidth = next.width;
+        watcher3dState.viewportHeight = next.height;
+        watcher3dState.renderer.setPixelRatio(
+          Math.min(WATCHER_3D_MAX_PIXEL_RATIO, Math.max(1, window.devicePixelRatio || 1))
+        );
+        watcher3dState.renderer.setSize(next.width, next.height, false);
+        watcher3dState.camera.aspect = next.width / next.height;
+        watcher3dState.camera.updateProjectionMatrix();
+        watcher3dState.lastViewportSyncAtMs = performance.now();
+      }
+
+      function ensureWatcher3dScene() {
+        if (!terminalWatcher3dHost || !watcher3dState.deps) {
+          appendWatcherDebugEvent('scene-unavailable', {
+            has_host: Boolean(terminalWatcher3dHost),
+            has_deps: Boolean(watcher3dState.deps),
+          });
+          return false;
+        }
+        if (watcher3dState.renderer && watcher3dState.scene && watcher3dState.camera) return true;
+        const { THREE } = watcher3dState.deps;
+        const initialSize = resolveWatcherViewportSize();
+        const renderer = new THREE.WebGLRenderer({
+          alpha: true,
+          antialias: true,
+          powerPreference: 'high-performance',
+        });
+        renderer.setPixelRatio(
+          Math.min(WATCHER_3D_MAX_PIXEL_RATIO, Math.max(1, window.devicePixelRatio || 1))
+        );
+        renderer.setSize(initialSize.width, initialSize.height, false);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(
+          28,
+          initialSize.width / initialSize.height,
+          0.1,
+          40
+        );
+        camera.position.set(0, 1.05, 2.2);
+        const ambient = new THREE.AmbientLight(0xffffff, 0.92);
+        const key = new THREE.DirectionalLight(0xffffff, 1.05);
+        key.position.set(0.35, 1.1, 0.7);
+        const fill = new THREE.DirectionalLight(0xbfd8ff, 0.55);
+        fill.position.set(-0.55, 0.65, 0.35);
+        scene.add(ambient);
+        scene.add(key);
+        scene.add(fill);
+        terminalWatcher3dHost.innerHTML = '';
+        terminalWatcher3dHost.appendChild(renderer.domElement);
+        watcher3dState.renderer = renderer;
+        watcher3dState.scene = scene;
+        watcher3dState.camera = camera;
+        watcher3dState.clock = new THREE.Clock();
+        watcher3dState.viewportWidth = initialSize.width;
+        watcher3dState.viewportHeight = initialSize.height;
+        watcher3dState.time = 0;
+        syncWatcher3dViewport(true);
+        watcher3dState.lastRenderAtMs = 0;
+        watcher3dState.lastViewportSyncAtMs = performance.now();
+        appendWatcherDebugEvent('scene-created', {
+          width: initialSize.width,
+          height: initialSize.height,
+        });
+        return true;
+      }
+
+      function clearWatcher3dModel() {
+        if (watcher3dState.scene && watcher3dState.modelRoot) {
+          watcher3dState.scene.remove(watcher3dState.modelRoot);
+        }
+        watcher3dState.modelRoot = null;
+        watcher3dState.vrm = null;
+        watcher3dState.modelFacingYawOffsetDeg = 0;
+      }
+
+      function createWatcher3dPrototypeModel() {
+        if (!watcher3dState.deps) return null;
+        const { THREE } = watcher3dState.deps;
+        const root = new THREE.Group();
+        const bodyMat = new THREE.MeshStandardMaterial({
+          color: 0x7ea6ff,
+          roughness: 0.35,
+          metalness: 0.08,
+        });
+        const headMat = new THREE.MeshStandardMaterial({
+          color: 0xffdcc7,
+          roughness: 0.55,
+          metalness: 0.02,
+        });
+        const accentMat = new THREE.MeshStandardMaterial({
+          color: 0x2b3a67,
+          roughness: 0.4,
+          metalness: 0.12,
+        });
+        const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 0.75, 10, 20), bodyMat);
+        body.position.set(0, 0.55, 0);
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 24, 24), headMat);
+        head.position.set(0, 1.35, 0);
+        const eyeLeft = new THREE.Mesh(new THREE.SphereGeometry(0.028, 12, 12), accentMat);
+        eyeLeft.position.set(-0.075, 1.38, 0.19);
+        const eyeRight = new THREE.Mesh(new THREE.SphereGeometry(0.028, 12, 12), accentMat);
+        eyeRight.position.set(0.075, 1.38, 0.19);
+        const footLeft = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.2, 8, 12), accentMat);
+        footLeft.position.set(-0.12, 0.02, 0.04);
+        footLeft.rotation.z = 0.14;
+        const footRight = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.2, 8, 12), accentMat);
+        footRight.position.set(0.12, 0.02, 0.04);
+        footRight.rotation.z = -0.14;
+        root.add(body);
+        root.add(head);
+        root.add(eyeLeft);
+        root.add(eyeRight);
+        root.add(footLeft);
+        root.add(footRight);
+        root.position.set(0, 0, 0);
+        return root;
+      }
+
+      async function showWatcher3dPrototypeModel(reason = '') {
+        const startedAtMs = Date.now();
+        const fallbackReason = String(reason || '').trim();
+        appendWatcherDebugEvent('prototype-start', {
+          reason: fallbackReason,
+        });
+        try {
+          await promiseWithTimeout(
+            ensureWatcher3dDependencies(),
+            WATCHER_3D_DEPENDENCY_TIMEOUT_MS,
+            'deps:prototype'
+          );
+          if (!ensureWatcher3dScene()) {
+            appendWatcherDebugEvent('prototype-scene-unavailable', {
+              reason: fallbackReason,
+            });
+            return false;
+          }
+          const prototypeModel = createWatcher3dPrototypeModel();
+          if (!prototypeModel) {
+            appendWatcherDebugEvent('prototype-model-create-fail', {
+              reason: fallbackReason,
+            });
+            return false;
+          }
+          clearWatcher3dModel();
+          watcher3dState.modelRoot = prototypeModel;
+          watcher3dState.scene.add(prototypeModel);
+          watcher3dState.loadedModelPath = '__prototype__';
+          watcher3dState.lastLoadFailed = true;
+          applyWatcher3dModelTuning();
+          setCharacter3dStatusByKey('settings.character.3d_status_prototype');
+          appendWatcherDebugEvent('prototype-success', {
+            reason: fallbackReason,
+            elapsed_ms: Math.max(0, Date.now() - startedAtMs),
+          });
+          return true;
+        } catch (error) {
+          appendWatcherDebugEvent('prototype-error', {
+            reason: fallbackReason,
+            elapsed_ms: Math.max(0, Date.now() - startedAtMs),
+            message: summarizeStatusDebugError(error),
+          });
+          throw error;
+        }
+      }
+
+      function applyWatcher3dModelTuning() {
+        if (!watcher3dState.modelRoot || !watcher3dState.deps) return;
+        const { THREE } = watcher3dState.deps;
+        const scale = normalizeCharacter3dScale(settingsState.character_3d_scale);
+        const yawDeg = resolveWatcher3dDisplayYawDeg();
+        watcher3dState.modelRoot.scale.setScalar(scale);
+        watcher3dState.modelRoot.rotation.y = THREE.MathUtils.degToRad(yawDeg);
+      }
+
+      function normalizeCharacter3dYawForDisplay(value) {
+        let yaw = Number(value);
+        if (!Number.isFinite(yaw)) yaw = 0;
+        while (yaw > 180) yaw -= 360;
+        while (yaw < -180) yaw += 360;
+        return yaw;
+      }
+
+      function resolveWatcherModelFacingYawOffsetDeg() {
+        return Number(watcher3dState.modelFacingYawOffsetDeg || 0);
+      }
+
+      function resolveWatcherModelFacingYawOffsetDegForVrm(vrm, modelPath, characterId) {
+        const packId = normalizeCharacterPackId(characterId);
+        const vrmPath = String(modelPath || '').trim().toLowerCase();
+        if (packId.startsWith('nikechan') || vrmPath.includes('nikechan')) {
+          return 180;
+        }
+        const meta = vrm && vrm.meta ? vrm.meta : null;
+        if (meta) {
+          try {
+            const metaText = JSON.stringify(meta).toLowerCase();
+            if (metaText.includes('nikechan')) {
+              return 180;
+            }
+          } catch {
+            // ignore meta stringify error
+          }
+        }
+        return 0;
+      }
+
+      function resolveWatcher3dDisplayYawDeg() {
+        const baseYaw = normalizeCharacter3dYaw(settingsState.character_3d_yaw_deg);
+        const offsetYaw = resolveWatcherModelFacingYawOffsetDeg();
+        return normalizeCharacter3dYawForDisplay(baseYaw + offsetYaw);
+      }
+
+      function isWatcherProcessingStatus(status) {
+        return (
+          status === TerminalStatusState.running ||
+          status === TerminalStatusState.aiRunning ||
+          status === TerminalStatusState.subworkerRunning
+        );
+      }
+
+      function resolveCharacterBaseStateFromTerminalStatus(status) {
+        const normalized = normalizeTerminalStatusState(status);
+        if (isWatcherProcessingStatus(normalized)) return CharacterMotionBaseState.processing;
+        if (
+          normalized === TerminalStatusState.needInput ||
+          normalized === TerminalStatusState.fail
+        ) {
+          return CharacterMotionBaseState.needUser;
+        }
+        return CharacterMotionBaseState.waiting;
+      }
+
+      function startWatcherCharacterTrigger(trigger) {
+        const nextTrigger = String(trigger || '').trim().toLowerCase();
+        if (!nextTrigger || nextTrigger === CharacterMotionTriggerState.none) return;
+        const duration = CHARACTER_MOTION_TRIGGER_DURATION_MS[nextTrigger];
+        if (!Number.isFinite(duration) || duration <= 0) return;
+        const now = Date.now();
+        if (nextTrigger === CharacterMotionTriggerState.errorAlert) {
+          const elapsed = now - Number(watcher3dState.lastErrorTriggerAtMs || 0);
+          if (elapsed < CHARACTER_MOTION_ERROR_COOLDOWN_MS) return;
+          watcher3dState.lastErrorTriggerAtMs = now;
+        }
+        watcher3dState.triggerState = nextTrigger;
+        watcher3dState.triggerEndsAtMs = now + duration;
+      }
+
+      function resolveWatcherCharacterRuntime() {
+        const now = Date.now();
+        if (
+          watcher3dState.triggerState &&
+          watcher3dState.triggerState !== CharacterMotionTriggerState.none &&
+          now >= Number(watcher3dState.triggerEndsAtMs || 0)
+        ) {
+          watcher3dState.triggerState = CharacterMotionTriggerState.none;
+          watcher3dState.triggerEndsAtMs = 0;
+        }
+        const bootElapsed = now - Number(watcher3dState.bootStartedAtMs || 0);
+        const baseState =
+          bootElapsed < CHARACTER_MOTION_NEUTRAL_BOOT_MS
+            ? CharacterMotionBaseState.neutral
+            : watcher3dState.baseState || CharacterMotionBaseState.waiting;
+        const triggerState =
+          watcher3dState.triggerState || CharacterMotionTriggerState.none;
+        let triggerProgress = 0;
+        if (
+          triggerState !== CharacterMotionTriggerState.none &&
+          Number.isFinite(watcher3dState.triggerEndsAtMs)
+        ) {
+          const totalMs = CHARACTER_MOTION_TRIGGER_DURATION_MS[triggerState];
+          const remainingMs = Math.max(0, watcher3dState.triggerEndsAtMs - now);
+          if (Number.isFinite(totalMs) && totalMs > 0) {
+            triggerProgress = 1 - remainingMs / totalMs;
+          }
+        }
+        return { baseState, triggerState, triggerProgress };
+      }
+
+      async function loadWatcher3dModel() {
+        const modelPath = String(settingsState.character_3d_vrm_path || '').trim();
+        const modelPathSummary = summarizePathForDebug(modelPath);
+        const startedAtMs = Date.now();
+        appendWatcherDebugEvent('model-load-start', {
+          model_path: modelPathSummary,
+          refresh_token: Number(watcher3dState.refreshToken || 0),
+        });
+        if (!modelPath) {
+          watcher3dState.lastLoadFailed = true;
+          appendWatcherDebugEvent('model-load-skip', {
+            reason: 'missing-model-path',
+          });
+          return false;
+        }
+        const modelUrl = convertCharacterAssetPathToUrl(modelPath);
+        if (!modelUrl) {
+          watcher3dState.lastLoadFailed = true;
+          appendWatcherDebugEvent('model-load-skip', {
+            reason: 'invalid-model-url',
+            model_path: modelPathSummary,
+          });
+          return false;
+        }
+        if (
+          watcher3dState.modelRoot &&
+          watcher3dState.loadedModelPath === modelPath &&
+          !watcher3dState.lastLoadFailed
+        ) {
+          applyWatcher3dModelTuning();
+          appendWatcherDebugEvent('model-load-cache-hit', {
+            model_path: modelPathSummary,
+          });
+          return true;
+        }
+        if (watcher3dState.modelLoading && watcher3dState.modelLoadingPath === modelPath) {
+          const ageMs = Date.now() - Number(watcher3dState.modelLoadingStartedAtMs || 0);
+          if (ageMs > WATCHER_3D_MODEL_LOAD_TIMEOUT_MS + 1200) {
+            appendWatcherDebugEvent('model-load-stale-reset', {
+              model_path: modelPathSummary,
+              age_ms: ageMs,
+            });
+            watcher3dState.modelLoading = null;
+            watcher3dState.modelLoadingPath = '';
+            watcher3dState.modelLoadingStartedAtMs = 0;
+          } else {
+            appendWatcherDebugEvent('model-load-join-inflight', {
+              model_path: modelPathSummary,
+              age_ms: ageMs,
+            });
+            return await watcher3dState.modelLoading;
+          }
+        }
+        const loadingPromise = (async () => {
+          let stage = 'deps';
+          try {
+            const deps = await promiseWithTimeout(
+              ensureWatcher3dDependencies(),
+              WATCHER_3D_DEPENDENCY_TIMEOUT_MS,
+              'deps:model'
+            );
+            stage = 'scene';
+            if (!ensureWatcher3dScene()) {
+              appendWatcherDebugEvent('model-load-scene-unavailable', {
+                model_path: modelPathSummary,
+              });
+              return false;
+            }
+            setCharacter3dStatusByKey('settings.character.3d_status_loading');
+            stage = 'loader-init';
+            const loader = new deps.GLTFLoader();
+            if (deps.VRMLoaderPlugin) {
+              loader.register((parser) => new deps.VRMLoaderPlugin(parser));
+            }
+            stage = 'vrm-load';
+            const vrm = await promiseWithTimeout(
+              new Promise((resolve, reject) => {
+                loader.load(
+                  modelUrl,
+                  (gltf) => {
+                    if (gltf && gltf.userData && gltf.userData.vrm) {
+                      resolve(gltf.userData.vrm);
+                      return;
+                    }
+                    reject(new Error('VRM not found in model'));
+                  },
+                  undefined,
+                  (error) => reject(error)
+                );
+              }),
+              WATCHER_3D_MODEL_LOAD_TIMEOUT_MS,
+              'vrm-load'
+            );
+            stage = 'vrm-apply';
+            if (deps.VRMUtils && typeof deps.VRMUtils.rotateVRM0 === 'function') {
+              const metaVersion = String(
+                (vrm && vrm.meta && vrm.meta.metaVersion) ||
+                  (vrm && vrm.meta && vrm.meta.version) ||
+                  ''
+              ).trim();
+              if (!metaVersion || metaVersion.startsWith('0')) {
+                deps.VRMUtils.rotateVRM0(vrm);
+              }
+            }
+            clearWatcher3dModel();
+            watcher3dState.vrm = vrm;
+            watcher3dState.modelRoot = vrm.scene;
+            watcher3dState.modelFacingYawOffsetDeg = resolveWatcherModelFacingYawOffsetDegForVrm(
+              vrm,
+              modelPath,
+              settingsState.character_id
+            );
+            watcher3dState.scene.add(vrm.scene);
+            watcher3dState.loadedModelPath = modelPath;
+            watcher3dState.lastLoadFailed = false;
+            applyWatcher3dModelTuning();
+            setCharacter3dStatusByKey('settings.character.3d_status_ready');
+            appendWatcherDebugEvent('model-load-success', {
+              model_path: modelPathSummary,
+              deps_source: String(watcher3dState.depsSource || ''),
+              elapsed_ms: Math.max(0, Date.now() - startedAtMs),
+            });
+            return true;
+          } catch (error) {
+            watcher3dState.lastLoadFailed = true;
+            appendWatcherDebugEvent('model-load-error', {
+              model_path: modelPathSummary,
+              stage,
+              elapsed_ms: Math.max(0, Date.now() - startedAtMs),
+              message: summarizeStatusDebugError(error),
+            });
+            throw error;
+          }
+        })();
+        watcher3dState.modelLoading = loadingPromise;
+        watcher3dState.modelLoadingPath = modelPath;
+        watcher3dState.modelLoadingStartedAtMs = Date.now();
+        try {
+          return await loadingPromise;
+        } finally {
+          if (watcher3dState.modelLoading === loadingPromise) {
+            watcher3dState.modelLoading = null;
+            watcher3dState.modelLoadingPath = '';
+            watcher3dState.modelLoadingStartedAtMs = 0;
+          }
+        }
+      }
+
+      function applyWatcher3dFallbackMotion(deltaSec) {
+        if (!watcher3dState.modelRoot) return;
+        const model = watcher3dState.modelRoot;
+        watcher3dState.time += Math.max(0, Number(deltaSec) || 0);
+        const tSec = watcher3dState.time;
+        const runtime = resolveWatcherCharacterRuntime();
+        let posY = 0;
+        let rotX = 0;
+        let rotZ = 0;
+
+        if (runtime.baseState === CharacterMotionBaseState.processing) {
+          posY = Math.sin(tSec * 6.4) * 0.032;
+          rotX = Math.sin(tSec * 4.4) * 0.028;
+          rotZ = Math.sin(tSec * 4.0) * 0.032;
+        } else if (runtime.baseState === CharacterMotionBaseState.needUser) {
+          posY = Math.sin(tSec * 2.8) * 0.014;
+          rotX = -0.05 + Math.sin(tSec * 2.2) * 0.016;
+          rotZ = Math.sin(tSec * 2.6) * 0.09;
+        } else if (runtime.baseState === CharacterMotionBaseState.neutral) {
+          posY = Math.sin(tSec * 2.1) * 0.008;
+          rotX = Math.sin(tSec * 1.4) * 0.01;
+          rotZ = Math.sin(tSec * 1.2) * 0.008;
+        } else {
+          posY = Math.sin(tSec * 1.6) * 0.01;
+          rotX = Math.sin(tSec * 1.4) * 0.009;
+          rotZ = Math.sin(tSec * 1.3) * 0.01;
+        }
+
+        if (runtime.triggerState === CharacterMotionTriggerState.completion) {
+          const p = Math.min(1, Math.max(0, runtime.triggerProgress));
+          const energy = 1 - p;
+          posY += Math.abs(Math.sin(p * Math.PI * 3.0)) * 0.05 * energy;
+          rotZ += Math.sin(p * Math.PI * 4.0) * 0.08 * energy;
+        } else if (runtime.triggerState === CharacterMotionTriggerState.errorAlert) {
+          const p = Math.min(1, Math.max(0, runtime.triggerProgress));
+          const energy = 1 - p;
+          rotZ += Math.sin(p * Math.PI * 16.0) * 0.16 * energy;
+          rotX += -0.06 * energy;
+          posY -= 0.015 * energy;
+        }
+
+        model.position.y = posY;
+        model.rotation.x = rotX;
+        model.rotation.z = rotZ;
+      }
+
+      function stopWatcher3dLoop() {
+        watcher3dState.active = false;
+        if (watcher3dState.rafId) {
+          cancelAnimationFrame(watcher3dState.rafId);
+          watcher3dState.rafId = 0;
+        }
+        watcher3dState.triggerState = CharacterMotionTriggerState.none;
+        watcher3dState.triggerEndsAtMs = 0;
+        watcher3dState.lastRenderAtMs = 0;
+      }
+
+      function startWatcher3dLoop() {
+        if (!watcher3dState.renderer || !watcher3dState.scene || !watcher3dState.camera) return;
+        if (watcher3dState.rafId) return;
+        watcher3dState.active = true;
+        watcher3dState.bootStartedAtMs = Date.now();
+        watcher3dState.lastRenderAtMs = 0;
+        watcher3dState.lastViewportSyncAtMs = 0;
+        syncWatcher3dViewport(true);
+        const frame = () => {
+          if (!watcher3dState.active) {
+            watcher3dState.rafId = 0;
+            return;
+          }
+          const nowMs = performance.now();
+          if (
+            watcher3dState.lastViewportSyncAtMs <= 0 ||
+            nowMs - watcher3dState.lastViewportSyncAtMs >= WATCHER_3D_VIEWPORT_SYNC_INTERVAL_MS
+          ) {
+            syncWatcher3dViewport();
+          }
+          if (
+            watcher3dState.lastRenderAtMs > 0 &&
+            nowMs - watcher3dState.lastRenderAtMs < WATCHER_3D_RENDER_INTERVAL_MS
+          ) {
+            watcher3dState.rafId = requestAnimationFrame(frame);
+            return;
+          }
+          watcher3dState.lastRenderAtMs = nowMs;
+          const delta = watcher3dState.clock ? watcher3dState.clock.getDelta() : 1 / 60;
+          applyWatcher3dFallbackMotion(delta);
+          try {
+            watcher3dState.renderer.render(watcher3dState.scene, watcher3dState.camera);
+          } catch (error) {
+            console.warn('[watcher-3d] render failed', error);
+            stopWatcher3dLoop();
+            terminalWatcher.classList.remove('is-3d');
+            setCharacter3dStatusByKey('settings.character.3d_status_error');
+            return;
+          }
+          watcher3dState.rafId = requestAnimationFrame(frame);
+        };
+        watcher3dState.rafId = requestAnimationFrame(frame);
+      }
+
+      function setWatcher3dStatus(status) {
+        const nextStatus = normalizeTerminalStatusState(status);
+        const prevStatus = watcher3dState.currentStatus;
+        watcher3dState.currentStatus = nextStatus;
+        watcher3dState.baseState = resolveCharacterBaseStateFromTerminalStatus(nextStatus);
+        if (nextStatus === TerminalStatusState.fail && prevStatus !== TerminalStatusState.fail) {
+          startWatcherCharacterTrigger(CharacterMotionTriggerState.errorAlert);
+          return;
+        }
+        if (
+          isWatcherProcessingStatus(prevStatus) &&
+          nextStatus === TerminalStatusState.success &&
+          watcher3dState.baseState !== CharacterMotionBaseState.needUser
+        ) {
+          startWatcherCharacterTrigger(CharacterMotionTriggerState.completion);
+        }
+      }
+
+      function waitForWatcherUiFlushBefore3dLoad() {
+        return new Promise((resolve) => {
+          requestAnimationFrame(() => {
+            // Yield once after rAF so the hidden 2D state can be painted before heavy 3D work.
+            // rAF 後に一度だけ event loop を明けて、3D重処理前に 2D 非表示状態を描画させる。
+            setTimeout(resolve, 0);
+          });
+        });
+      }
+
+      async function refreshWatcherRendererMode(reason = 'settings') {
+        if (!terminalWatcher) return;
+        const refreshReason = String(reason || '').trim() || 'settings';
+        appendWatcherDebugEvent('refresh-start', {
+          reason: refreshReason,
+          settings_hydrated: Boolean(settingsHydrated),
+          watcher_enabled: Boolean(terminalWatcherEnabled),
+          debug_mode: Boolean(characterDebugModeEnabled),
+        });
+        if (!settingsHydrated && !characterDebugModeEnabled) {
+          setWatcherPreparing(true, 'settings-hydration');
+          appendWatcherDebugEvent('refresh-wait-settings-hydration', {
+            reason: refreshReason,
+          });
+          return;
+        }
+        const shouldRenderInWindow =
+          isWatcherView && (characterDebugModeEnabled || terminalWatcherEnabled);
+        const renderer = normalizeCharacterRenderer(settingsState.character_renderer);
+        const vrmPath = String(settingsState.character_3d_vrm_path || '').trim();
+        const vrmPathSummary = summarizePathForDebug(vrmPath);
+        const force3dInDebug = characterDebugModeEnabled && characterDebugForce3d && Boolean(vrmPath);
+        const use3dBySettings = renderer === '3d' && Boolean(vrmPath);
+        const refreshToken = (watcher3dState.refreshToken = (watcher3dState.refreshToken || 0) + 1);
+        appendWatcherDebugEvent('refresh-context', {
+          reason: refreshReason,
+          refresh_token: refreshToken,
+          should_render_window: Boolean(shouldRenderInWindow),
+          renderer,
+          force_3d_debug: Boolean(force3dInDebug),
+          use_3d_settings: Boolean(use3dBySettings),
+          has_vrm_path: Boolean(vrmPath),
+          vrm_path: vrmPathSummary,
+        });
+        if (!shouldRenderInWindow) {
+          setWatcherPreparing(false, 'watcher-hidden');
+          terminalWatcher.classList.remove('is-3d');
+          terminalWatcher.classList.remove('is-3d-loading');
+          stopWatcher3dLoop();
+          if (renderer === '3d' && !vrmPath) {
+            setCharacter3dStatusByKey('settings.character.3d_status_missing_vrm');
+          } else if (!refreshReason || refreshReason === 'settings' || refreshReason === 'visibility') {
+            setCharacter3dStatusByKey('');
+          }
+          appendWatcherDebugEvent('refresh-skip-hidden', {
+            reason: refreshReason,
+            refresh_token: refreshToken,
+          });
+          return;
+        }
+        const use3d = use3dBySettings || force3dInDebug;
+        if (!use3d) {
+          setWatcherPreparing(false, '2d-renderer');
+          terminalWatcher.classList.remove('is-3d');
+          terminalWatcher.classList.remove('is-3d-loading');
+          stopWatcher3dLoop();
+          if (renderer === '3d' && !vrmPath) {
+            setCharacter3dStatusByKey('settings.character.3d_status_missing_vrm');
+          } else if (!refreshReason || refreshReason === 'settings') {
+            setCharacter3dStatusByKey('');
+          }
+          appendWatcherDebugEvent('refresh-2d', {
+            reason: refreshReason,
+            refresh_token: refreshToken,
+          });
+          return;
+        }
+        // Keep 3D hidden while recomputing/loading to reduce UI stalls on Windows.
+        // 再計算/読込中は 3D を一旦隠し、完了後に表示する。
+        setWatcherPreparing(true, '3d-reload');
+        stopWatcher3dLoop();
+        terminalWatcher.classList.remove('is-3d');
+        terminalWatcher.classList.add('is-3d-loading');
+        setCharacter3dStatusByKey('settings.character.3d_status_loading');
+        appendWatcherDebugEvent('refresh-3d-load-start', {
+          reason: refreshReason,
+          refresh_token: refreshToken,
+          vrm_path: vrmPathSummary,
+        });
+        await waitForWatcherUiFlushBefore3dLoad();
+        if (refreshToken !== watcher3dState.refreshToken) {
+          appendWatcherDebugEvent('refresh-cancelled', {
+            stage: 'before-load',
+            reason: refreshReason,
+            refresh_token: refreshToken,
+            latest_refresh_token: Number(watcher3dState.refreshToken || 0),
+          });
+          return;
+        }
+        try {
+          const loaded = await promiseWithTimeout(
+            loadWatcher3dModel(),
+            WATCHER_3D_MODEL_LOAD_TIMEOUT_MS + 500,
+            'load-model'
+          );
+          if (refreshToken !== watcher3dState.refreshToken) {
+            appendWatcherDebugEvent('refresh-cancelled', {
+              stage: 'after-load',
+              reason: refreshReason,
+              refresh_token: refreshToken,
+              latest_refresh_token: Number(watcher3dState.refreshToken || 0),
+            });
+            return;
+          }
+          if (!loaded) {
+            const prototypeLoaded = await promiseWithTimeout(
+              showWatcher3dPrototypeModel('load-returned-false').catch(() => false),
+              WATCHER_3D_PROTOTYPE_TIMEOUT_MS,
+              'prototype-fallback'
+            ).catch(() => false);
+            if (refreshToken !== watcher3dState.refreshToken) {
+              appendWatcherDebugEvent('refresh-cancelled', {
+                stage: 'prototype-after-false',
+                reason: refreshReason,
+                refresh_token: refreshToken,
+                latest_refresh_token: Number(watcher3dState.refreshToken || 0),
+              });
+              return;
+            }
+            if (!prototypeLoaded) {
+              setWatcherPreparing(false, '3d-fallback-unavailable');
+              terminalWatcher.classList.remove('is-3d');
+              terminalWatcher.classList.remove('is-3d-loading');
+              setCharacter3dStatusByKey('settings.character.3d_status_fallback');
+              appendWatcherDebugEvent('refresh-fallback-failed', {
+                reason: refreshReason,
+                refresh_token: refreshToken,
+              });
+              return;
+            }
+            appendWatcherDebugEvent('refresh-fallback-prototype', {
+              reason: refreshReason,
+              refresh_token: refreshToken,
+            });
+          }
+          setWatcherPreparing(false, '3d-ready');
+          terminalWatcher.classList.remove('is-3d-loading');
+          terminalWatcher.classList.add('is-3d');
+          syncWatcher3dViewport(true);
+          startWatcher3dLoop();
+          if (watcher3dState.loadedModelPath !== '__prototype__') {
+            setCharacter3dStatusByKey('settings.character.3d_status_ready');
+          }
+          appendWatcherDebugEvent('refresh-ready', {
+            reason: refreshReason,
+            refresh_token: refreshToken,
+            model_path: summarizePathForDebug(watcher3dState.loadedModelPath),
+            deps_source: String(watcher3dState.depsSource || ''),
+          });
+        } catch (error) {
+          if (refreshToken !== watcher3dState.refreshToken) {
+            appendWatcherDebugEvent('refresh-cancelled', {
+              stage: 'catch',
+              reason: refreshReason,
+              refresh_token: refreshToken,
+              latest_refresh_token: Number(watcher3dState.refreshToken || 0),
+            });
+            return;
+          }
+          console.warn('[watcher-3d] init failed', error);
+          const prototypeLoaded = await promiseWithTimeout(
+            showWatcher3dPrototypeModel('load-error').catch(() => false),
+            WATCHER_3D_PROTOTYPE_TIMEOUT_MS,
+            'prototype-after-error'
+          ).catch(() => false);
+          if (refreshToken !== watcher3dState.refreshToken) {
+            appendWatcherDebugEvent('refresh-cancelled', {
+              stage: 'prototype-after-error',
+              reason: refreshReason,
+              refresh_token: refreshToken,
+              latest_refresh_token: Number(watcher3dState.refreshToken || 0),
+            });
+            return;
+          }
+          if (!prototypeLoaded) {
+            setWatcherPreparing(false, '3d-init-error');
+            terminalWatcher.classList.remove('is-3d');
+            terminalWatcher.classList.remove('is-3d-loading');
+            stopWatcher3dLoop();
+            setCharacter3dStatusByKey('settings.character.3d_status_error');
+            appendWatcherDebugEvent('refresh-error', {
+              reason: refreshReason,
+              refresh_token: refreshToken,
+              message: summarizeStatusDebugError(error),
+            });
+            return;
+          }
+          setWatcherPreparing(false, 'prototype-after-error');
+          terminalWatcher.classList.remove('is-3d-loading');
+          terminalWatcher.classList.add('is-3d');
+          syncWatcher3dViewport(true);
+          startWatcher3dLoop();
+          appendWatcherDebugEvent('refresh-fallback-prototype', {
+            reason: `${refreshReason}:after-error`,
+            refresh_token: refreshToken,
+            message: summarizeStatusDebugError(error),
+          });
+        }
+      }
+
+      function applyTerminalWatcherVisibility(reason = 'visibility') {
+        if (!terminalWatcher) return;
+        const requestedByMode = isWatcherView && (characterDebugModeEnabled || terminalWatcherEnabled);
+        const shouldShow = requestedByMode || (isWatcherView && !settingsHydrated);
+        terminalWatcher.style.display = shouldShow ? 'block' : 'none';
+        if (isWatcherView && !settingsHydrated) {
+          setWatcherPreparing(true, 'visibility-wait-settings');
+        }
+        const watcherInteractive = shouldShow && isWatcherView;
+        const watcherPointerEvents = watcherInteractive ? 'auto' : 'none';
+        terminalWatcher.style.pointerEvents = watcherPointerEvents;
+        if (terminalWatcherImage) {
+          terminalWatcherImage.style.pointerEvents = watcherPointerEvents;
+        }
+        if (terminalWatcher3dHost) {
+          terminalWatcher3dHost.style.pointerEvents = watcherPointerEvents;
+          const canvas = terminalWatcher3dHost.querySelector('canvas');
+          if (canvas) {
+            canvas.style.pointerEvents = watcherPointerEvents;
+          }
+        }
+        if (!shouldShow && isWatcherView) {
+          setWatcherPreparing(false, 'watcher-hidden');
+          terminalWatcher.classList.remove('is-3d-loading');
+          watcherPointerInside = false;
+          void syncWatcherWindowNativeFrame(false, 'watcher-hidden');
+        }
+        const visibilityKey = [
+          shouldShow ? '1' : '0',
+          watcherInteractive ? '1' : '0',
+          settingsHydrated ? '1' : '0',
+          characterDebugModeEnabled ? '1' : '0',
+          terminalWatcherEnabled ? '1' : '0',
+        ].join(':');
+        if (visibilityKey !== lastWatcherVisibilityLogged) {
+          lastWatcherVisibilityLogged = visibilityKey;
+          appendWatcherDebugEvent('visibility', {
+            reason: String(reason || 'visibility'),
+            should_show: Boolean(shouldShow),
+            interactive: Boolean(watcherInteractive),
+            settings_hydrated: Boolean(settingsHydrated),
+            debug_mode: Boolean(characterDebugModeEnabled),
+            watcher_enabled: Boolean(terminalWatcherEnabled),
+          });
+        }
+        void refreshWatcherRendererMode('visibility');
       }
 
       function normalizeObservedStateForDisplay(state) {
@@ -4256,6 +5493,35 @@
             }
           })
           .catch(() => {});
+      }
+
+      function summarizeStatusDebugError(error) {
+        if (!error) return '';
+        if (error && typeof error === 'object' && 'message' in error) {
+          return String(error.message || '')
+            .trim()
+            .slice(0, 240);
+        }
+        return String(error || '')
+          .trim()
+          .slice(0, 240);
+      }
+
+      function summarizePathForDebug(rawPath) {
+        const value = String(rawPath || '').trim();
+        if (!value) return '';
+        const normalized = value.replace(/\\/g, '/');
+        const parts = normalized.split('/');
+        return parts.length > 0 ? parts[parts.length - 1] : normalized;
+      }
+
+      function appendWatcherDebugEvent(eventType, details = {}) {
+        if (!isWatcherView) return;
+        const normalized = String(eventType || '')
+          .trim()
+          .toLowerCase();
+        if (!normalized) return;
+        appendStatusDebugEvent(`watcher-${normalized}`, details);
       }
 
       function currentSubworkerDebugStatus() {
@@ -6121,105 +7387,6 @@
         setTerminalStickyObserved(state, reason || state);
       }
 
-      async function appendDebugSnapshot() {
-        if (!terminalDebugSave) return;
-        const mergedStateForSnapshot =
-          terminalState.observed.merged && terminalState.observed.merged.state ? terminalState.observed.merged.state : TerminalObservation.idle;
-        const mergedReasonForSnapshot =
-          terminalState.observed.merged && terminalState.observed.merged.reason ? terminalState.observed.merged.reason : mergedStateForSnapshot;
-        const unifiedStatusState = syncTerminalUnifiedState(
-          mergedStateForSnapshot,
-          mergedReasonForSnapshot
-        );
-        const payload = {
-          session_id: terminalSessionId || null,
-          state: terminalState.observed.merged ? terminalState.observed.merged.state : null,
-          status_state: unifiedStatusState,
-          terminal_unified: {
-            base_state: terminalState.unified.base_state,
-            status_state: terminalState.unified.status_state,
-            subworker_phase: terminalState.unified.subworker_phase,
-            reason: terminalState.unified.reason,
-          },
-          agent_active: agentSessionActive,
-          tool: normalizeToolName(settingsState.llm_tool || 'codex') || null,
-          capture: inputCaptureMode,
-          buffer_data_len: inputLineBuffer.length,
-          buffer_key_len: keyInputBuffer.length,
-          buffer_data: truncateDebugText(inputLineBuffer || '', 120),
-          buffer_key: truncateDebugText(keyInputBuffer || '', 120),
-          last_key: lastKeyLabel || '',
-          input_chunks: inputChunkHistory.slice(-INPUT_CHUNK_HISTORY_LIMIT),
-          line: lastInputLine,
-          event_type: lastTerminalEvent.type,
-          event_detail: lastTerminalEvent.detail,
-          state_transitions: recentStateTransitions(STATE_TRANSITION_HISTORY_LIMIT),
-          subworker: {
-            enabled: normalizeSubworkerEnabled(settingsState.subworker_enabled),
-            debug_enabled: normalizeSubworkerDebugEnabled(
-              settingsState.subworker_debug_enabled
-            ),
-            mode: normalizeSubworkerMode(settingsState.subworker_mode),
-            threshold: normalizeSubworkerConfidenceThreshold(
-              settingsState.subworker_confidence_threshold
-            ),
-            paused: isSubworkerRuntimePaused(),
-            skip_once: terminalState.runtime.subworker.skip_once_armed,
-            active: isSubworkerRuntimeRunning(),
-            phase: currentSubworkerRuntimePhase(),
-            debug_log_path: subworkerDebugLogPath || '',
-            confidence: terminalState.runtime.subworker.last_confidence,
-            action: terminalState.runtime.subworker.last_action,
-            result: terminalState.runtime.subworker.last_result,
-            reason: terminalState.runtime.subworker.last_reason,
-          },
-          automation_gate: {
-            state: terminalState.runtime.automation.state,
-            reason: String(terminalState.runtime.automation.reason || ''),
-            entered_at_ms: Number(terminalState.runtime.automation.entered_at_ms || 0),
-            active: isAutomationManualHoldActive(),
-            token: Number(terminalState.runtime.automation.token || 0),
-          },
-          subworker_decisions: recentSubworkerDecisions(SUBWORKER_DECISION_HISTORY_LIMIT),
-          badge: terminalDebugBadge ? terminalDebugBadge.textContent : '',
-        };
-        const originalLabel = terminalDebugSave.textContent;
-        terminalDebugSave.textContent = t('debug.status.saving');
-        try {
-          await invokeWithSession('append_terminal_debug_snapshot', { payload });
-          terminalDebugSave.textContent = t('debug.status.saved');
-          setTimeout(() => {
-            if (terminalDebugSave) terminalDebugSave.textContent = originalLabel;
-          }, 900);
-        } catch {
-          terminalDebugSave.textContent = t('debug.status.failed');
-          setTimeout(() => {
-            if (terminalDebugSave) terminalDebugSave.textContent = originalLabel;
-          }, 1200);
-        }
-      }
-
-      async function saveDebugScreenshot() {
-        if (!terminalDebugScreenshot) return;
-        const originalLabel = terminalDebugScreenshot.textContent;
-        terminalDebugScreenshot.textContent = t('debug.status.saving');
-        try {
-          const path = await invokeWithSession('save_debug_screenshot', {});
-          if (path) {
-            console.debug('[terminal-debug] screenshot saved', { path });
-          }
-          terminalDebugScreenshot.textContent = t('debug.status.saved');
-          setTimeout(() => {
-            if (terminalDebugScreenshot) terminalDebugScreenshot.textContent = originalLabel;
-          }, 1200);
-        } catch {
-          terminalDebugScreenshot.textContent = t('debug.status.failed');
-          setTimeout(() => {
-            if (terminalDebugScreenshot) terminalDebugScreenshot.textContent = originalLabel;
-          }, 1400);
-        }
-      }
-
       function terminalWatcherFaceForState(state) {
         const normalizedState = resolveTerminalStatusState(state);
         const assetState =
@@ -6251,14 +7418,17 @@
 
       function applyTerminalObservedState(state, title) {
         const normalizedState = resolveTerminalStatusState(state);
-        if (terminalWatcherImage) {
+        setWatcher3dStatus(normalizedState);
+        const watcher3dActive =
+          Boolean(terminalWatcher) && terminalWatcher.classList.contains('is-3d');
+        if (terminalWatcherImage && !watcher3dActive) {
           terminalWatcherImage.src = terminalWatcherFaceForState(normalizedState);
         }
         if (terminalWatcher) {
           terminalWatcher.title = title || normalizedState;
         }
         const shell =
-          (terminalWatcher && terminalWatcher.parentElement) ||
+          (isWatcherView ? watcherShell : terminalShell) ||
           (terminalContainer && terminalContainer.parentElement);
         if (shell && shell.classList) {
           shell.classList.remove(
@@ -7671,6 +8841,41 @@
         mode: 'careful',
         confidenceThreshold: 0.8,
       });
+      const character3dDefaults = Object.freeze({
+        renderer: '2d',
+        vrmPath: '',
+        scale: 1.0,
+        yawDeg: 0.0,
+      });
+      const BUILTIN_CHARACTER_PACKS_URL = 'assets/character-packs/builtin.packs.json';
+      const BUILTIN_CHARACTER_PACKS_TIMEOUT_MS = 2600;
+      const WATCHER_3D_PROTOTYPE_FALLBACK_PACKS = Object.freeze([
+        {
+          pack_id: 'nikechan-v2',
+          display_name: 'Nikechan v2 (remote)',
+          renderer: '3d',
+          model_vrm_path:
+            'https://raw.githubusercontent.com/tegnike/nikechan-assets/main/vrms/nikechan_v2.vrm',
+          motions: {},
+          expressions: {},
+          default_scale: 1.0,
+          default_yaw_deg: 0.0,
+          source: 'builtin:nikechan-assets',
+        },
+        {
+          pack_id: 'nikechan-v1',
+          display_name: 'Nikechan v1 (remote)',
+          renderer: '3d',
+          model_vrm_path:
+            'https://raw.githubusercontent.com/tegnike/nikechan-assets/main/vrms/nikechan_v1.vrm',
+          motions: {},
+          expressions: {},
+          default_scale: 1.0,
+          default_yaw_deg: 0.0,
+          source: 'builtin:nikechan-assets',
+        },
+      ]);
+      const LEGACY_NIKECHAN_YAW_MIGRATION_KEY = 'nagomi.legacy.nikechanYaw180Fix.v2';
 
       function normalizeShortcutKeyToken(raw) {
         const text = String(raw || '').trim();
@@ -7844,6 +9049,10 @@
         subworker_prompt_template_markdown: '',
         status_debug_enabled: false,
         character_id: 'default',
+        character_renderer: character3dDefaults.renderer,
+        character_3d_vrm_path: character3dDefaults.vrmPath,
+        character_3d_scale: character3dDefaults.scale,
+        character_3d_yaw_deg: character3dDefaults.yawDeg,
         log_retention_lines: 20000,
         terminal_watcher_enabled: false,
         terminal_font_family: terminalSettingsDefaults.fontFamily,
@@ -7873,11 +9082,11 @@
       updateSubworkerPanelDisplay();
       const DEFAULT_SCROLLBACK_LINES = terminalSettingsDefaults.scrollbackLines;
       const characterBundles = new Set(['default']);
+      const characterPackCatalog = new Map();
+      let characterPackCatalogLoaded = false;
       let ipcSessionId = null;
       let debugTerminalEnabled =
         new URLSearchParams(window.location.search).get('debug_terminal') === '1';
-      const TERMINAL_DEBUG_UI_STORAGE_KEY = 'nagomi_terminal_debug_ui';
-      let terminalDebugUiVisible = true;
       // Terminal debug buffer avoids per-keystroke console spam / ターミナルのデバッグログをバッファして console 連打を避ける
       const TERMINAL_DEBUG_BUFFER_LIMIT = 800;
       const terminalDebugBuffer = [];
@@ -7930,37 +9139,6 @@
             0,
             terminalDebugBuffer.length - TERMINAL_DEBUG_BUFFER_LIMIT
           );
-        }
-      }
-
-      function loadTerminalDebugUiVisible() {
-        try {
-          const raw = localStorage.getItem(TERMINAL_DEBUG_UI_STORAGE_KEY);
-          if (raw === '0' || raw === 'false') return false;
-          if (raw === '1' || raw === 'true') return true;
-        } catch {
-          return true;
-        }
-        return true;
-      }
-
-      function applyTerminalDebugUiVisible(visible) {
-        terminalDebugUiVisible = Boolean(visible);
-        if (terminalShell) {
-          terminalShell.classList.toggle('debug-ui-hidden', !terminalDebugUiVisible);
-        }
-        if (terminalDebugToggle) {
-          terminalDebugToggle.textContent = terminalDebugUiVisible
-            ? t('debug.ui_on')
-            : t('debug.ui_off');
-        }
-        try {
-          localStorage.setItem(
-            TERMINAL_DEBUG_UI_STORAGE_KEY,
-            terminalDebugUiVisible ? '1' : '0'
-          );
-        } catch {
-          return;
         }
       }
 
@@ -8140,6 +9318,16 @@
         }
       }
 
+      async function invokeWithSessionStrictTimeout(command, payload, timeoutMs) {
+        const timeout = Math.max(200, Number(timeoutMs) || 0);
+        return await Promise.race([
+          invokeWithSessionStrict(command, payload),
+          new Promise((_, reject) => {
+            setTimeout(() => reject(new Error(`[ipc] timeout for ${command}`)), timeout);
+          }),
+        ]);
+      }
+
       function updateModeSubtitle(view) {
         if (!modeSubtitle) return;
         if (view === 'settings' || view === 'watcher') {
@@ -8165,9 +9353,20 @@
         if (view === 'watcher') {
           document.body.classList.add('watcher-only');
           document.documentElement.classList.add('watcher-only');
+          if (characterDebugModeEnabled) {
+            document.body.classList.add('character-debug-mode');
+            document.documentElement.classList.add('character-debug-mode');
+          } else {
+            document.body.classList.remove('character-debug-mode');
+            document.documentElement.classList.remove('character-debug-mode');
+          }
+          setCharacterDebugFrameSelected(document.hasFocus());
         } else {
           document.body.classList.remove('watcher-only');
           document.documentElement.classList.remove('watcher-only');
+          document.body.classList.remove('character-debug-mode');
+          document.documentElement.classList.remove('character-debug-mode');
+          setCharacterDebugFrameSelected(false);
         }
         if (view === 'terminal') {
           document.body.classList.add('terminal-only');
@@ -8184,12 +9383,19 @@
           runBoard.classList.add('hidden');
           settingsBoard.classList.add('hidden');
           if (terminalBoard) {
-            terminalBoard.classList.remove('hidden');
+            terminalBoard.classList.add('hidden');
+          }
+          if (watcherBoard) {
+            watcherBoard.classList.remove('hidden');
           }
           if (modeSwitch) {
             modeSwitch.classList.add('hidden');
           }
-          applyTerminalWatcherVisibility();
+          applyTerminalWatcherVisibility('apply-view');
+          syncWatcherWindowNativeFrameFromFocus('apply-view');
+          if (characterDebugModeEnabled && characterDebugState) {
+            applyTerminalObservedState(characterDebugState, 'character-debug');
+          }
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
               notifyWatcherWindowReady();
@@ -8203,6 +9409,9 @@
           runBoard.classList.add('hidden');
           if (terminalBoard) {
             terminalBoard.classList.add('hidden');
+          }
+          if (watcherBoard) {
+            watcherBoard.classList.add('hidden');
           }
           settingsBoard.classList.remove('hidden');
           if (modeSwitch) {
@@ -8219,6 +9428,9 @@
         }
         if (terminalBoard) {
           terminalBoard.classList.add('hidden');
+        }
+        if (watcherBoard) {
+          watcherBoard.classList.add('hidden');
         }
         if (view === 'run') {
           chatMain.classList.add('hidden');
@@ -10173,15 +11385,637 @@
         codexHookStatus.textContent = text || '';
       }
 
+      function setCharacterDebugToggleLabel() {
+        if (characterDebugToggleState) {
+          setToggleState(characterDebugWindowOpen, characterDebugToggleState);
+        }
+        if (characterDebugToggleButton) {
+          characterDebugToggleButton.setAttribute('aria-label', t('settings.character.debug_toggle'));
+        }
+      }
+
+      function setCharacterDebugFrameSelected(selected) {
+        if (!characterDebugFrame) {
+          document.body.classList.remove('character-debug-selected');
+          document.documentElement.classList.remove('character-debug-selected');
+          return;
+        }
+        const active = Boolean(selected) && isWatcherView;
+        document.body.classList.toggle('character-debug-selected', active);
+        document.documentElement.classList.toggle('character-debug-selected', active);
+        characterDebugFrame.setAttribute('aria-hidden', active ? 'false' : 'true');
+      }
+
+      async function syncWatcherWindowNativeFrame(framed, reason = 'unknown') {
+        if (!isWatcherView) return false;
+        watcherWindowFrameDesiredState = Boolean(framed);
+        if (!watcherReadyNotified) {
+          // Defer native frame IPC until watcher_window_ready completes.
+          // watcher_window_ready 完了前は native frame IPC を遅延し、起動直後の固まりを避ける。
+          return false;
+        }
+        if (watcherWindowFrameSyncInFlight) return true;
+        watcherWindowFrameSyncInFlight = true;
+        let synced = true;
+        try {
+          while (watcherWindowFrameDesiredState !== null) {
+            const nextFramed = watcherWindowFrameDesiredState;
+            watcherWindowFrameDesiredState = null;
+            if (watcherWindowFrameState === nextFramed) {
+              continue;
+            }
+            watcherWindowFrameState = nextFramed;
+            try {
+              await invokeWithSessionStrictTimeout(
+                'set_watcher_window_framed',
+                { framed: nextFramed },
+                900
+              );
+              watcherWindowNativeFrameIgnoreBlurUntilMs = nextFramed
+                ? Date.now() + WATCHER_WINDOW_NATIVE_FRAME_BLUR_GUARD_MS
+                : 0;
+            } catch (error) {
+              synced = false;
+              watcherWindowFrameState = null;
+              watcherWindowNativeFrameIgnoreBlurUntilMs = 0;
+              console.debug('[watcher] set frame failed', { reason, framed: nextFramed, error });
+            }
+          }
+        } finally {
+          watcherWindowFrameSyncInFlight = false;
+        }
+        return synced;
+      }
+
+      function syncWatcherWindowNativeFrameFromFocus(reason = 'focus-change') {
+        if (!isWatcherView) return;
+        const focused = Boolean(document.hasFocus && document.hasFocus());
+        const frameSelected = focused || watcherPointerInside;
+        // Some transparent watcher windows on Windows do not report focus reliably.
+        // Use selected-state (focus OR pointer-inside) for native frame visibility.
+        // Windows の透明 watcher では focus が欠落する場合があるため、
+        // native frame は「選択状態（focus または pointer inside）」で制御する。
+        const framed = frameSelected;
+        setCharacterDebugFrameSelected(frameSelected);
+        void syncWatcherWindowNativeFrame(framed, reason);
+      }
+
+      function clearWatcherWindowBlurSyncTimer() {
+        if (!watcherWindowBlurSyncTimer) return;
+        clearTimeout(watcherWindowBlurSyncTimer);
+        watcherWindowBlurSyncTimer = 0;
+      }
+
+      function scheduleWatcherWindowBlurSync(reason = 'blur') {
+        clearWatcherWindowBlurSyncTimer();
+        const now = Date.now();
+        const blurGuardMs =
+          watcherWindowNativeFrameIgnoreBlurUntilMs > now
+            ? watcherWindowNativeFrameIgnoreBlurUntilMs - now
+            : 0;
+        const baseDelayMs = characterDebugModeEnabled
+          ? WATCHER_DEBUG_WINDOW_BLUR_SYNC_DELAY_MS
+          : WATCHER_WINDOW_BLUR_SYNC_DELAY_MS;
+        const delayMs = Math.max(baseDelayMs, blurGuardMs);
+        watcherWindowBlurSyncTimer = window.setTimeout(() => {
+          watcherWindowBlurSyncTimer = 0;
+          syncWatcherWindowNativeFrameFromFocus(reason);
+        }, delayMs);
+      }
+
+      function clampWatcherResizeWidth(value) {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) return WATCHER_RESIZE_MIN_WIDTH;
+        return Math.max(WATCHER_RESIZE_MIN_WIDTH, Math.min(WATCHER_RESIZE_MAX_WIDTH, Math.round(parsed)));
+      }
+
+      function clampWatcherResizeHeight(value) {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) return WATCHER_RESIZE_MIN_HEIGHT;
+        return Math.max(
+          WATCHER_RESIZE_MIN_HEIGHT,
+          Math.min(WATCHER_RESIZE_MAX_HEIGHT, Math.round(parsed))
+        );
+      }
+
+      function queueWatcherWindowResize(width, height) {
+        if (!isWatcherView || characterDebugModeEnabled) return;
+        const nextWidth = clampWatcherResizeWidth(width);
+        const nextHeight = clampWatcherResizeHeight(height);
+        watcherResizePendingSize = { width: nextWidth, height: nextHeight };
+        if (watcherResizeDragRaf) return;
+        watcherResizeDragRaf = window.requestAnimationFrame(() => {
+          watcherResizeDragRaf = 0;
+          void flushWatcherWindowResizeQueue();
+        });
+      }
+
+      async function flushWatcherWindowResizeQueue() {
+        if (watcherResizeApplyInFlight || !watcherResizePendingSize) return;
+        watcherResizeApplyInFlight = true;
+        try {
+          while (watcherResizePendingSize) {
+            const pending = watcherResizePendingSize;
+            watcherResizePendingSize = null;
+            try {
+              await invokeWithSessionStrictTimeout('resize_watcher_window', pending, 350);
+            } catch (error) {
+              console.warn('[watcher] resize_watcher_window failed', { pending, error });
+            }
+          }
+        } finally {
+          watcherResizeApplyInFlight = false;
+        }
+      }
+
+      async function requestCloseWatcherWindow(trigger = 'ui') {
+        if (!isWatcherView) return false;
+        clearWatcherWindowBlurSyncTimer();
+        watcherPointerInside = false;
+        watcherResizeDrag = null;
+        watcherResizePendingSize = null;
+        if (watcherResizeDragRaf) {
+          window.cancelAnimationFrame(watcherResizeDragRaf);
+          watcherResizeDragRaf = 0;
+        }
+        setCharacterDebugFrameSelected(false);
+        settingsState.terminal_watcher_enabled = false;
+        terminalWatcherEnabled = false;
+        applyTerminalWatcherVisibility('watcher-close');
+        if (characterDebugModeEnabled) {
+          void invokeWithSession('close_character_debug_watcher').catch((error) => {
+            console.warn('[watcher] close character debug watcher failed', { trigger, error });
+          });
+          return true;
+        }
+        try {
+          await invokeWithSessionStrictTimeout(
+            'set_terminal_watcher_enabled',
+            { enabled: false },
+            900
+          );
+          return true;
+        } catch (error) {
+          const next = { ...settingsState, terminal_watcher_enabled: false };
+          void invokeWithSession('save_settings', { settings: next }).catch((saveError) => {
+            console.warn('[watcher] save_settings failed while closing', {
+              trigger,
+              error: saveError,
+            });
+          });
+          console.warn('[watcher] set_terminal_watcher_enabled failed while closing', {
+            trigger,
+            error,
+          });
+          return true;
+        }
+      }
+
+      async function syncCharacterDebugToggleStateFromBackend() {
+        if (!characterDebugToggleButton) return;
+        if (characterDebugFallbackUsingWatcher) {
+          characterDebugWindowOpen = Boolean(terminalWatcherEnabled);
+          setCharacterDebugToggleLabel();
+          return;
+        }
+        try {
+          const opened = await invokeWithSessionStrictTimeout(
+            'is_character_debug_watcher_open',
+            undefined,
+            CHARACTER_DEBUG_TOGGLE_TIMEOUT_MS
+          );
+          characterDebugWindowOpen = Boolean(opened);
+        } catch {
+          characterDebugWindowOpen = false;
+        }
+        setCharacterDebugToggleLabel();
+      }
+
+      function openCharacterDebugWatcherFallback() {
+        if (characterDebugFallbackPreviousWatcherEnabled === null) {
+          characterDebugFallbackPreviousWatcherEnabled = Boolean(terminalWatcherEnabled);
+        }
+        characterDebugFallbackUsingWatcher = true;
+        characterDebugWindowOpen = true;
+        if (settingsState.character_renderer !== '3d') {
+          settingsState.character_renderer = '3d';
+          if (characterRendererSelect) {
+            characterRendererSelect.value = settingsState.character_renderer;
+          }
+        }
+        applyCharacter3dPresetIfNeeded();
+        terminalWatcherEnabled = true;
+        settingsState.terminal_watcher_enabled = true;
+        applyTerminalWatcherVisibility('watcher-fallback-open');
+        void refreshWatcherRendererMode('settings');
+        saveSettingsToBackend();
+        setCharacterDebugToggleLabel();
+      }
+
+      function closeCharacterDebugWatcherFallback() {
+        characterDebugWindowOpen = false;
+        characterDebugFallbackUsingWatcher = false;
+        const restoreWatcherEnabled =
+          characterDebugFallbackPreviousWatcherEnabled === null
+            ? false
+            : Boolean(characterDebugFallbackPreviousWatcherEnabled);
+        characterDebugFallbackPreviousWatcherEnabled = null;
+        terminalWatcherEnabled = restoreWatcherEnabled;
+        settingsState.terminal_watcher_enabled = terminalWatcherEnabled;
+        applyTerminalWatcherVisibility('watcher-fallback-close');
+        saveSettingsToBackend();
+        setCharacterDebugToggleLabel();
+      }
+
+      function normalizeCharacterPackId(value) {
+        const normalized = String(value || '')
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9_-]+/g, '-')
+          .replace(/[-_]{2,}/g, '-')
+          .replace(/^[-_]+|[-_]+$/g, '');
+        return normalized;
+      }
+
+      function normalizeCharacterPackEntry(raw) {
+        if (!raw || typeof raw !== 'object') return null;
+        const packId = normalizeCharacterPackId(raw.pack_id || raw.id || '');
+        if (!packId) return null;
+        const displayName = String(raw.display_name || raw.name || packId).trim() || packId;
+        const renderer = normalizeCharacterRenderer(raw.renderer);
+        const modelVrmPath = String(raw.model_vrm_path || '').trim();
+        const motions = {};
+        const rawMotions = raw.motions && typeof raw.motions === 'object' ? raw.motions : {};
+        Object.entries(rawMotions).forEach(([key, value]) => {
+          const motionKey = String(key || '').trim().toLowerCase();
+          const motionPath = String(value || '').trim();
+          if (!motionKey || !motionPath) return;
+          motions[motionKey] = motionPath;
+        });
+        const expressions = {};
+        const rawExpressions =
+          raw.expressions && typeof raw.expressions === 'object' ? raw.expressions : {};
+        Object.entries(rawExpressions).forEach(([key, value]) => {
+          const expressionKey = String(key || '').trim().toLowerCase();
+          const expressionValue = String(value || '').trim();
+          if (!expressionKey || !expressionValue) return;
+          expressions[expressionKey] = expressionValue;
+        });
+        return {
+          pack_id: packId,
+          display_name: displayName,
+          renderer,
+          model_vrm_path: modelVrmPath,
+          motions,
+          expressions,
+          default_scale: normalizeCharacter3dScale(raw.default_scale),
+          default_yaw_deg: normalizeCharacter3dYaw(raw.default_yaw_deg),
+          source: String(raw.source || '').trim(),
+        };
+      }
+
+      function upsertCharacterPackEntry(raw) {
+        const normalized = normalizeCharacterPackEntry(raw);
+        if (!normalized) return null;
+        characterPackCatalog.set(normalized.pack_id, normalized);
+        return normalized;
+      }
+
+      function applyCharacterPackToSettings(pack, persist) {
+        if (!pack) return;
+        const shouldPersist = persist !== false;
+        settingsState.character_id = pack.pack_id;
+        settingsState.character_renderer = normalizeCharacterRenderer(pack.renderer);
+        settingsState.character_3d_vrm_path = String(pack.model_vrm_path || '').trim();
+        settingsState.character_3d_scale = normalizeCharacter3dScale(pack.default_scale);
+        settingsState.character_3d_yaw_deg = normalizeCharacter3dYaw(pack.default_yaw_deg);
+        if (characterUploaded) characterUploaded.textContent = settingsState.character_id;
+        if (characterRendererSelect) {
+          characterRendererSelect.value = settingsState.character_renderer;
+        }
+        if (character3dScaleInput) {
+          character3dScaleInput.value = formatCharacter3dScale(settingsState.character_3d_scale);
+        }
+        if (character3dYawInput) {
+          character3dYawInput.value = formatCharacter3dYaw(settingsState.character_3d_yaw_deg);
+        }
+        if (characterVrmUploaded) {
+          const vrmPath = String(settingsState.character_3d_vrm_path || '').trim();
+          const name = vrmPath ? vrmPath.split(/[\\/]/).pop() || vrmPath : '';
+          characterVrmUploaded.textContent = name || t('settings.character.vrm_no_upload');
+        }
+        refreshCharacterList();
+        void refreshWatcherRendererMode('settings');
+        if (shouldPersist) {
+          saveSettingsToBackend();
+        }
+      }
+
+      async function fetchBuiltInCharacterPacks() {
+        const startedAtMs = Date.now();
+        appendWatcherDebugEvent('pack-fetch-start', {
+          url: BUILTIN_CHARACTER_PACKS_URL,
+          timeout_ms: BUILTIN_CHARACTER_PACKS_TIMEOUT_MS,
+        });
+        let timeoutId = null;
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        try {
+          if (controller) {
+            timeoutId = window.setTimeout(() => {
+              controller.abort();
+            }, BUILTIN_CHARACTER_PACKS_TIMEOUT_MS);
+          }
+          const response = await fetch(BUILTIN_CHARACTER_PACKS_URL, {
+            cache: 'no-store',
+            signal: controller ? controller.signal : undefined,
+          });
+          if (!response.ok) {
+            appendWatcherDebugEvent('pack-fetch-http-fail', {
+              status: Number(response.status || 0),
+              elapsed_ms: Math.max(0, Date.now() - startedAtMs),
+            });
+            return [];
+          }
+          const payload = await response.json();
+          if (Array.isArray(payload)) {
+            appendWatcherDebugEvent('pack-fetch-success', {
+              count: payload.length,
+              elapsed_ms: Math.max(0, Date.now() - startedAtMs),
+            });
+            return payload;
+          }
+          if (payload && Array.isArray(payload.packs)) {
+            appendWatcherDebugEvent('pack-fetch-success', {
+              count: payload.packs.length,
+              elapsed_ms: Math.max(0, Date.now() - startedAtMs),
+            });
+            return payload.packs;
+          }
+          appendWatcherDebugEvent('pack-fetch-empty', {
+            elapsed_ms: Math.max(0, Date.now() - startedAtMs),
+          });
+          return [];
+        } catch (error) {
+          appendWatcherDebugEvent('pack-fetch-error', {
+            timeout: summarizeStatusDebugError(error).toLowerCase().includes('abort'),
+            elapsed_ms: Math.max(0, Date.now() - startedAtMs),
+            message: summarizeStatusDebugError(error),
+          });
+          return [];
+        } finally {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+        }
+      }
+
+      async function fetchStoredCharacterPacks() {
+        const startedAtMs = Date.now();
+        appendWatcherDebugEvent('pack-list-stored-start', {
+          timeout_ms: BUILTIN_CHARACTER_PACKS_TIMEOUT_MS,
+        });
+        try {
+          const packs = await invokeWithSessionStrictTimeout(
+            'list_character_packs',
+            undefined,
+            BUILTIN_CHARACTER_PACKS_TIMEOUT_MS
+          );
+          const resolved = Array.isArray(packs) ? packs : [];
+          appendWatcherDebugEvent('pack-list-stored-success', {
+            count: resolved.length,
+            elapsed_ms: Math.max(0, Date.now() - startedAtMs),
+          });
+          return resolved;
+        } catch (error) {
+          appendWatcherDebugEvent('pack-list-stored-error', {
+            elapsed_ms: Math.max(0, Date.now() - startedAtMs),
+            message: summarizeStatusDebugError(error),
+          });
+          return [];
+        }
+      }
+
+      async function reloadCharacterPackCatalog() {
+        const startedAtMs = Date.now();
+        appendWatcherDebugEvent('pack-catalog-reload-start', {});
+        let builtInPacks = [];
+        let storedPacks = [];
+        let reloadError = null;
+        try {
+          [builtInPacks, storedPacks] = await Promise.all([
+            fetchBuiltInCharacterPacks(),
+            fetchStoredCharacterPacks(),
+          ]);
+          characterPackCatalog.clear();
+          builtInPacks.forEach((pack) => {
+            upsertCharacterPackEntry(pack);
+          });
+          storedPacks.forEach((pack) => {
+            upsertCharacterPackEntry(pack);
+          });
+          if (characterPackCatalog.size === 0) {
+            WATCHER_3D_PROTOTYPE_FALLBACK_PACKS.forEach((pack) => {
+              upsertCharacterPackEntry(pack);
+            });
+          }
+          appendWatcherDebugEvent('pack-catalog-reload-complete', {
+            built_in_count: builtInPacks.length,
+            stored_count: storedPacks.length,
+            total_count: characterPackCatalog.size,
+            elapsed_ms: Math.max(0, Date.now() - startedAtMs),
+          });
+        } catch (error) {
+          reloadError = error;
+          appendWatcherDebugEvent('pack-catalog-reload-error', {
+            message: summarizeStatusDebugError(error),
+            elapsed_ms: Math.max(0, Date.now() - startedAtMs),
+          });
+        } finally {
+          characterPackCatalogLoaded = true;
+          if (settingsState.character_id) {
+            characterBundles.add(settingsState.character_id);
+          }
+          if (!settingsHydrated) {
+            settingsHydrated = true;
+            appendWatcherDebugEvent('settings-hydrated', {
+              source: 'pack-catalog',
+              elapsed_ms: Math.max(0, Date.now() - startedAtMs),
+              has_error: Boolean(reloadError),
+            });
+          }
+          try {
+            applyCharacter3dPresetIfNeeded();
+          } catch (error) {
+            appendWatcherDebugEvent('pack-catalog-postprocess-error', {
+              step: 'applyCharacter3dPresetIfNeeded',
+              message: summarizeStatusDebugError(error),
+            });
+          }
+          try {
+            refreshCharacterList();
+          } catch (error) {
+            appendWatcherDebugEvent('pack-catalog-postprocess-error', {
+              step: 'refreshCharacterList',
+              message: summarizeStatusDebugError(error),
+            });
+          }
+          applyTerminalWatcherVisibility('settings-hydrated');
+        }
+      }
+
+      function isBuiltinCharacterPack(pack) {
+        return String((pack && pack.source) || '')
+          .trim()
+          .toLowerCase()
+          .startsWith('builtin:');
+      }
+
+      function pickCharacter3dPackCandidate() {
+        const activePackId = normalizeCharacterPackId(settingsState.character_id);
+        if (activePackId) {
+          const activePack = characterPackCatalog.get(activePackId);
+          if (activePack) {
+            const activeRenderer = normalizeCharacterRenderer(activePack.renderer);
+            const activeModelPath = String(activePack.model_vrm_path || '').trim();
+            if (activeRenderer === '3d' && activeModelPath) {
+              return activePack;
+            }
+          }
+        }
+        const preferredIds = ['nikechan-v2', 'nikechan-v2-outerwear', 'nikechan-v1'];
+        for (const packId of preferredIds) {
+          const pack = characterPackCatalog.get(packId);
+          if (!pack) continue;
+          const renderer = normalizeCharacterRenderer(pack.renderer);
+          const modelPath = String(pack.model_vrm_path || '').trim();
+          if (renderer === '3d' && modelPath) {
+            return pack;
+          }
+        }
+        for (const pack of characterPackCatalog.values()) {
+          const renderer = normalizeCharacterRenderer(pack.renderer);
+          const modelPath = String(pack.model_vrm_path || '').trim();
+          if (renderer === '3d' && modelPath) {
+            return pack;
+          }
+        }
+        return null;
+      }
+
+      function applyCharacter3dPresetIfNeeded() {
+        const renderer = normalizeCharacterRenderer(settingsState.character_renderer);
+        const vrmPath = String(settingsState.character_3d_vrm_path || '').trim();
+        const forceForDebug = characterDebugModeEnabled && characterDebugForce3d;
+        const shouldEnsure3d = forceForDebug || renderer === '3d';
+        if (!shouldEnsure3d) return;
+        if (renderer === '3d' && vrmPath) return;
+        let pack = pickCharacter3dPackCandidate();
+        if (!pack && forceForDebug) {
+          for (const fallbackPack of WATCHER_3D_PROTOTYPE_FALLBACK_PACKS) {
+            const added = upsertCharacterPackEntry(fallbackPack);
+            if (added) {
+              pack = added;
+              break;
+            }
+          }
+        }
+        if (!pack) return;
+        applyCharacterPackToSettings(pack, false);
+      }
+
+      async function persistActiveCharacterPackFromSettings() {
+        const activePackId = normalizeCharacterPackId(settingsState.character_id);
+        if (!activePackId) return;
+        const activePack = characterPackCatalog.get(activePackId);
+        if (!activePack || isBuiltinCharacterPack(activePack)) return;
+        const payload = buildCharacterPackManifestPayload({
+          ...activePack,
+          renderer: settingsState.character_renderer,
+          model_vrm_path: settingsState.character_3d_vrm_path,
+          default_scale: settingsState.character_3d_scale,
+          default_yaw_deg: settingsState.character_3d_yaw_deg,
+        });
+        if (!payload) return;
+        try {
+          const savedPack = await invokeWithSessionStrict('save_character_pack_manifest', {
+            manifest: payload,
+          });
+          upsertCharacterPackEntry(savedPack);
+        } catch (error) {
+          console.warn('[character-pack] failed to persist active pack', error);
+        }
+      }
+
       function refreshCharacterList() {
         if (!characterList) return;
         characterList.innerHTML = '';
+        const entries = [];
+        Array.from(characterPackCatalog.values()).forEach((pack) => {
+          entries.push({
+            key: pack.pack_id,
+            label: pack.display_name || pack.pack_id,
+            pack,
+          });
+        });
         Array.from(characterBundles.values()).forEach((name) => {
+          const key = String(name || '').trim();
+          if (!key) return;
+          if (characterPackCatalog.has(key)) return;
+          entries.push({ key, label: key, pack: null });
+        });
+        if (entries.length === 0) {
+          entries.push({ key: 'default', label: 'default', pack: null });
+        }
+        entries.sort((left, right) =>
+          String(left.label || '').localeCompare(String(right.label || ''), 'ja')
+        );
+        entries.forEach((entry) => {
           const card = document.createElement('div');
           card.className = 'character-card';
-          card.textContent = name;
+          if (entry.key === settingsState.character_id) {
+            card.classList.add('active');
+          }
+          card.textContent = entry.label;
+          card.addEventListener('click', () => {
+            if (entry.pack) {
+              applyCharacterPackToSettings(entry.pack, true);
+              return;
+            }
+            settingsState.character_id = entry.key;
+            if (characterUploaded) characterUploaded.textContent = settingsState.character_id;
+            refreshCharacterList();
+            saveSettingsToBackend();
+          });
           characterList.appendChild(card);
         });
+      }
+
+      function readFileAsBase64(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const value = String(reader.result || '');
+            const split = value.indexOf(',');
+            if (split < 0) {
+              resolve(value);
+              return;
+            }
+            resolve(value.slice(split + 1));
+          };
+          reader.onerror = () => reject(new Error('failed to read file'));
+          reader.readAsDataURL(file);
+        });
+      }
+
+      async function saveCharacterAssetFile(file, category) {
+        if (!file) return '';
+        const bytesBase64 = await readFileAsBase64(file);
+        const outPath = await invokeWithSessionStrict('save_character_asset', {
+          filename: file.name,
+          bytesBase64,
+          category,
+        });
+        return String(outPath || '').trim();
       }
 
       function setFontStatus(message) {
@@ -10236,6 +12070,83 @@
           }
         }
         return Boolean(fallback);
+      }
+
+      function normalizeCharacterRenderer(value) {
+        return String(value || '').trim().toLowerCase() === '3d' ? '3d' : '2d';
+      }
+
+      function normalizeCharacter3dScale(value) {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) return character3dDefaults.scale;
+        return Math.min(3, Math.max(0.2, parsed));
+      }
+
+      function normalizeCharacter3dYaw(value) {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) return character3dDefaults.yawDeg;
+        return Math.min(180, Math.max(-180, parsed));
+      }
+
+      function shouldMigrateLegacyNikechanYaw(settingsLike) {
+        try {
+          if (window.localStorage && window.localStorage.getItem(LEGACY_NIKECHAN_YAW_MIGRATION_KEY)) {
+            return false;
+          }
+        } catch {
+          // ignore storage errors
+        }
+        const yaw = normalizeCharacter3dYaw(settingsLike && settingsLike.character_3d_yaw_deg);
+        if (Math.abs(yaw - 180) > 0.001) return false;
+        const packId = normalizeCharacterPackId(settingsLike && settingsLike.character_id);
+        const vrmPath = String((settingsLike && settingsLike.character_3d_vrm_path) || '')
+          .trim()
+          .toLowerCase();
+        return packId.startsWith('nikechan') || vrmPath.includes('nikechan');
+      }
+
+      function markLegacyNikechanYawMigrated() {
+        try {
+          if (window.localStorage) {
+            window.localStorage.setItem(LEGACY_NIKECHAN_YAW_MIGRATION_KEY, '1');
+          }
+        } catch {
+          // ignore storage errors
+        }
+      }
+
+      function formatCharacter3dScale(value) {
+        const normalized = normalizeCharacter3dScale(value);
+        return normalized.toFixed(1);
+      }
+
+      function formatCharacter3dYaw(value) {
+        const normalized = normalizeCharacter3dYaw(value);
+        return String(Math.round(normalized));
+      }
+
+      function characterNameFromFilename(filename) {
+        const value = String(filename || '').trim();
+        if (!value) return '';
+        const base = value.split(/[\\/]/).pop() || value;
+        const name = base.replace(/\.[^.]+$/, '').trim();
+        return name || '';
+      }
+
+      function buildCharacterPackManifestPayload(pack) {
+        const normalized = normalizeCharacterPackEntry(pack);
+        if (!normalized) return null;
+        return {
+          pack_id: normalized.pack_id,
+          display_name: normalized.display_name,
+          renderer: normalized.renderer,
+          model_vrm_path: normalized.model_vrm_path,
+          motions: normalized.motions,
+          expressions: normalized.expressions,
+          default_scale: normalized.default_scale,
+          default_yaw_deg: normalized.default_yaw_deg,
+          source: normalized.source,
+        };
       }
 
       function themePresetToPair(preset, fallbackMode) {
@@ -10533,6 +12444,7 @@
       function applySettings(next) {
         if (!next) return;
         Object.assign(settingsState, next);
+        let migratedLegacyNikechanYaw = false;
         settingsState.terminal_theme = normalizeThemeMode(settingsState.terminal_theme);
         settingsState.terminal_theme_palette = normalizeThemePalette(
           settingsState.terminal_theme,
@@ -10576,6 +12488,17 @@
         settingsState.subworker_prompt_template_markdown = normalizeSubworkerPromptTemplateMarkdown(
           settingsState.subworker_prompt_template_markdown
         );
+        settingsState.character_renderer = normalizeCharacterRenderer(
+          settingsState.character_renderer
+        );
+        settingsState.character_3d_vrm_path = String(settingsState.character_3d_vrm_path || '').trim();
+        settingsState.character_3d_scale = normalizeCharacter3dScale(settingsState.character_3d_scale);
+        settingsState.character_3d_yaw_deg = normalizeCharacter3dYaw(settingsState.character_3d_yaw_deg);
+        if (shouldMigrateLegacyNikechanYaw(settingsState)) {
+          settingsState.character_3d_yaw_deg = 0.0;
+          migratedLegacyNikechanYaw = true;
+          markLegacyNikechanYawMigrated();
+        }
         settingsState.status_debug_enabled = normalizeBoolean(
           settingsState.status_debug_enabled,
           false
@@ -10628,6 +12551,20 @@
             settingsState.subworker_prompt_template_markdown || '';
         }
         if (characterUploaded) characterUploaded.textContent = settingsState.character_id;
+        if (characterRendererSelect) {
+          characterRendererSelect.value = settingsState.character_renderer;
+        }
+        if (character3dScaleInput) {
+          character3dScaleInput.value = formatCharacter3dScale(settingsState.character_3d_scale);
+        }
+        if (character3dYawInput) {
+          character3dYawInput.value = formatCharacter3dYaw(settingsState.character_3d_yaw_deg);
+        }
+        if (characterVrmUploaded) {
+          const vrmPath = String(settingsState.character_3d_vrm_path || '').trim();
+          const name = vrmPath ? vrmPath.split(/[\\/]/).pop() || vrmPath : '';
+          characterVrmUploaded.textContent = name || t('settings.character.vrm_no_upload');
+        }
         if (terminalTheme) terminalTheme.value = themePreset;
         if (terminalFont) {
           ensureFontOption(settingsState.terminal_font_family);
@@ -10651,6 +12588,7 @@
         if (settingsState.character_id) {
           characterBundles.add(settingsState.character_id);
         }
+        applyCharacter3dPresetIfNeeded();
         refreshCharacterList();
         const retention = document.querySelector('[data-role="settings-log-retention"]');
         if (settingsState.log_retention_lines && retention) {
@@ -10658,10 +12596,13 @@
         }
         applySettingsTheme(settingsState.terminal_theme, settingsState.terminal_theme_palette);
         applyTerminalRuntimeVisibility();
-        applyTerminalWatcherVisibility();
+        applyTerminalWatcherVisibility('apply-settings');
         applyTerminalSettings();
         updateSubworkerPanelDisplay();
         updateTerminalDebugBadge();
+        if (migratedLegacyNikechanYaw) {
+          saveSettingsToBackend();
+        }
       }
 
       function applySettingsTheme(theme, palette) {
@@ -10690,6 +12631,9 @@
           const payload = event && event.payload;
           if (!payload) return;
           applySettings(payload);
+          if (!characterPackCatalogLoaded) {
+            void reloadCharacterPackCatalog();
+          }
           applyTerminalSettings();
           const pending = readPendingSettingsSnapshot();
           if (pending && pendingSettingsSatisfiedByPayload(pending, payload)) {
@@ -10702,11 +12646,134 @@
         if (!isWatcherView) return;
         const listen = getEventListen();
         if (!listen) return;
+        if (characterDebugModeEnabled && characterDebugState) {
+          applyTerminalObservedState(characterDebugState, 'character-debug');
+        }
         listen('terminal-aggregate-state', (event) => {
+          if (characterDebugModeEnabled && characterDebugState) {
+            return;
+          }
           const payload = event && event.payload;
           if (!payload || !payload.state) return;
           applyTerminalObservedState(payload.state, payload.reason || payload.state);
         });
+      }
+
+      function registerCharacterDebugFrameHandlers() {
+        if (!isWatcherView) return;
+        if (!characterDebugFrameCloseButton && !characterDebugFrameResizeHandle) return;
+        if (characterDebugFrameCloseButton) {
+          characterDebugFrameCloseButton.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            await requestCloseWatcherWindow('frame-close-button');
+          });
+        }
+        if (characterDebugFrameResizeHandle) {
+          characterDebugFrameResizeHandle.addEventListener('pointerdown', (event) => {
+            if (characterDebugModeEnabled) return;
+            event.preventDefault();
+            event.stopPropagation();
+            watcherResizeDrag = {
+              startX: Number(event.clientX) || 0,
+              startY: Number(event.clientY) || 0,
+              startWidth: Math.max(WATCHER_RESIZE_MIN_WIDTH, Math.round(window.innerWidth || 0)),
+              startHeight: Math.max(WATCHER_RESIZE_MIN_HEIGHT, Math.round(window.innerHeight || 0)),
+              pointerId: event.pointerId,
+            };
+            watcherPointerInside = true;
+            setCharacterDebugFrameSelected(true);
+            if (typeof characterDebugFrameResizeHandle.setPointerCapture === 'function') {
+              try {
+                characterDebugFrameResizeHandle.setPointerCapture(event.pointerId);
+              } catch {
+                // ignore capture errors
+              }
+            }
+          });
+        }
+        window.addEventListener(
+          'pointermove',
+          (event) => {
+            if (!watcherResizeDrag) return;
+            const dx = (Number(event.clientX) || 0) - watcherResizeDrag.startX;
+            const dy = (Number(event.clientY) || 0) - watcherResizeDrag.startY;
+            queueWatcherWindowResize(watcherResizeDrag.startWidth + dx, watcherResizeDrag.startHeight + dy);
+          },
+          true
+        );
+        const stopWatcherResizeDrag = (event) => {
+          if (!watcherResizeDrag) return;
+          const pointerId = watcherResizeDrag.pointerId;
+          watcherResizeDrag = null;
+          if (
+            event &&
+            characterDebugFrameResizeHandle &&
+            typeof characterDebugFrameResizeHandle.releasePointerCapture === 'function'
+          ) {
+            try {
+              characterDebugFrameResizeHandle.releasePointerCapture(pointerId);
+            } catch {
+              // ignore capture errors
+            }
+          }
+        };
+        window.addEventListener('pointerup', stopWatcherResizeDrag, true);
+        window.addEventListener('pointercancel', stopWatcherResizeDrag, true);
+      }
+
+      function registerWatcherWindowFrameHandlers() {
+        if (!isWatcherView) return;
+        window.addEventListener('focus', () => {
+          clearWatcherWindowBlurSyncTimer();
+          syncWatcherWindowNativeFrameFromFocus('focus');
+        });
+        window.addEventListener('blur', () => {
+          scheduleWatcherWindowBlurSync('blur');
+        });
+        document.addEventListener('visibilitychange', () => {
+          clearWatcherWindowBlurSyncTimer();
+          if (document.visibilityState === 'hidden') {
+            watcherPointerInside = false;
+            setCharacterDebugFrameSelected(false);
+            void syncWatcherWindowNativeFrame(false, 'visibility-hidden');
+            return;
+          }
+          syncWatcherWindowNativeFrameFromFocus('visibility-visible');
+        });
+        document.addEventListener(
+          'pointerenter',
+          () => {
+            watcherPointerInside = true;
+            setCharacterDebugFrameSelected(true);
+          },
+          true
+        );
+        document.addEventListener(
+          'pointerleave',
+          () => {
+            watcherPointerInside = false;
+            if (!(document.hasFocus && document.hasFocus())) {
+              setCharacterDebugFrameSelected(false);
+            }
+          },
+          true
+        );
+        document.addEventListener(
+          'pointerdown',
+          () => {
+            watcherPointerInside = true;
+            clearWatcherWindowBlurSyncTimer();
+            setCharacterDebugFrameSelected(true);
+            // Fallback for transparent watcher windows on Windows:
+            // focus event can be delayed/missed, so re-check once after pointerdown.
+            // Windows の透明 watcher では focus 通知が遅延/欠落する場合があるため、pointerdown 後に1回だけ再同期する。
+            window.setTimeout(() => {
+              syncWatcherWindowNativeFrameFromFocus('pointerdown-fallback');
+            }, 0);
+          },
+          true
+        );
       }
 
       async function notifyWatcherWindowReady() {
@@ -10714,17 +12781,78 @@
         try {
           await invokeWithSession('watcher_window_ready');
           watcherReadyNotified = true;
+          syncWatcherWindowNativeFrameFromFocus('watcher-ready');
         } catch {
           // retry on next requestAnimationFrame
         }
       }
 
       async function loadSettingsFromBackend() {
-        try {
-          return await invokeWithSessionStrict('load_settings');
-        } catch {
-          return null;
+        const maxAttempts = 4;
+        const perAttemptTimeoutMs = 2600;
+        const startedAtMs = Date.now();
+        appendWatcherDebugEvent('load-settings-start', {
+          max_attempts: maxAttempts,
+          timeout_ms: perAttemptTimeoutMs,
+        });
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+          const attemptNo = attempt + 1;
+          const attemptStartedAtMs = Date.now();
+          appendWatcherDebugEvent('load-settings-attempt', {
+            attempt: attemptNo,
+            timeout_ms: perAttemptTimeoutMs,
+          });
+          try {
+            const loaded = await invokeWithSessionStrictTimeout(
+              'load_settings',
+              undefined,
+              perAttemptTimeoutMs
+            );
+            const elapsedMs = Math.max(0, Date.now() - attemptStartedAtMs);
+            if (loaded) {
+              appendWatcherDebugEvent('load-settings-success', {
+                attempt: attemptNo,
+                elapsed_ms: elapsedMs,
+                total_elapsed_ms: Math.max(0, Date.now() - startedAtMs),
+              });
+              return loaded;
+            }
+            appendWatcherDebugEvent('load-settings-empty', {
+              attempt: attemptNo,
+              elapsed_ms: elapsedMs,
+            });
+          } catch (error) {
+            const elapsedMs = Math.max(0, Date.now() - attemptStartedAtMs);
+            const message = summarizeStatusDebugError(error);
+            appendWatcherDebugEvent('load-settings-error', {
+              attempt: attemptNo,
+              elapsed_ms: elapsedMs,
+              timeout: message.toLowerCase().includes('timeout'),
+              message,
+            });
+            if (attempt >= maxAttempts - 1) {
+              console.warn('[settings] load_settings failed; falling back to defaults', error);
+              appendWatcherDebugEvent('load-settings-fallback', {
+                attempt: attemptNo,
+                total_elapsed_ms: Math.max(0, Date.now() - startedAtMs),
+                message,
+              });
+              return null;
+            }
+          }
+          const retryDelayMs = 180 * (attempt + 1);
+          appendWatcherDebugEvent('load-settings-retry-delay', {
+            attempt: attemptNo,
+            retry_in_ms: retryDelayMs,
+          });
+          await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
         }
+        appendWatcherDebugEvent('load-settings-fallback', {
+          attempt: maxAttempts,
+          total_elapsed_ms: Math.max(0, Date.now() - startedAtMs),
+          message: 'max attempts reached',
+        });
+        return null;
       }
 
       function bootstrapIpcSession(retries) {
@@ -10870,12 +12998,29 @@
 
       if (characterWatcherToggle) {
         setToggleState(terminalWatcherEnabled, characterWatcherState);
-        characterWatcherToggle.addEventListener('click', () => {
-          terminalWatcherEnabled = !terminalWatcherEnabled;
-          setToggleState(terminalWatcherEnabled, characterWatcherState);
-          settingsState.terminal_watcher_enabled = terminalWatcherEnabled;
-          applyTerminalWatcherVisibility();
-          saveSettingsToBackend();
+        characterWatcherToggle.addEventListener('click', async () => {
+          const previous = Boolean(terminalWatcherEnabled);
+          const next = !previous;
+          terminalWatcherEnabled = next;
+          settingsState.terminal_watcher_enabled = next;
+          setToggleState(next, characterWatcherState);
+          applyTerminalWatcherVisibility('settings-updated');
+          try {
+            await invokeWithSessionStrictTimeout(
+              'set_terminal_watcher_enabled',
+              { enabled: next },
+              1300
+            );
+          } catch (error) {
+            terminalWatcherEnabled = previous;
+            settingsState.terminal_watcher_enabled = previous;
+            setToggleState(previous, characterWatcherState);
+            applyTerminalWatcherVisibility('settings-updated-revert');
+            console.warn('[settings] set_terminal_watcher_enabled failed', {
+              enabled: next,
+              error,
+            });
+          }
         });
       }
 
@@ -11002,10 +13147,14 @@
         characterUpload.addEventListener('change', () => {
           const file = characterUpload.files && characterUpload.files[0];
           if (!file) {
-            characterUploaded.textContent = 'no upload';
+            if (characterUploaded) {
+              characterUploaded.textContent = t('settings.character.no_upload');
+            }
             return;
           }
-          characterUploaded.textContent = file.name;
+          if (characterUploaded) {
+            characterUploaded.textContent = file.name;
+          }
           const name = file.name.replace(/\.zip$/i, '');
           settingsState.character_id = name;
           if (characterList) {
@@ -11013,6 +13162,140 @@
             refreshCharacterList();
           }
           saveSettingsToBackend();
+        });
+      }
+
+      if (characterRendererSelect) {
+        characterRendererSelect.addEventListener('change', () => {
+          settingsState.character_renderer = normalizeCharacterRenderer(characterRendererSelect.value);
+          if (settingsState.character_renderer === '3d') {
+            applyCharacter3dPresetIfNeeded();
+          }
+          characterRendererSelect.value = settingsState.character_renderer;
+          void refreshWatcherRendererMode('settings');
+          void persistActiveCharacterPackFromSettings();
+          saveSettingsToBackend();
+        });
+      }
+
+      if (character3dScaleInput) {
+        const syncCharacter3dScaleInput = () => {
+          settingsState.character_3d_scale = normalizeCharacter3dScale(character3dScaleInput.value);
+          character3dScaleInput.value = formatCharacter3dScale(settingsState.character_3d_scale);
+          applyWatcher3dModelTuning();
+          void refreshWatcherRendererMode('settings');
+          void persistActiveCharacterPackFromSettings();
+          saveSettingsToBackend();
+        };
+        character3dScaleInput.addEventListener('change', syncCharacter3dScaleInput);
+      }
+
+      if (character3dYawInput) {
+        const syncCharacter3dYawInput = () => {
+          settingsState.character_3d_yaw_deg = normalizeCharacter3dYaw(character3dYawInput.value);
+          character3dYawInput.value = formatCharacter3dYaw(settingsState.character_3d_yaw_deg);
+          applyWatcher3dModelTuning();
+          void refreshWatcherRendererMode('settings');
+          void persistActiveCharacterPackFromSettings();
+          saveSettingsToBackend();
+        };
+        character3dYawInput.addEventListener('change', syncCharacter3dYawInput);
+      }
+
+      if (characterVrmUpload) {
+        characterVrmUpload.addEventListener('change', async () => {
+          const file = characterVrmUpload.files && characterVrmUpload.files[0];
+          if (!file) {
+            if (characterVrmUploaded) {
+              characterVrmUploaded.textContent = t('settings.character.vrm_no_upload');
+            }
+            return;
+          }
+          if (characterVrmUploaded) {
+            characterVrmUploaded.textContent = file.name;
+          }
+          try {
+            const savedPath = await saveCharacterAssetFile(file, 'vrm');
+            if (!savedPath) {
+              throw new Error('save_character_asset returned empty path');
+            }
+            const characterName = characterNameFromFilename(file.name) || `pack-${Date.now()}`;
+            const packId =
+              normalizeCharacterPackId(characterName) || `pack-${Math.floor(Date.now() / 1000)}`;
+            const manifestPayload = buildCharacterPackManifestPayload({
+              pack_id: packId,
+              display_name: characterName,
+              renderer: '3d',
+              model_vrm_path: savedPath,
+              motions: {},
+              expressions: {},
+              default_scale: normalizeCharacter3dScale(settingsState.character_3d_scale),
+              default_yaw_deg: normalizeCharacter3dYaw(settingsState.character_3d_yaw_deg),
+              source: 'user-upload',
+            });
+            if (!manifestPayload) {
+              throw new Error('failed to build character pack manifest');
+            }
+            const savedPack = await invokeWithSessionStrict('save_character_pack_manifest', {
+              manifest: manifestPayload,
+            });
+            const normalizedPack = upsertCharacterPackEntry(savedPack);
+            if (!normalizedPack) {
+              throw new Error('failed to normalize saved character pack');
+            }
+            characterBundles.add(normalizedPack.pack_id);
+            applyCharacterPackToSettings(normalizedPack, false);
+            await saveSettingsToBackend();
+          } catch (error) {
+            console.warn('[settings] save VRM failed', error);
+            if (characterVrmUploaded) {
+              characterVrmUploaded.textContent = t('settings.character.3d_status_error');
+            }
+          } finally {
+            characterVrmUpload.value = '';
+          }
+        });
+      }
+
+      if (characterDebugToggleButton) {
+        characterDebugToggleButton.addEventListener('click', async () => {
+          const targetOpen = !characterDebugWindowOpen;
+          if (characterDebugFallbackUsingWatcher) {
+            if (targetOpen) {
+              openCharacterDebugWatcherFallback();
+            } else {
+              closeCharacterDebugWatcherFallback();
+            }
+            return;
+          }
+          try {
+            const opened = await invokeWithSessionStrictTimeout(
+              'toggle_character_debug_watcher',
+              undefined,
+              CHARACTER_DEBUG_TOGGLE_TIMEOUT_MS
+            );
+            characterDebugFallbackUsingWatcher = false;
+            characterDebugWindowOpen = Boolean(opened);
+            setCharacterDebugToggleLabel();
+          } catch (error) {
+            console.warn('[settings] toggle character debug watcher failed', error);
+            if (targetOpen) {
+              openCharacterDebugWatcherFallback();
+            } else {
+              try {
+                await invokeWithSessionStrictTimeout(
+                  'close_character_debug_watcher',
+                  undefined,
+                  CHARACTER_DEBUG_TOGGLE_TIMEOUT_MS
+                );
+                characterDebugWindowOpen = false;
+                setCharacterDebugToggleLabel();
+              } catch (fallbackError) {
+                console.warn('[settings] fallback character debug watcher toggle failed', fallbackError);
+                closeCharacterDebugWatcherFallback();
+              }
+            }
+          }
         });
       }
 
@@ -11122,21 +13405,6 @@
         });
       }
 
-      if (terminalDebugSave) {
-        terminalDebugSave.addEventListener('click', () => {
-          appendDebugSnapshot();
-        });
-      }
-      if (terminalDebugScreenshot) {
-        terminalDebugScreenshot.addEventListener('click', () => {
-          saveDebugScreenshot();
-        });
-      }
-      if (terminalDebugToggle) {
-        terminalDebugToggle.addEventListener('click', () => {
-          applyTerminalDebugUiVisible(!terminalDebugUiVisible);
-        });
-      }
       if (subworkerPauseToggle) {
         subworkerPauseToggle.addEventListener('click', () => {
           if (isSubworkerRuntimeRunning()) return;
@@ -11184,11 +13452,16 @@
       registerTestHooks();
       registerSettingsListener();
       registerWatcherListener();
+      registerWatcherWindowFrameHandlers();
+      registerCharacterDebugFrameHandlers();
 
       const initialView = new URLSearchParams(window.location.search).get('view') || 'chat';
       bootstrapIpcSession(6);
       loadSettingsFromBackend().then((loaded) => {
         const next = loaded ? { ...loaded } : { ...settingsState };
+        appendWatcherDebugEvent('bootstrap-settings-loaded', {
+          loaded_from_backend: Boolean(loaded),
+        });
         if (!loaded) {
           const storedTheme = readStoredThemePreference();
           if (storedTheme) {
@@ -11199,10 +13472,24 @@
         const pending = readPendingSettingsSnapshot();
         if (pending) {
           Object.assign(next, pending);
+          appendWatcherDebugEvent('bootstrap-settings-pending-merged', {
+            keys: Object.keys(pending),
+          });
         }
         applySettings(next);
-        applyTerminalDebugUiVisible(loadTerminalDebugUiVisible());
+        appendWatcherDebugEvent('bootstrap-settings-applied', {
+          renderer: normalizeCharacterRenderer(settingsState.character_renderer),
+          watcher_enabled: Boolean(settingsState.terminal_watcher_enabled),
+          has_vrm_path: Boolean(String(settingsState.character_3d_vrm_path || '').trim()),
+          vrm_path: summarizePathForDebug(settingsState.character_3d_vrm_path),
+        });
+        void reloadCharacterPackCatalog().catch((error) => {
+          appendWatcherDebugEvent('pack-catalog-reload-error', {
+            message: summarizeStatusDebugError(error),
+          });
+        });
         applyView(initialView);
+        void syncCharacterDebugToggleStateFromBackend();
         // Retry flush if we have a pending snapshot. This is what makes "toggle + quit" survive
         // across restarts even if the IPC save didn't complete before exit.
         schedulePendingSettingsFlush();

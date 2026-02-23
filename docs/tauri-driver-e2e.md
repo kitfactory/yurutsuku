@@ -45,6 +45,8 @@ node apps/orchestrator/e2e/subworker.matrix.e2e.js
 node apps/orchestrator/e2e/subworker.advice.format.e2e.js
 node apps/orchestrator/e2e/subworker.judge.dedup.e2e.js
 node apps/orchestrator/e2e/codex.prime-minister.e2e.js
+node apps/orchestrator/e2e/watcher.frame.e2e.js
+node apps/orchestrator/e2e/watcher.debug3d.e2e.js
 ```
 
 `terminal.tint.e2e.js` は前提不足（例: `msedge` 不在、driver/browser の major 不一致、既存プロセス残存）時に skip を返す。  
@@ -78,7 +80,7 @@ npm run e2e:tint -w apps/orchestrator
 ### 実施方法
 1) `node apps/orchestrator/e2e/terminal.tint.e2e.js` を実行して tint の基本回帰を確認する  
 2) nagomi Terminal で手動確認する（`echo ok` / 異常終了コマンド / 入力待ちコマンド）  
-3) `save debug snapshot` で遷移イベントを保存し、`need_input` 直前に `running` があることを確認する  
+3) `nagomi debug-tail status --n 80` で遷移イベントを確認し、`need_input` 直前に `running` があることを確認する  
 
 ---
 
@@ -106,7 +108,7 @@ npm run e2e:tint -w apps/orchestrator
 4) 稼働中の緑表示と、終了後の状態復帰を目視確認する  
 5) Settings > AI Coding Agent で `一時停止` / `今回だけスキップ` の挙動を確認する  
 6) 端末幅を狭くしてもサブワーカー結果の 1 行表示が読み取れることを確認する  
-7) `save debug snapshot` で `subworker_status` / `subworker_advice` / `subworker_decision` / state の相関を確認する  
+7) `nagomi debug-tail subworker --n 80` と `nagomi debug-tail status --n 80` で `subworker_status` / `subworker_advice` / `subworker_decision` / state の相関を確認する  
 
 ---
 
@@ -130,6 +132,8 @@ npm run test:rust:notify -w apps/orchestrator
 - `apps/orchestrator/e2e/subworker.matrix.e2e.js`: モード別（慎重/ガンガン/アドバイス）の行列ケースを確認する
 - `apps/orchestrator/e2e/subworker.advice.format.e2e.js`: アドバイス表示形式と Tab 適用を確認する
 - `apps/orchestrator/e2e/subworker.judge.dedup.e2e.js`: `hook-judge`/`judge-result` 連続時の dedup（`llm-start` 重複なし）と非Tabでの ghost 解除を確認する
+- `apps/orchestrator/e2e/watcher.frame.e2e.js`: 通常 watcher でキャラクター領域クリック時に frame 選択状態が有効化されることを確認する
+- `apps/orchestrator/e2e/watcher.debug3d.e2e.js`: `watcher-debug` で 3Dモデル表示（`is-3d + canvas`）とクリック選択時の frame 有効化を確認する
 
 ---
 
@@ -151,19 +155,18 @@ npm run test:rust:notify -w apps/orchestrator
 ## ノウハウ: ターミナル入力イベントのデバッグ
 ### 目的
 - codex の開始/終了（`codex` / `/quit`）入力が検知できないときの切り分け
-- 全自動 E2E が通らない場合でも、手動＋スナップショットで検証を継続できる
+- 全自動 E2E が通らない場合でも、手動＋JSONLログで検証を継続できる
 
 ### 手順（開発中のデバッグ手段）
-1) Terminal 画面右下のデバッグ表示（`terminal-debug-badge`）で状態を確認  
-2) `save debug snapshot` ボタンでスナップショットを保存  
-3) 保存先:  
-   - `C:\\Users\\<user>\\AppData\\Roaming\\com.kitfactory.nagomi\\terminal_debug_snapshots.jsonl`
-4) デバッグ UI は `debug ui: on/off` ボタンで切り替えられる（状態は localStorage に保持）
+1) Settings > AI Coding Agent で `状態デバッグログ` を ON にする  
+2) `nagomi debug-tail status --n 120` で直近イベントを確認する  
+3) 必要に応じて `nagomi debug-tail watcher --n 120` / `nagomi debug-tail subworker --n 120` を併用する  
+4) 保存先（例）: `C:\\Users\\<user>\\AppData\\Roaming\\com.kitfactory.nagomi\\status_debug_events.jsonl`
 
 ### 見るべきポイント
-- `line=codex` / `line=/quit` が出ているか
-- `agent=on` が立っているか
-- `cap=data` で入力を拾えているか
+- `event=terminal-line` / `state ... -> ...` が期待順で出ているか
+- `judge-start` / `judge-complete` が欠落していないか
+- `unified=.../.../...` が実際の表示ステータスと一致しているか
 
 ### 典型的な原因と対策
 - **line が崩れる / 先頭が二重になる**  
@@ -186,7 +189,7 @@ npm run test:rust:notify -w apps/orchestrator
 
 ### 実践ポイント
 - **観測性のレイヤ分離**: 入力/出力/判定を別レイヤで検証できるようにする
-- **半自動ルートの用意**: 失敗時に 1 クリックで情報採取できる導線（スナップショット/末尾ログ/スクショ）
+- **半自動ルートの用意**: 失敗時にすぐ情報採取できる導線（`debug-tail` / JSONL 直読）
 - **入力系の単一路線化**: onData/送信キューのみに統一し、key/global/textarea の混在を避ける
 - **フレーク対策**: 描画/タイミング揺れを減らす（固定フォント/サイズ、アニメ抑制）
 - **イベント相関ID**: session_id や tool 名を全イベントに付与して追跡する
@@ -194,12 +197,12 @@ npm run test:rust:notify -w apps/orchestrator
 - **判定オラクルの構造化**: JSON/state を基準に判定し、自然言語判定を避ける
 
 ### 補助データの活用
-- 全自動で通らない場合でも、**手動 + スナップショット**で前進する
+- 全自動で通らない場合でも、**手動 + JSONLログ**で前進する
 - E2E の「失敗時の情報量」を増やし、再現性を高める
 
 ### 実際の運用で効いたこと（実感ベース）
 - **観測が先、制御は後**: まず見える化してから制御を入れると試行が速くなる
-- **観察コストを下げる仕掛けが効く**: 1クリックで状況を固定できるスナップショットは強い
+- **観察コストを下げる仕掛けが効く**: `debug-tail` と JSONL 直読で状況固定が速い
 - **入力検知は一本道が正義**: onData/送信キューに一本化すると誤判定が減る
 - **E2Eが詰まっても前に進める**: 半自動ルートを用意すると実装もテストも止まらない
 - **確実に拾えるイベントを軸にする**: `codex`/`/quit` のようなハードイベントを基準に設計する

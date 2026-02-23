@@ -13,7 +13,8 @@
 2.1 Given: Chat モードを開く, When: UI を描画する, Then: 左に対話レーン、右下にキャラクターを表示する  
 2.2 Given: 末尾追従が ON, When: 新しい出力が来る, Then: 自動スクロールで末尾に追従する  
 2.3 Given: ユーザーが上方向にスクロールする, When: 追従解除条件を満たす, Then: 末尾追従を OFF にする  
-2.4 Given: トレイメニューを表示する, When: 項目一覧を表示する, Then: `Open Terminal Window` / `Arrange Terminal Windows` / `Open Settings` / `Quit` のみを表示する（`Open Chat` / `Open Run` / `worker_*` は表示しない）  
+2.4 Given: トレイメニューを表示する, When: 項目一覧を表示する, Then: `Open Terminal Window` / `Open Character Window` / `Arrange Terminal Windows` / `Open Settings` / `Quit` のみを表示する（`Open Chat` / `Open Run` / `worker_*` は表示しない）  
+2.4.1 Given: トレイからキャラクターウィンドウを再表示したい, When: `Open Character Window` を選ぶ, Then: `terminal_watcher_enabled=true` を保存して通常 watcher window を再表示する  
 2.5 Given: Run のタイル配置を行う, When: セッション一覧を描画する, Then: 各モニタの作業領域ごとにターミナルウィンドウを均等グリッドで並べる（現位置の中心点で上→下、左→右の順に並び替える / 同一行判定は中心点の y 差が作業領域高の約 12%（最低 80px）以内）  
 2.6 Given: 各モニタ内のウィンドウ数が 4 以上, When: 配置する, Then: 2 行で並べる  
 2.7 Given: 各モニタ内のウィンドウ数が 9 以上, When: 配置する, Then: 3 行で並べる  
@@ -51,10 +52,39 @@
 2.22 Given: IME を使う, When: 変換操作を行う, Then: OS の IME に従って入力できる（専用処理は持たない）  
 2.23 Given: ターミナル画面を表示する, When: 描画する, Then: 画面内の基本表示は PTY 出力と `:ng` 内蔵コマンドのローカル出力で構成する（サブワーカーのアドバイスは「次に何を入力するか」を示すローカル出力行として追記する）  
 2.24 Given: ターミナルが表示中, When: 観測（Watcher）を表示する, Then: **全ターミナルを代表する状態**を右下のキャラクターで示す（実装参照: `apps/orchestrator/src/assets/watcher/nagomisan_*.png` / 元データ: `apps/orchestrator/src/assets/watcher/nagomi_fullbody_icons_96_v3.zip`）  
-2.24.1 Given: 観測（Watcher）を表示する, When: 表示設定が ON, Then: **別ウィンドウ（透過）**でフルボディ（96x192）を右下に表示する  
+2.24.1 Given: 観測（Watcher）を表示する, When: 表示設定が ON, Then: **別ウィンドウ（透過）**でフルボディ（256x512）を右下に表示する  
 2.24.2 Given: 観測（Watcher）を表示する, When: 表示設定が OFF, Then: 透過ウィンドウを表示しない  
 2.24.3 Given: 観測表示を行う, When: 全体状況で表情/モーションを選ぶ, Then: `need_input` は呼びかけ、`running` は作業中、`failure` は困った、`idle/success` は眠い表情として表示する  
 2.24.4 Given: 観測表示を行う, When: 3Dキャラ（VRM）が設定済み, Then: 3D表示を優先する（未設定なら2D画像を表示する）  
+2.24.4.1 Given: 3D表示を初期化する, When: VRM読み込みに失敗する, Then: 機能実証向けの 3Dプロトタイプモデルへフォールバックし、3D canvas 自体は維持する（依存ロード自体に失敗した場合のみ2Dへフォールバック）  
+2.24.5 Given: キャラクターデバッグ表示を使う, When: Settings の `キャラクターデバッグ表示を開く` を押す, Then: `watcher-debug` ウィンドウを別で開く（背景透明・常時最前面・既定 480x960）  
+2.24.6 Given: キャラクターデバッグ表示を使う, When: `watcher-debug` を描画する, Then: キャラクターを通常 Watcher より大きく中央表示する（背景透明）  
+2.24.7 Given: キャラクターデバッグ表示を終了する, When: Settings の `キャラクターデバッグ表示` トグルを閉じる側へ切り替える, Then: `watcher-debug` を閉じる（通常 Watcher の ON/OFF には影響しない）  
+2.24.8 Given: キャラクターデバッグ表示で 3D表示を行う, When: ウィンドウサイズが変わる, Then: 3D canvas と camera aspect を表示サイズへ追従させる  
+2.24.9 Given: 透明 watcher window を開いている, When: ウィンドウ表示を制御する, Then: 通常 watcher / `watcher-debug` ともに選択時（focus または pointer inside）に native window frame（Windows タイトルバー）+ UI フレームを表示し、非選択時に frame を隠す  
+2.24.9.1 Given: キャラクターデバッグ表示を開いている, When: ウィンドウを選択（focus）する, Then: デバッグ用フレームを表示し、フレーム上の `閉じる` ボタンで `watcher-debug` を閉じられる  
+2.24.9.2 Given: 通常 watcher を開いている, When: ウィンドウが選択状態（focus または pointer inside）になる, Then: 通常 watcher は native frame（Windows タイトルバー）+ UI フレームで選択状態を示し、非選択時は非表示に戻す  
+2.24.9.2.1 Given: 通常 watcher が選択状態である, When: フレーム右下のリサイズハンドルをドラッグする, Then: ウィンドウサイズを変更できる（右下アンカー維持、最小 `192x384`）  
+2.24.9.3 Given: 通常 watcher を閉じる, When: フレームの `閉じる` ボタンまたはタイトルバー `×` を押す, Then: UI は保存待ちでブロックせず即時に閉じる。`set_terminal_watcher_enabled(false)` で非表示化と永続化を同期し、失敗時のみ `save_settings` をフォールバックする  
+2.24.9.4 Given: すべてのターミナルが終了する, When: 最後のターミナルウィンドウが閉じて terminal session/worker が空になる, Then: キャラクター表示ウィンドウ（通常 watcher / `watcher-debug`）を自動で閉じる  
+2.24.9.5 Given: watcher の IPC 発火条件を定義する, When: watcher window を操作する, Then: watcher 系IPCは `watcher_window_ready`（window起動ごとに1回）/ `set_watcher_window_framed`（通常 watcher / `watcher-debug` の選択状態遷移時のみ）/ `resize_watcher_window`（通常 watcher のリサイズハンドル操作時のみ）/ `set_terminal_watcher_enabled(false)`（通常 watcher 明示close時のみ）/ `close_character_debug_watcher`（`watcher-debug` 明示close時のみ）に限定する  
+2.24.9.5.1 Given: pointer enter/leave/down や hover が発生する, When: watcher UI フレーム表示を更新する, Then: pointer enter/leave と hover では native frame 切替IPCは発火しない。pointer down では focus 通知欠落時の補正として 1 回だけ frame 再同期を許可する  
+2.24.9.5.2 Given: `set_watcher_window_framed` が in-flight である, When: 追加の frame 切替要求が入る, Then: 要求は `latest desired state` に上書きし、同時実行せず直列適用する  
+2.24.9.5.3 Given: リサイズドラッグでイベントが高頻度に到着する, When: `resize_watcher_window` を送る, Then: 同時実行せず直列適用し、pending は最新サイズのみ保持する  
+2.24.10 Given: 3Dキャラクター表示を行う, When: キャラクター状態を描画する, Then: 固定モーションは `neutral` / `processing` / `waiting` / `need_user` の4状態で扱う（複数ターミナルの集約状態から決定する）  
+2.24.10.1 Given: ワンショット反応を行う, When: 状態遷移を検知する, Then: `completion`（処理完了）と `error_alert`（エラー発生）をトリガーモーションとして再生する  
+2.24.10.2 Given: `error_alert` を再生する, When: `fail` が短時間で連続する, Then: クールダウンを入れて連打再生を抑制する  
+2.24.10.3 Given: Watcher 3D を描画する, When: 同一 VRM 読込要求が短時間で重なる, Then: 同一路径の読込は 1 本に畳み、重複ロードを起こさない  
+2.24.10.4 Given: Watcher 3D を描画する, When: UI 応答性を維持したい, Then: 描画は低負荷モード（pixel ratio 上限 + フレーム間引き）で実行する  
+2.24.10.5 Given: `renderer=3d` を設定する, When: 通常 watcher を表示する, Then: VRM 設定済みであれば通常 watcher でも 3D を表示する（`watcher-debug` は大きめプレビュー用途として併用できる）  
+2.24.10.6 Given: Watcher 3D を再計算/再読込する, When: 読込を開始する, Then: 3Dは完了まで非表示にし、完了後に再表示する（読込中は loading 表示）  
+2.24.10.7 Given: アプリ起動直後に watcher を表示する, When: 設定読込中である, Then: settings 適用完了まで watcher の本表示を保留し、`renderer=3d` 時に 2D を一瞬表示してから切り替える経路を使わない  
+2.24.10.8 Given: watcher の初期化/再読込を行う, When: 2D/3D いずれかの表示準備中である, Then: watcher 内の専用 Div に `準備中...` を表示して、準備完了後に通常表示へ切り替える  
+2.24.10.9 Given: Watcher 3D の依存/VRM 読込が遅延または停止する, When: タイムアウト時間を超える, Then: 読込を失敗扱いとして `準備中...` を解除し、プロトタイプ3Dまたは2Dフォールバックへ進む  
+2.24.10.10 Given: 起動時に設定を読む, When: `load_settings` IPC が応答しない, Then: 試行ごとのタイムアウトで次試行へ進み、最終的に defaults へフォールバックして `準備中...` 固定を回避する  
+2.24.10.11 Given: Watcher の起動/再読込が詰まる, When: `status_debug_enabled=ON` でデバッグする, Then: `status_debug_events.jsonl` に `watcher-*` イベント（settings/pack/deps/model/fallback/preparing）を時系列追記し、`watcher-preparing-stuck` で長時間待機を明示する  
+2.24.10.12 Given: キャラクターパック一覧を再構築する, When: built-in fetch または stored pack list が遅延する, Then: timeout 後に空配列フォールバックして `reloadCharacterPackCatalog` を完走し、`settingsHydrated` を進める  
+2.24.10.13 Given: `reloadCharacterPackCatalog` が完了する, When: `settingsHydrated` が `true` へ遷移する, Then: watcher 表示評価（`applyTerminalWatcherVisibility` -> `refreshWatcherRendererMode`）を即時実行し、`settings-hydration` のまま停止しない  
 2.25 Given: 観測状態が変化する, When: 状態を適用する, Then: terminal の背景に対して半透明でトーンの揃った tint を重ねて状態を区別する  
 2.25.1 Given: 状態を表示する, When: 表示色を決める, Then: **色は以下で固定**する（黒=idle/success、青=running、オレンジ=need_input、赤=failure）  
 2.25.1.1 Given: `running` 表示を行う, When: 実行主体を区別する, Then: 表示/報告用ステータスは `running`（通常コマンド実行中）/`ai-running`（AI が指示を処理中）/`subworker-running`（サブワーカー稼働中）に分離する（内部状態機械の `running` は維持する）  
@@ -126,6 +156,23 @@
 7.4.2 Given: 3Dキャラクターを使う, When: VRM を設定する, Then: 3D表示は **VRM** を読み込み、2D画像より優先して表示する  
 7.4.3 Given: 3Dキャラクターで状態ごとのモーションを設定する, When: VRM Animation（`.vrma`）を割り当てる, Then: `idle/success`→`idle`、`running`→`running`、`need_input`→`need_input`、`failure`→`fail` の対応で再生する  
 7.4.4 Given: 状態モーションが未設定, When: 3D表示を行う, Then: `idle` を再生し、`idle` 未設定なら静止にフォールバックする  
+7.4.5 Given: 3Dキャラクター設定を調整する, When: `renderer` / `scale` / `yaw` を変更する, Then: 設定は永続化され、Watcher の 3D表示へ反映される（`renderer=3d` かつ VRM 未設定時は 2D表示へフォールバックする）  
+7.4.5.1 Given: `renderer=3d` を選択する, When: `model_vrm_path` が未設定で組み込み3Dパックが存在する, Then: 組み込み3Dパック（優先: 現在選択Pack、次点: `nikechan-v2` -> `nikechan-v2-outerwear` -> `nikechan-v1` -> その他3D Pack）を自動適用して 3D表示へ遷移する  
+7.4.6 Given: VRM を追加する, When: 設定画面から `.vrm` をアップロードする, Then: VRM は `app_config_dir/character-assets/vrm/` 配下へ保存され、`character_3d_vrm_path` に保存パスを保持する  
+7.4.7 Given: キャラクター素材をパックで管理する, When: Pack を保存する, Then: `app_config_dir/character-packs/<pack_id>/pack.json` を正本として管理する  
+7.4.7.1 Given: Pack を保存する, When: `pack.json` を作成する, Then: 必須キーは `pack_id` / `display_name` / `renderer` / `model_vrm_path` とする（`renderer` は `2d|3d`）  
+7.4.7.2 Given: Pack へ拡張素材を追加する, When: モーション/表情を定義する, Then: `motions`（state -> `.vrma` path）と `expressions`（state -> expression key）を任意で保持できる  
+7.4.7.3 Given: Pack の既定チューニングを定義する, When: 3D表示を初期化する, Then: `default_scale` / `default_yaw_deg` を適用する（未指定時は 1.0 / 0.0）  
+7.4.8 Given: Pack の一覧を表示する, When: 設定画面を開く, Then: 組み込み Pack と `app_config_dir` 配下のユーザー Pack を統合して表示する  
+7.4.9 Given: Pack を選択する, When: ユーザーがキャラクター一覧をクリックする, Then: `character_id` と 3D設定（`renderer`/`model_vrm_path`/`scale`/`yaw`）へ即時反映する  
+7.4.10 Given: 既存モデルをプロトタイプへ配置する, When: `tegnike/nikechan-assets` の VRM を参照する, Then: 組み込み Pack 定義（remote URL）として一覧に表示し、選択で 3D表示できる  
+7.4.10.1 Given: Nikechan 系 VRM を表示する, When: Watcher 3D の向きを適用する, Then: Pack ID または VRM path に `nikechan` を含む場合は表示 yaw に +180 度オフセットを加えて正面向きに補正する（ユーザー設定 yaw は保持する）  
+7.4.11 Given: キャラクターデバッグ表示を操作する, When: Settings の `デバッグ表示` トグルボタンを押す, Then: `toggle_character_debug_watcher` を呼び出してデバッグ表示を開閉する（実行時不一致のフォールバックとして `open_character_debug_watcher` / `close_character_debug_watcher` を利用してよい）  
+7.4.11.1 Given: `watcher-debug` の開閉コマンド応答がタイムアウトする, When: Settings の `デバッグ表示` トグルを押す, Then: UI は待ち続けず、通常 watcher を 3D プレビュー代替として開閉できるフォールバックへ切り替える（既存 watcher の ON/OFF は復元する）  
+7.4.12 Given: デバッグ表示の URL パラメータを指定する, When: `character_debug=1` を付けて watcher view を開く, Then: `character_debug_width/height/state` を読み取り、固定表示サイズ/固定状態を適用できる  
+7.4.12.1 Given: 3D未設定でデバッグ表示を開く, When: `character_debug_force_3d=1` を付ける, Then: 現在設定が `2d` でも組み込み3Dパック（優先: 選択中Pack、次点: `nikechan-v2` -> `nikechan-v2-outerwear` -> `nikechan-v1` -> その他3D Pack）を自動適用して 3D 表示する（設定保存はしない）  
+7.4.12.2 Given: 組み込み Pack の取得に失敗する, When: デバッグ表示で 3D 強制を行う, Then: `WATCHER_3D_PROTOTYPE_FALLBACK_PACKS` の remote URL を暫定 pack として利用し、3D表示の機能実証を継続する  
+7.4.13 Given: デバッグ表示ウィンドウを閉じたい, When: デバッグ表示を開く, Then: focus 時のみデバッグフレームと native window frame を表示し、blur 時は隠す。`閉じる` ボタンまたはタイトルバー `×` で `close_character_debug_watcher`（または window close）を実行できる（`Esc` はこの機能に割り当てない）  
 7.5 Given: AI Coding Agent セクションを表示する, When: 設定画面を開く, Then: 「使用ツール」「AIターミナル状態判定」「サブワーカー設定（モード/閾値/運用操作）」を表示する（連携ボタンは表示しない）  
 7.6 Given: AI Coding Agent を使う, When: 設定を保存する, Then: 使用する AI ツールを 1 つ選択できる（codex/claudecode/opencode）  
 7.7 Given: AI Coding Agent を選択する, When: 設定画面を表示する, Then: 「選択したAIツールは起動コマンド判別とAI判定の対象になる」旨を説明する  
@@ -182,7 +229,7 @@
 10.2.4 Given: ユーザーが `nagomi --restart` を実行する, When: 既存 Orchestrator が稼働中, Then: 既存プロセスを停止して再起動し、更新済みバイナリを確実に反映する  
 10.2.5 Given: ユーザーが `nagomi --status` を実行する, When: 起動可否を確認したい, Then: **起動/停止は行わず**、解決した Orchestrator パスと `running/healthy/health_url` を JSON で表示する  
 10.2.6 Given: ユーザーが `nagomi --debug-paths` を実行する, When: デバッグログの場所を確認したい, Then: **起動/停止は行わず**、app_config_dir と主要ログ/JSONL のパスを JSON で表示する  
-10.2.7 Given: ユーザーが `nagomi debug-tail <kind>` を実行する, When: 直近ログを素早く見たい, Then: **起動/停止は行わず**、`status|subworker|terminal` の各 JSONL の末尾を読みやすく要約して表示する  
+10.2.7 Given: ユーザーが `nagomi debug-tail <kind>` を実行する, When: 直近ログを素早く見たい, Then: **起動/停止は行わず**、`status|watcher|subworker|terminal` の各 JSONL の末尾を読みやすく要約して表示する（`watcher` は `status_debug_events.jsonl` から `watcher-*` のみ抽出する）  
 10.3 Given: Orchestrator の起動済み判定を行う, When: プロセス名で検出した後に IPC probe を試す, Then: IPC が応答しない場合は未起動として扱う  
 10.3.1 Given: 起動済み判定を行う, When: CLI から生存確認が必要, Then: `127.0.0.1` のヘルスチェックエンドポイントで確認する  
 10.3.2 Given: ヘルスチェックを行う, When: `GET /health` にアクセスする, Then: `{"status":"ok","pid":<number>}` を返す  
@@ -406,21 +453,14 @@ export const NagomiNotify = async ({ $, project, directory }) => {
 12.37.1 Given: モードが `アドバイス` である, When: サブワーカーがアドバイス表示を行う, Then: ターミナル状態は `need_input` として扱う  
 
 ## 13. デバッグ/開発用機能
-13.1 Given: Terminal 画面でデバッグ UI を扱う, When: `debug ui: on/off` を切り替える, Then: デバッグバッジと保存ボタンの表示を切り替える（表示状態はローカルに保存する）  
-13.2 Given: デバッグ UI が表示中, When: 状態/入力/イベントが更新される, Then: デバッグバッジに state と簡易情報に加えて **直近の状態遷移（from->to）** を表示する  
-13.3 Given: デバッグスナップショットを保存する, When: `save debug snapshot` を押す, Then: 現在の入力/イベント/状態と **state_transitions（直近遷移履歴）** を JSONL 1 行として保存する（保存先: app_config_dir の `terminal_debug_snapshots.jsonl`）  
-13.4 Given: デバッグスナップショットを保存する, When: 保存する, Then: `ts_ms` を付与して追記保存する  
-13.5 Given: terminal-output-broadcast を有効化する, When: `NAGOMI_ENABLE_TERMINAL_OUTPUT_BROADCAST=1`, Then: 端末出力を `terminal-output-broadcast` イベントとしてアプリ全体へ emit する  
-13.6 Given: worker I/O のデバッグを行う, When: `NAGOMI_DEBUG_WORKER_IO=1`, Then: worker の入出力に関するログを app_config_dir の `worker_smoke.log` に追記する  
-13.7 Given: テスト用 HTTP エンドポイントを使う, When: `NAGOMI_ENABLE_TEST_ENDPOINTS=1`, Then: `/terminal-send` を有効化する（詳細は 10.3.5 に従う）  
-13.8 Given: デバッグスクリーンショットを保存する, When: `save debug screenshot` を押す, Then: WebView2 DevTools の `Page.captureScreenshot` で取得し、app_config_dir の `terminal_debug_screenshots/terminal-<ts>.png` に保存する  
-13.9 Given: デバッグスクリーンショットを保存する, When: 取得後に PNG が 3s 以内に生成されない, Then: 失敗として扱い保存を中断する  
-13.10 Given: デバッグスクリーンショットを保存する, When: 取得に失敗する, Then: 可能な範囲で `worker_smoke.log` に失敗理由を記録する  
-13.11 Given: サブワーカー判定を追跡する, When: 判定/実行が行われる, Then: `mode/confidence/threshold/action/result/reason` をデバッグログ（またはスナップショット）に記録する  
-13.12 Given: サブワーカーデバッグが ON, When: サブワーカーの `start/skip/result/pause/resume` が発生する, Then: app_config_dir の `subworker_debug_events.jsonl` に JSONL で追記保存する  
-13.13 Given: `subworker_debug_events.jsonl` へ追記する, When: 1 件のイベントを保存する, Then: `ts_ms` と `event_type`、およびサブワーカー現在状態（phase/mode/threshold/action/result など）を同時に記録する  
-13.14 Given: サブワーカーデバッグが ON, When: 初回保存に成功する, Then: Terminal 本文に `subworker-debug-file: <path>` を表示し、解析対象ファイルを即時確認できるようにする  
-13.15 Given: デバッグスナップショット/サブワーカーデバッグを保存する, When: `running` 系ステータスを保存する, Then: `status_state`（`running|ai-running|subworker-running`）と `observed_status` を含めて後追い解析できるようにする（可能なら `agent_work_active` も含める）  
-13.16 Given: サブワーカーデバッグイベントを保存する, When: `start/skip/result` を記録する, Then: `judge_complete_event`（固定 `judge-complete`）と `judge_complete_source`（`judge-result|hook-judge|judge-fallback`）を保存し、`skip` の場合は理由を必須で残す  
-13.17 Given: 状態デバッグログが ON, When: 状態遷移/フック受信/Judge 開始・結果・フォールバック等のイベントが発生する, Then: app_config_dir の `status_debug_events.jsonl` に JSONL で追記保存する  
-13.18 Given: `status_debug_events.jsonl` へ追記する, When: 1 件のイベントを保存する, Then: `ts_ms` と `event_type` に加えて、`terminal_observed/agent_observed/merged_observed/status_state/judge/subworker` を同時に記録し、後から原因解析できるようにする  
+13.1 Given: デバッグ情報を確認したい, When: Watcher/Terminal を操作する, Then: デバッグは UI ボタンではなく JSONL ログで追跡する（`status_debug_events.jsonl` / `subworker_debug_events.jsonl` / `subworker_io_events.jsonl`）  
+13.2 Given: 状態デバッグログが ON（`status_debug_enabled=true`）, When: 状態遷移/フック受信/Judge 開始・結果・フォールバック等が発生する, Then: app_config_dir の `status_debug_events.jsonl` に JSONL 追記する  
+13.3 Given: `status_debug_events.jsonl` へ追記する, When: 1 件のイベントを保存する, Then: `ts_ms` と `event_type` に加えて、`terminal_observed/agent_observed/merged_observed/status_state/judge/subworker` を同時に記録し、後追い解析できるようにする  
+13.4 Given: Watcher の起動/再読込をデバッグする, When: `status_debug_enabled=true` で watcher を表示する, Then: `status_debug_events.jsonl` に `watcher-*` イベント（`load-settings` / `pack-catalog` / `deps` / `model-load` / `fallback` / `preparing-stuck`）を追記する  
+13.5 Given: サブワーカーデバッグが ON, When: サブワーカーの `start/skip/result/pause/resume` が発生する, Then: app_config_dir の `subworker_debug_events.jsonl` に JSONL 追記する  
+13.6 Given: `subworker_debug_events.jsonl` へ追記する, When: 1 件のイベントを保存する, Then: `ts_ms` と `event_type`、およびサブワーカー状態（phase/mode/threshold/action/result など）を同時記録する  
+13.7 Given: サブワーカーデバッグが ON, When: 初回保存に成功する, Then: Terminal 本文に `subworker-debug-file: <path>` を表示し、解析対象ファイルを即時確認できるようにする  
+13.8 Given: サブワーカー判定を追跡する, When: `start/skip/result` を記録する, Then: `judge_complete_event`（固定 `judge-complete`）と `judge_complete_source`（`judge-result|hook-judge|judge-fallback`）を保存し、`skip` の場合は理由を必須にする  
+13.9 Given: terminal-output-broadcast を有効化する, When: `NAGOMI_ENABLE_TERMINAL_OUTPUT_BROADCAST=1`, Then: 端末出力を `terminal-output-broadcast` イベントとして emit する  
+13.10 Given: worker I/O のデバッグを行う, When: `NAGOMI_DEBUG_WORKER_IO=1`, Then: worker 入出力ログを app_config_dir の `worker_smoke.log` に追記する  
+13.11 Given: テスト用 HTTP エンドポイントを使う, When: `NAGOMI_ENABLE_TEST_ENDPOINTS=1`, Then: `/terminal-send` を有効化する（詳細は 10.3.5）  

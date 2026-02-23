@@ -1,14 +1,10 @@
 ﻿use crate::completion_hook::{hooks_base_dir, CompletionHookManager, HookEvent, HookEventKind};
 use anyhow::Result;
-#[cfg(windows)]
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
-#[cfg(windows)]
 use base64::Engine;
 use nagomi_protocol::Message;
 use serde::{Deserialize, Serialize};
 use socket2::{Domain, Protocol, Socket, Type};
-#[cfg(windows)]
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 #[cfg(windows)]
 use std::ffi::OsStr;
@@ -32,23 +28,7 @@ use tauri::{
     WebviewUrl, WebviewWindowBuilder,
 };
 #[cfg(windows)]
-use webview2_com::CallDevToolsProtocolMethodCompletedHandler;
-#[cfg(windows)]
-use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2CallDevToolsProtocolMethodCompletedHandler;
-#[cfg(windows)]
-use windows::core::PCWSTR;
-#[cfg(windows)]
-use windows_sys::Win32::Foundation::RECT;
-#[cfg(windows)]
-use windows_sys::Win32::Graphics::Gdi::{
-    BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC, GetDIBits,
-    ReleaseDC, SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, CAPTUREBLT, DIB_RGB_COLORS,
-    SRCCOPY,
-};
-#[cfg(windows)]
 use windows_sys::Win32::System::Environment::ExpandEnvironmentStringsW;
-#[cfg(windows)]
-use windows_sys::Win32::UI::WindowsAndMessaging::GetClientRect;
 #[cfg(windows)]
 use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, REG_EXPAND_SZ, REG_SZ};
 #[cfg(windows)]
@@ -64,6 +44,13 @@ const WINDOW_CHAT: &str = "chat";
 const WINDOW_RUN: &str = "run";
 const WINDOW_SETTINGS: &str = "settings";
 const WINDOW_WATCHER: &str = "watcher";
+const WINDOW_WATCHER_DEBUG: &str = "watcher-debug";
+const WATCHER_WINDOW_WIDTH: u32 = 256;
+const WATCHER_WINDOW_HEIGHT: u32 = 512;
+const WATCHER_WINDOW_MARGIN: i32 = 16;
+const WATCHER_DEBUG_WINDOW_WIDTH: u32 = 480;
+const WATCHER_DEBUG_WINDOW_HEIGHT: u32 = 960;
+const WATCHER_DEBUG_WINDOW_MARGIN: i32 = 20;
 const TERMINAL_SHELL_CMD: &str = "cmd";
 const TERMINAL_SHELL_POWERSHELL: &str = "powershell";
 const TERMINAL_SHELL_WSL: &str = "wsl";
@@ -75,12 +62,9 @@ const SUBWORKER_DEBUG_ENABLED_DEFAULT: bool = false;
 const SUBWORKER_MODE_CAREFUL: &str = "careful";
 const SUBWORKER_CONFIDENCE_THRESHOLD_DEFAULT: f32 = 0.8;
 const STATUS_DEBUG_ENABLED_DEFAULT: bool = false;
-
-#[cfg(windows)]
-thread_local! {
-    static WEBVIEW2_CAPTURE_HANDLER: RefCell<Option<ICoreWebView2CallDevToolsProtocolMethodCompletedHandler>> =
-        RefCell::new(None);
-}
+const CHARACTER_RENDERER_DEFAULT: &str = "2d";
+const CHARACTER_3D_SCALE_DEFAULT: f32 = 1.0;
+const CHARACTER_3D_YAW_DEG_DEFAULT: f32 = 0.0;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -105,6 +89,14 @@ struct Settings {
     #[serde(default = "default_status_debug_enabled")]
     status_debug_enabled: bool,
     character_id: String,
+    #[serde(default = "default_character_renderer")]
+    character_renderer: String,
+    #[serde(default)]
+    character_3d_vrm_path: String,
+    #[serde(default = "default_character_3d_scale")]
+    character_3d_scale: f32,
+    #[serde(default = "default_character_3d_yaw_deg")]
+    character_3d_yaw_deg: f32,
     log_retention_lines: u32,
     terminal_watcher_enabled: bool,
     #[serde(default)]
@@ -131,6 +123,39 @@ struct Settings {
     terminal_keybind_focus_next: String,
     #[serde(default = "default_terminal_keybind_focus_prev")]
     terminal_keybind_focus_prev: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+struct CharacterPackManifest {
+    pack_id: String,
+    display_name: String,
+    renderer: String,
+    model_vrm_path: String,
+    motions: HashMap<String, String>,
+    expressions: HashMap<String, String>,
+    #[serde(default = "default_character_3d_scale")]
+    default_scale: f32,
+    #[serde(default = "default_character_3d_yaw_deg")]
+    default_yaw_deg: f32,
+    #[serde(default)]
+    source: String,
+}
+
+impl Default for CharacterPackManifest {
+    fn default() -> Self {
+        Self {
+            pack_id: String::new(),
+            display_name: String::new(),
+            renderer: default_character_renderer(),
+            model_vrm_path: String::new(),
+            motions: HashMap::new(),
+            expressions: HashMap::new(),
+            default_scale: default_character_3d_scale(),
+            default_yaw_deg: default_character_3d_yaw_deg(),
+            source: String::new(),
+        }
+    }
 }
 
 fn default_terminal_shell_kind() -> String {
@@ -175,6 +200,18 @@ fn default_subworker_confidence_threshold() -> f32 {
 
 fn default_status_debug_enabled() -> bool {
     STATUS_DEBUG_ENABLED_DEFAULT
+}
+
+fn default_character_renderer() -> String {
+    CHARACTER_RENDERER_DEFAULT.to_string()
+}
+
+fn default_character_3d_scale() -> f32 {
+    CHARACTER_3D_SCALE_DEFAULT
+}
+
+fn default_character_3d_yaw_deg() -> f32 {
+    CHARACTER_3D_YAW_DEG_DEFAULT
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -371,6 +408,10 @@ impl Default for Settings {
             subworker_prompt_template_markdown: String::new(),
             status_debug_enabled: default_status_debug_enabled(),
             character_id: "default".to_string(),
+            character_renderer: default_character_renderer(),
+            character_3d_vrm_path: String::new(),
+            character_3d_scale: default_character_3d_scale(),
+            character_3d_yaw_deg: default_character_3d_yaw_deg(),
             log_retention_lines: 20_000,
             terminal_watcher_enabled: false,
             terminal_font_family: "ui-monospace, 'Cascadia Mono', Consolas, 'SFMono-Regular', Menlo, Monaco, 'Liberation Mono', 'DejaVu Sans Mono', monospace".to_string(),
@@ -468,12 +509,149 @@ fn settings_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
     app_config_dir(app).join("settings.json")
 }
 
-fn worker_log_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
-    app_config_dir(app).join("worker_smoke.log")
+fn character_assets_dir<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
+    app_config_dir(app).join("character-assets")
 }
 
-fn terminal_debug_snapshot_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
-    app_config_dir(app).join("terminal_debug_snapshots.jsonl")
+fn character_packs_dir<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
+    app_config_dir(app).join("character-packs")
+}
+
+fn character_pack_manifest_path<R: Runtime>(app: &AppHandle<R>, pack_id: &str) -> PathBuf {
+    character_packs_dir(app).join(pack_id).join("pack.json")
+}
+
+fn sanitize_asset_component(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    for ch in raw.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' {
+            out.push(ch);
+        } else {
+            out.push('_');
+        }
+    }
+    let trimmed = out.trim_matches('_').trim_matches('.');
+    if trimmed.is_empty() {
+        "asset".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn sanitize_pack_id(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    for ch in raw.trim().chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+            continue;
+        }
+        if ch == '-' || ch == '_' {
+            out.push(ch);
+            continue;
+        }
+        if ch.is_ascii_whitespace() || ch == '.' {
+            out.push('-');
+        }
+    }
+    let mut compact = String::with_capacity(out.len());
+    let mut prev_sep = true;
+    for ch in out.chars() {
+        let is_sep = ch == '-' || ch == '_';
+        if is_sep {
+            if prev_sep {
+                continue;
+            }
+            prev_sep = true;
+            compact.push(ch);
+            continue;
+        }
+        prev_sep = false;
+        compact.push(ch);
+    }
+    compact.trim_matches('-').trim_matches('_').to_string()
+}
+
+fn normalize_character_pack_manifest(manifest: &mut CharacterPackManifest) -> Result<(), String> {
+    let mut pack_id = sanitize_pack_id(&manifest.pack_id);
+    if pack_id.is_empty() {
+        pack_id = sanitize_pack_id(&manifest.display_name);
+    }
+    if pack_id.is_empty() {
+        return Err("pack_id is empty".to_string());
+    }
+    manifest.pack_id = pack_id;
+    manifest.display_name = manifest.display_name.trim().to_string();
+    if manifest.display_name.is_empty() {
+        manifest.display_name = manifest.pack_id.clone();
+    }
+    manifest.renderer = normalize_character_renderer(&manifest.renderer).to_string();
+    manifest.model_vrm_path = manifest.model_vrm_path.trim().to_string();
+    manifest.default_scale = normalize_character_3d_scale(manifest.default_scale);
+    manifest.default_yaw_deg = normalize_character_3d_yaw_deg(manifest.default_yaw_deg);
+    manifest.source = manifest.source.trim().to_string();
+    if manifest.renderer == "3d" && manifest.model_vrm_path.is_empty() {
+        return Err("model_vrm_path is required for 3d pack".to_string());
+    }
+    manifest.motions = manifest
+        .motions
+        .iter()
+        .filter_map(|(key, value)| {
+            let k = key.trim().to_ascii_lowercase();
+            let v = value.trim().to_string();
+            if k.is_empty() || v.is_empty() {
+                None
+            } else {
+                Some((k, v))
+            }
+        })
+        .collect();
+    manifest.expressions = manifest
+        .expressions
+        .iter()
+        .filter_map(|(key, value)| {
+            let k = key.trim().to_ascii_lowercase();
+            let v = value.trim().to_string();
+            if k.is_empty() || v.is_empty() {
+                None
+            } else {
+                Some((k, v))
+            }
+        })
+        .collect();
+    Ok(())
+}
+
+fn read_character_pack_manifest(path: &Path) -> Result<CharacterPackManifest> {
+    let raw = fs::read_to_string(path)?;
+    let mut manifest: CharacterPackManifest = serde_json::from_str(&raw)?;
+    normalize_character_pack_manifest(&mut manifest).map_err(anyhow::Error::msg)?;
+    Ok(manifest)
+}
+
+fn normalize_character_renderer(raw: &str) -> &'static str {
+    if raw.trim().eq_ignore_ascii_case("3d") {
+        "3d"
+    } else {
+        "2d"
+    }
+}
+
+fn normalize_character_3d_scale(raw: f32) -> f32 {
+    if !raw.is_finite() {
+        return CHARACTER_3D_SCALE_DEFAULT;
+    }
+    raw.clamp(0.2, 3.0)
+}
+
+fn normalize_character_3d_yaw_deg(raw: f32) -> f32 {
+    if !raw.is_finite() {
+        return CHARACTER_3D_YAW_DEG_DEFAULT;
+    }
+    raw.clamp(-180.0, 180.0)
+}
+
+fn worker_log_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
+    app_config_dir(app).join("worker_smoke.log")
 }
 
 fn status_debug_events_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
@@ -486,18 +664,6 @@ fn subworker_debug_events_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
 
 fn subworker_io_events_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
     app_config_dir(app).join("subworker_io_events.jsonl")
-}
-
-fn terminal_debug_screenshot_dir<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
-    app_config_dir(app).join("terminal_debug_screenshots")
-}
-
-fn terminal_debug_screenshot_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
-    let now_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis();
-    terminal_debug_screenshot_dir(app).join(format!("terminal-{}.png", now_ms))
 }
 
 fn append_jsonl_entry(path: &Path, payload: serde_json::Value) -> Result<(), String> {
@@ -1548,7 +1714,12 @@ fn load_settings<R: Runtime>(
 ) -> Result<Settings, String> {
     ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
     let path = settings_path(&app);
-    read_settings(&path).map_err(|err| err.to_string())
+    let mut settings = read_settings(&path).map_err(|err| err.to_string())?;
+    settings.character_renderer = normalize_character_renderer(&settings.character_renderer).to_string();
+    settings.character_3d_scale = normalize_character_3d_scale(settings.character_3d_scale);
+    settings.character_3d_yaw_deg = normalize_character_3d_yaw_deg(settings.character_3d_yaw_deg);
+    settings.character_3d_vrm_path = settings.character_3d_vrm_path.trim().to_string();
+    Ok(settings)
 }
 
 #[tauri::command]
@@ -1558,6 +1729,13 @@ fn save_settings<R: Runtime>(
     settings: Settings,
 ) -> Result<(), String> {
     ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    let mut settings = settings;
+    settings.character_renderer =
+        normalize_character_renderer(&settings.character_renderer).to_string();
+    settings.character_3d_scale = normalize_character_3d_scale(settings.character_3d_scale);
+    settings.character_3d_yaw_deg =
+        normalize_character_3d_yaw_deg(settings.character_3d_yaw_deg);
+    settings.character_3d_vrm_path = settings.character_3d_vrm_path.trim().to_string();
     let path = settings_path(&app);
     let hook_tool = settings.llm_tool.clone();
     write_settings(&path, &settings).map_err(|err| err.to_string())?;
@@ -1565,6 +1743,110 @@ fn save_settings<R: Runtime>(
     let _ = app.emit("settings-updated", settings.clone());
     sync_watcher_window(&app, &settings);
     Ok(())
+}
+
+#[tauri::command]
+fn save_character_asset<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+    filename: String,
+    bytes_base64: String,
+    category: Option<String>,
+) -> Result<String, String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    let raw_name = Path::new(filename.trim())
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("asset.vrm");
+    let stem_raw = Path::new(raw_name)
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("asset");
+    let ext_raw = Path::new(raw_name)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("bin");
+    let safe_stem = sanitize_asset_component(stem_raw);
+    let safe_ext = sanitize_asset_component(ext_raw);
+    let safe_category = sanitize_asset_component(category.as_deref().unwrap_or("misc"));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let out_name = format!("{safe_stem}-{now_ms}.{safe_ext}");
+    let out_dir = character_assets_dir(&app).join(safe_category);
+    fs::create_dir_all(&out_dir).map_err(|err| err.to_string())?;
+    let out_path = out_dir.join(out_name);
+
+    let bytes = BASE64_STANDARD
+        .decode(bytes_base64.as_bytes())
+        .map_err(|err| err.to_string())?;
+    if bytes.is_empty() {
+        return Err("asset is empty".to_string());
+    }
+    if bytes.len() > 64 * 1024 * 1024 {
+        return Err("asset exceeds 64MB limit".to_string());
+    }
+    fs::write(&out_path, bytes).map_err(|err| err.to_string())?;
+    Ok(out_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn save_character_pack_manifest<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+    manifest: CharacterPackManifest,
+) -> Result<CharacterPackManifest, String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    let mut manifest = manifest;
+    normalize_character_pack_manifest(&mut manifest)?;
+    let out_path = character_pack_manifest_path(&app, &manifest.pack_id);
+    if let Some(parent) = out_path.parent() {
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
+    let raw = serde_json::to_string_pretty(&manifest).map_err(|err| err.to_string())?;
+    fs::write(&out_path, raw).map_err(|err| err.to_string())?;
+    Ok(manifest)
+}
+
+#[tauri::command]
+fn list_character_packs<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+) -> Result<Vec<CharacterPackManifest>, String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    let root = character_packs_dir(&app);
+    if !root.exists() {
+        return Ok(Vec::new());
+    }
+    let mut packs = Vec::new();
+    let entries = fs::read_dir(&root).map_err(|err| err.to_string())?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let manifest_path = path.join("pack.json");
+        if !manifest_path.exists() {
+            continue;
+        }
+        match read_character_pack_manifest(&manifest_path) {
+            Ok(manifest) => packs.push(manifest),
+            Err(err) => {
+                eprintln!(
+                    "[character-pack] skip invalid manifest {}: {}",
+                    manifest_path.display(),
+                    err
+                );
+            }
+        }
+    }
+    packs.sort_by(|a, b| {
+        let left = a.display_name.to_ascii_lowercase();
+        let right = b.display_name.to_ascii_lowercase();
+        left.cmp(&right).then_with(|| a.pack_id.cmp(&b.pack_id))
+    });
+    Ok(packs)
 }
 
 #[tauri::command]
@@ -3044,22 +3326,24 @@ fn aggregate_observed_state(states: &HashMap<String, String>) -> String {
 }
 
 fn emit_terminal_aggregate_state<R: Runtime>(app: &AppHandle<R>, state: &str) {
-    if let Some(window) = app.get_webview_window(WINDOW_WATCHER) {
-        let payload = AggregateStatePayload {
-            state: state.to_string(),
-        };
-        let _ = window.emit("terminal-aggregate-state", payload);
+    let payload = AggregateStatePayload {
+        state: state.to_string(),
+    };
+    for label in [WINDOW_WATCHER, WINDOW_WATCHER_DEBUG] {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.emit("terminal-aggregate-state", payload.clone());
+        }
     }
 }
 
-fn position_watcher_window<R: Runtime>(
+fn position_watcher_window_with_size<R: Runtime>(
     app: &AppHandle<R>,
     window: &tauri::WebviewWindow<R>,
+    win_w: u32,
+    win_h: u32,
+    margin: i32,
 ) -> Result<(), String> {
     let (x, y, width, height) = primary_work_area(app)?;
-    let win_w = 96u32;
-    let win_h = 192u32;
-    let margin = 16i32;
     let pos_x = x + width as i32 - win_w as i32 - margin;
     let pos_y = y + height as i32 - win_h as i32 - margin;
     let _ = window.set_size(Size::Physical(PhysicalSize::new(win_w, win_h)));
@@ -3067,8 +3351,46 @@ fn position_watcher_window<R: Runtime>(
     Ok(())
 }
 
+fn position_watcher_window<R: Runtime>(
+    app: &AppHandle<R>,
+    window: &tauri::WebviewWindow<R>,
+) -> Result<(), String> {
+    position_watcher_window_with_size(
+        app,
+        window,
+        WATCHER_WINDOW_WIDTH,
+        WATCHER_WINDOW_HEIGHT,
+        WATCHER_WINDOW_MARGIN,
+    )
+}
+
+fn position_watcher_debug_window<R: Runtime>(
+    app: &AppHandle<R>,
+    window: &tauri::WebviewWindow<R>,
+) -> Result<(), String> {
+    let (x, y, width, height) = primary_work_area(app)?;
+    let win_w = WATCHER_DEBUG_WINDOW_WIDTH as i32;
+    let win_h = WATCHER_DEBUG_WINDOW_HEIGHT as i32;
+    let centered_x = x + (width as i32 - win_w) / 2;
+    let centered_y = y + (height as i32 - win_h) / 2;
+    let min_x = x + WATCHER_DEBUG_WINDOW_MARGIN;
+    let min_y = y + WATCHER_DEBUG_WINDOW_MARGIN;
+    let max_x = (x + width as i32 - win_w - WATCHER_DEBUG_WINDOW_MARGIN).max(min_x);
+    let max_y = (y + height as i32 - win_h - WATCHER_DEBUG_WINDOW_MARGIN).max(min_y);
+    let pos_x = centered_x.clamp(min_x, max_x);
+    let pos_y = centered_y.clamp(min_y, max_y);
+    let _ = window.set_size(Size::Physical(PhysicalSize::new(
+        WATCHER_DEBUG_WINDOW_WIDTH,
+        WATCHER_DEBUG_WINDOW_HEIGHT,
+    )));
+    let _ = window.set_position(Position::Physical(PhysicalPosition::new(pos_x, pos_y)));
+    Ok(())
+}
+
 fn open_watcher_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
-    if app.get_webview_window(WINDOW_WATCHER).is_some() {
+    if let Some(window) = app.get_webview_window(WINDOW_WATCHER) {
+        let _ = position_watcher_window(app, &window);
+        let _ = window.show();
         return Ok(());
     }
     let url = "index.html?view=watcher";
@@ -3082,7 +3404,38 @@ fn open_watcher_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
         .visible(false)
         .build()
         .map_err(|err| err.to_string())?;
+    bind_watcher_window_events(app, &window);
     let _ = position_watcher_window(app, &window);
+    let state = app.state::<TerminalAggregateState>();
+    let last_state = state
+        .last_state
+        .lock()
+        .ok()
+        .map(|value| value.clone())
+        .unwrap_or_else(|| "idle".to_string());
+    emit_terminal_aggregate_state(app, &last_state);
+    Ok(())
+}
+
+fn open_watcher_debug_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    if app.get_webview_window(WINDOW_WATCHER_DEBUG).is_some() {
+        return Ok(());
+    }
+    let url = format!(
+        "index.html?view=watcher&character_debug=1&character_debug_force_3d=1&character_debug_width={}&character_debug_height={}",
+        WATCHER_DEBUG_WINDOW_WIDTH, WATCHER_DEBUG_WINDOW_HEIGHT
+    );
+    let window = WebviewWindowBuilder::new(app, WINDOW_WATCHER_DEBUG, WebviewUrl::App(url.into()))
+        .title("Character Debug")
+        .transparent(true)
+        .decorations(true)
+        .resizable(true)
+        .always_on_top(true)
+        .skip_taskbar(false)
+        .visible(false)
+        .build()
+        .map_err(|err| err.to_string())?;
+    let _ = position_watcher_debug_window(app, &window);
     let state = app.state::<TerminalAggregateState>();
     let last_state = state
         .last_state
@@ -3100,19 +3453,72 @@ fn watcher_window_ready<R: Runtime>(
     ipc_session_id: String,
 ) -> Result<(), String> {
     ipc_session::touch_ipc_session_for_window(&window, &ipc_session_id)?;
-    if window.label() != WINDOW_WATCHER {
-        return Ok(());
-    }
     let app = window.app_handle();
-    let _ = position_watcher_window(&app, &window);
+    match window.label() {
+        WINDOW_WATCHER => {
+            let _ = position_watcher_window(&app, &window);
+        }
+        WINDOW_WATCHER_DEBUG => {
+            let _ = position_watcher_debug_window(&app, &window);
+        }
+        _ => return Ok(()),
+    }
     let _ = window.show();
     Ok(())
 }
 
 fn close_watcher_window<R: Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window(WINDOW_WATCHER) {
+        let _ = window.hide();
+    }
+}
+
+fn close_character_windows_if_all_terminals_closed<R: Runtime>(app: &AppHandle<R>) {
+    let terminal_windows_empty = collect_terminal_windows(app).is_empty();
+    let active_empty = app
+        .state::<TerminalSessionState>()
+        .active
+        .lock()
+        .map(|active| active.is_empty())
+        .unwrap_or(true);
+    let workers_empty = app
+        .state::<TerminalWorkerState>()
+        .processes
+        .lock()
+        .map(|processes| processes.is_empty())
+        .unwrap_or(true);
+    if !terminal_windows_empty && !(active_empty && workers_empty) {
+        return;
+    }
+    close_watcher_window(app);
+    if let Some(window) = app.get_webview_window(WINDOW_WATCHER_DEBUG) {
         let _ = window.close();
     }
+}
+
+#[tauri::command]
+fn set_watcher_window_framed<R: Runtime>(
+    window: tauri::WebviewWindow<R>,
+    ipc_session_id: String,
+    framed: bool,
+) -> Result<(), String> {
+    ipc_session::touch_ipc_session_for_window(&window, &ipc_session_id)?;
+    match window.label() {
+        WINDOW_WATCHER => {
+            let _ = window.set_decorations(framed);
+            // Keep current bounds while toggling decorations.
+            // Repositioning during move/resize can stall the window message loop on Windows.
+            // 装飾切替時は現在の位置/サイズを維持し、移動・リサイズ中の再配置競合を避ける。
+        }
+        WINDOW_WATCHER_DEBUG => {
+            let _ = window.set_decorations(framed);
+            // Keep current bounds while toggling decorations.
+            // Repositioning during move/resize can stall the window message loop on Windows.
+            // 装飾切替時は現在の位置/サイズを維持し、移動・リサイズ中の再配置競合を避ける。
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 fn sync_watcher_window<R: Runtime>(app: &AppHandle<R>, settings: &Settings) {
@@ -3121,6 +3527,121 @@ fn sync_watcher_window<R: Runtime>(app: &AppHandle<R>, settings: &Settings) {
     } else {
         close_watcher_window(app);
     }
+}
+
+fn persist_terminal_watcher_enabled<R: Runtime>(app: &AppHandle<R>, enabled: bool) {
+    let path = settings_path(app);
+    let mut settings = read_settings(&path).unwrap_or_else(|_| Settings::default());
+    if settings.terminal_watcher_enabled == enabled {
+        return;
+    }
+    settings.terminal_watcher_enabled = enabled;
+    let _ = write_settings(&path, &settings);
+    let _ = app.emit("settings-updated", settings.clone());
+    sync_watcher_window(app, &settings);
+}
+
+#[tauri::command]
+fn resize_watcher_window<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    let window = app
+        .get_webview_window(WINDOW_WATCHER)
+        .ok_or_else(|| "watcher window not found".to_string())?;
+    let target_w = width.clamp(96, 1400);
+    let target_h = height.clamp(192, 1800);
+    let current_pos = window.outer_position().ok();
+    let current_size = window.outer_size().ok();
+    let _ = window.set_size(Size::Physical(PhysicalSize::new(target_w, target_h)));
+    if let (Some(pos), Some(size)) = (current_pos, current_size) {
+        let right = pos.x + size.width as i32;
+        let bottom = pos.y + size.height as i32;
+        let new_x = right - target_w as i32;
+        let new_y = bottom - target_h as i32;
+        let _ = window.set_position(Position::Physical(PhysicalPosition::new(new_x, new_y)));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn set_terminal_watcher_enabled<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+    enabled: bool,
+) -> Result<(), String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    persist_terminal_watcher_enabled(&app, enabled);
+    Ok(())
+}
+
+fn bind_watcher_window_events<R: Runtime>(app: &AppHandle<R>, window: &tauri::WebviewWindow<R>) {
+    if window.label() != WINDOW_WATCHER {
+        return;
+    }
+    let app_for_events = app.clone();
+    window.on_window_event(move |event| match event {
+        tauri::WindowEvent::CloseRequested { api, .. } => {
+            api.prevent_close();
+            persist_terminal_watcher_enabled(&app_for_events, false);
+        }
+        tauri::WindowEvent::Destroyed => {
+            persist_terminal_watcher_enabled(&app_for_events, false);
+        }
+        _ => {}
+    });
+}
+
+fn open_character_watcher_from_tray<R: Runtime>(app: &AppHandle<R>) {
+    persist_terminal_watcher_enabled(app, true);
+}
+
+#[tauri::command]
+fn open_character_debug_watcher<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+) -> Result<(), String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    open_watcher_debug_window(&app)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn close_character_debug_watcher<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+) -> Result<(), String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    if let Some(window) = app.get_webview_window(WINDOW_WATCHER_DEBUG) {
+        let _ = window.close();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn is_character_debug_watcher_open<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+) -> Result<bool, String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    Ok(app.get_webview_window(WINDOW_WATCHER_DEBUG).is_some())
+}
+
+#[tauri::command]
+fn toggle_character_debug_watcher<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+) -> Result<bool, String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    if let Some(window) = app.get_webview_window(WINDOW_WATCHER_DEBUG) {
+        let _ = window.close();
+        return Ok(false);
+    }
+    open_watcher_debug_window(&app)?;
+    Ok(true)
 }
 
 fn available_monitors<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<tauri::Monitor>, String> {
@@ -3505,6 +4026,7 @@ fn stop_terminal_session<R: Runtime>(
             app.exit(0);
         }
     }
+    close_character_windows_if_all_terminals_closed(&app);
     Ok(())
 }
 
@@ -3664,6 +4186,7 @@ fn open_terminal_window_inner<R: Runtime>(
     let query =
         format!("view=terminal&session_id={session_id}&theme={theme_mode}&palette={theme_palette}");
     create_window(&app, &label, &title, &query).map_err(|err| err.to_string())?;
+    sync_watcher_window(&app, &settings);
     mark_terminal_layout_arranged(&app, false);
     let _ = register_terminal_window(&app, &session_id, &label);
     if let Some(window) = app.get_webview_window(&label) {
@@ -3738,18 +4261,6 @@ fn debug_emit_terminal_output<R: Runtime>(
 }
 
 #[tauri::command]
-fn append_terminal_debug_snapshot<R: Runtime>(
-    app: AppHandle<R>,
-    ipc_session_id: String,
-    payload: serde_json::Value,
-) -> Result<(), String> {
-    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
-    let path = terminal_debug_snapshot_path(&app);
-    append_jsonl_entry(&path, payload)?;
-    Ok(())
-}
-
-#[tauri::command]
 fn append_status_debug_event<R: Runtime>(
     app: AppHandle<R>,
     ipc_session_id: String,
@@ -3783,29 +4294,6 @@ fn append_subworker_io_event<R: Runtime>(
     let path = subworker_io_events_path(&app);
     append_jsonl_entry(&path, payload)?;
     Ok(path.to_string_lossy().to_string())
-}
-
-#[tauri::command]
-fn save_debug_screenshot<R: Runtime>(
-    app: AppHandle<R>,
-    window: tauri::Window<R>,
-    ipc_session_id: String,
-) -> Result<String, String> {
-    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
-    let path = terminal_debug_screenshot_path(&app);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
-    }
-    #[cfg(windows)]
-    {
-        save_webview2_screenshot(&window, &path).map_err(|err| err.to_string())?;
-        return Ok(path.to_string_lossy().to_string());
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = window;
-        Err("screenshot is only supported on Windows in P0".to_string())
-    }
 }
 
 #[tauri::command]
@@ -4073,6 +4561,7 @@ fn create_window<R: Runtime>(
             }
             tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed => {
                 mark_terminal_layout_arranged(&app_for_events, false);
+                close_character_windows_if_all_terminals_closed(&app_for_events);
             }
             _ => {}
         });
@@ -4091,6 +4580,13 @@ fn build_tray<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
         true,
         None::<&str>,
     )?;
+    let open_character_watcher = MenuItem::with_id(
+        app,
+        "open_character_watcher",
+        "Open Character Window",
+        true,
+        None::<&str>,
+    )?;
     let arrange_terminals = MenuItem::with_id(
         app,
         "arrange_terminals",
@@ -4101,6 +4597,7 @@ fn build_tray<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
     menu.append(&open_terminal)?;
+    menu.append(&open_character_watcher)?;
     menu.append(&arrange_terminals)?;
     menu.append(&open_settings)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
@@ -4120,6 +4617,9 @@ fn build_tray<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
             id if id == "open_terminal" => {
                 let session_id = generate_terminal_session_id();
                 let _ = open_terminal_window_inner(app.clone(), session_id);
+            }
+            id if id == "open_character_watcher" => {
+                open_character_watcher_from_tray(app);
             }
             id if id == "arrange_terminals" => {
                 let _ = arrange_terminal_windows_inner(app.clone());
@@ -4161,243 +4661,6 @@ fn log_worker_event<R: Runtime>(app: &AppHandle<R>, message: &str) -> Result<()>
         .append(true)
         .open(path)?;
     writeln!(file, "{}", message)?;
-    Ok(())
-}
-
-#[cfg(windows)]
-// WebView2 capture avoids black screenshots from GDI / WebView2 縺ｧ GDI 鮟貞｡励ｊ繧貞屓驕ｿ縺吶ｋ
-fn save_webview2_screenshot<R: Runtime>(window: &tauri::Window<R>, path: &Path) -> Result<()> {
-    let webview = window
-        .webviews()
-        .into_iter()
-        .next()
-        .ok_or_else(|| anyhow::anyhow!("webview not found"))?;
-    let app_handle = window.app_handle().clone();
-    let path_buf = path.to_path_buf();
-    let cleanup_path = path_buf.clone();
-    let path_for_webview = path_buf.clone();
-    let cleanup_for_webview = cleanup_path.clone();
-
-    webview
-        .with_webview(move |webview| {
-            let capture_result: Result<()> = (|| {
-                let controller = webview.controller();
-                let core = unsafe {
-                    controller
-                        .CoreWebView2()
-                        .map_err(|err| anyhow::anyhow!("CoreWebView2 failed: {err}"))?
-                };
-                let method_wide: Vec<u16> = "Page.captureScreenshot"
-                    .encode_utf16()
-                    .chain(Some(0))
-                    .collect();
-                let params_wide: Vec<u16> = "{\"format\":\"png\",\"fromSurface\":true}"
-                    .encode_utf16()
-                    .chain(Some(0))
-                    .collect();
-                let output_path = path_for_webview.clone();
-                let app_handle = app_handle.clone();
-                let handler = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(
-                    move |result: windows::core::Result<()>, response: String| {
-                        if let Err(err) = result {
-                            let _ = log_worker_event(
-                                &app_handle,
-                                &format!("debug screenshot devtools failed: {err}"),
-                            );
-                            WEBVIEW2_CAPTURE_HANDLER.with(|slot| *slot.borrow_mut() = None);
-                            return Ok(());
-                        }
-                        let data = serde_json::from_str::<serde_json::Value>(&response)
-                            .ok()
-                            .and_then(|value| {
-                                value
-                                    .get("data")
-                                    .and_then(|value| value.as_str())
-                                    .map(|value| value.to_string())
-                            })
-                            .unwrap_or_default();
-                        if data.is_empty() {
-                            let _ = log_worker_event(
-                                &app_handle,
-                                "debug screenshot devtools missing data",
-                            );
-                            WEBVIEW2_CAPTURE_HANDLER.with(|slot| *slot.borrow_mut() = None);
-                            return Ok(());
-                        }
-                        match BASE64_STANDARD.decode(data.as_bytes()) {
-                            Ok(bytes) => {
-                                let _ = fs::write(&output_path, bytes);
-                            }
-                            Err(err) => {
-                                let _ = log_worker_event(
-                                    &app_handle,
-                                    &format!("debug screenshot base64 decode failed: {err}"),
-                                );
-                            }
-                        }
-                        WEBVIEW2_CAPTURE_HANDLER.with(|slot| *slot.borrow_mut() = None);
-                        Ok(())
-                    },
-                ));
-                WEBVIEW2_CAPTURE_HANDLER.with(|slot| *slot.borrow_mut() = Some(handler.clone()));
-                unsafe {
-                    core.CallDevToolsProtocolMethod(
-                        PCWSTR(method_wide.as_ptr()),
-                        PCWSTR(params_wide.as_ptr()),
-                        &handler,
-                    )
-                    .map_err(|err| anyhow::anyhow!("CallDevToolsProtocolMethod failed: {err}"))?
-                };
-                Ok(())
-            })();
-
-            if let Err(err) = capture_result {
-                let _ = fs::remove_file(&cleanup_for_webview);
-                let _ = log_worker_event(&app_handle, &format!("debug screenshot failed: {err}"));
-            }
-        })
-        .map_err(|err| anyhow::anyhow!("webview access failed: {err}"))?;
-
-    if let Err(err) = wait_for_screenshot_file(&path_buf, Duration::from_secs(3)) {
-        let _ = fs::remove_file(cleanup_path);
-        return Err(err);
-    }
-    Ok(())
-}
-
-#[cfg(windows)]
-fn wait_for_screenshot_file(path: &Path, timeout: Duration) -> Result<()> {
-    let deadline = Instant::now() + timeout;
-    loop {
-        if let Ok(meta) = fs::metadata(path) {
-            if meta.len() > 0 {
-                return Ok(());
-            }
-        }
-        if Instant::now() >= deadline {
-            anyhow::bail!("CapturePreview timeout");
-        }
-        thread::sleep(Duration::from_millis(50));
-    }
-}
-
-#[cfg(windows)]
-fn save_window_screenshot(raw_hwnd: isize, path: &Path) -> Result<()> {
-    if raw_hwnd == 0 {
-        anyhow::bail!("invalid hwnd");
-    }
-    let mut rect = RECT {
-        left: 0,
-        top: 0,
-        right: 0,
-        bottom: 0,
-    };
-    let ok = unsafe { GetClientRect(raw_hwnd, &mut rect) };
-    if ok == 0 {
-        anyhow::bail!("GetClientRect failed");
-    }
-    let width = rect.right - rect.left;
-    let height = rect.bottom - rect.top;
-    if width <= 0 || height <= 0 {
-        anyhow::bail!("invalid window size");
-    }
-
-    let hdc_window = unsafe { GetDC(raw_hwnd) };
-    if hdc_window == 0 {
-        anyhow::bail!("GetDC failed");
-    }
-    let hdc_mem = unsafe { CreateCompatibleDC(hdc_window) };
-    if hdc_mem == 0 {
-        unsafe {
-            ReleaseDC(raw_hwnd, hdc_window);
-        }
-        anyhow::bail!("CreateCompatibleDC failed");
-    }
-    let hbmp = unsafe { CreateCompatibleBitmap(hdc_window, width, height) };
-    if hbmp == 0 {
-        unsafe {
-            DeleteDC(hdc_mem);
-            ReleaseDC(raw_hwnd, hdc_window);
-        }
-        anyhow::bail!("CreateCompatibleBitmap failed");
-    }
-    let previous = unsafe { SelectObject(hdc_mem, hbmp as _) };
-    unsafe {
-        BitBlt(
-            hdc_mem,
-            0,
-            0,
-            width,
-            height,
-            hdc_window,
-            0,
-            0,
-            SRCCOPY | CAPTUREBLT,
-        );
-    }
-
-    let mut bmi: BITMAPINFO = unsafe { std::mem::zeroed() };
-    bmi.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
-    bmi.bmiHeader.biWidth = width;
-    bmi.bmiHeader.biHeight = -height;
-    bmi.bmiHeader.biPlanes = 1;
-    bmi.bmiHeader.biBitCount = 32;
-    bmi.bmiHeader.biCompression = BI_RGB;
-    let mut buffer = vec![0u8; (width * height * 4) as usize];
-    let lines = unsafe {
-        GetDIBits(
-            hdc_mem,
-            hbmp,
-            0,
-            height as u32,
-            buffer.as_mut_ptr() as *mut _,
-            &mut bmi,
-            DIB_RGB_COLORS,
-        )
-    };
-
-    unsafe {
-        if previous != 0 {
-            SelectObject(hdc_mem, previous);
-        }
-        DeleteObject(hbmp as _);
-        DeleteDC(hdc_mem);
-        ReleaseDC(raw_hwnd, hdc_window);
-    }
-
-    if lines == 0 {
-        anyhow::bail!("GetDIBits failed");
-    }
-
-    write_bmp(path, width, height, &buffer)?;
-    Ok(())
-}
-
-#[cfg(windows)]
-fn write_bmp(path: &Path, width: i32, height: i32, pixels: &[u8]) -> Result<()> {
-    let header_size = 14u32;
-    let info_size = 40u32;
-    let data_size = pixels.len() as u32;
-    let file_size = header_size + info_size + data_size;
-
-    let mut file = fs::File::create(path)?;
-    file.write_all(&[0x42, 0x4d])?;
-    file.write_all(&file_size.to_le_bytes())?;
-    file.write_all(&0u16.to_le_bytes())?;
-    file.write_all(&0u16.to_le_bytes())?;
-    file.write_all(&(header_size + info_size).to_le_bytes())?;
-    file.write_all(&info_size.to_le_bytes())?;
-    file.write_all(&width.to_le_bytes())?;
-    file.write_all(&(-height).to_le_bytes())?;
-    file.write_all(&1u16.to_le_bytes())?;
-    file.write_all(&32u16.to_le_bytes())?;
-    file.write_all(&(BI_RGB as u32).to_le_bytes())?;
-    file.write_all(&data_size.to_le_bytes())?;
-    file.write_all(&0i32.to_le_bytes())?;
-    file.write_all(&0i32.to_le_bytes())?;
-    file.write_all(&0u32.to_le_bytes())?;
-    file.write_all(&0u32.to_le_bytes())?;
-    file.write_all(pixels)?;
     Ok(())
 }
 
@@ -4565,6 +4828,7 @@ fn start_worker_reader<R: Runtime>(app: AppHandle<R>) {
                                 ),
                             );
                         }
+                        close_character_windows_if_all_terminals_closed(&app);
                     }
                     Message::Error(error) => {
                         notify_smoke_error(&app, &error.session_id, &error.message);
@@ -4795,6 +5059,7 @@ fn start_terminal_worker_reader<R: Runtime>(
                                 let _ = process.stop();
                             }
                         }
+                        close_character_windows_if_all_terminals_closed(&app);
                     }
                     Message::Error(error) => {
                         let _ = log_worker_event(
@@ -4969,8 +5234,18 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             load_settings,
             save_settings,
+            save_character_asset,
+            save_character_pack_manifest,
+            list_character_packs,
             list_wsl_distros,
             watcher_window_ready,
+            set_watcher_window_framed,
+            set_terminal_watcher_enabled,
+            resize_watcher_window,
+            open_character_debug_watcher,
+            close_character_debug_watcher,
+            is_character_debug_watcher_open,
+            toggle_character_debug_watcher,
             report_terminal_observation,
             ensure_codex_hook,
             tool_judge,
@@ -4996,11 +5271,9 @@ fn main() {
             ipc_session::ipc_session_close,
             debug_emit_terminal_broadcast,
             debug_emit_terminal_output,
-            append_terminal_debug_snapshot,
             append_status_debug_event,
             append_subworker_debug_event,
             append_subworker_io_event,
-            save_debug_screenshot,
             terminal_smoke
         ])
         .setup(|app| {
@@ -5089,6 +5362,10 @@ mod tests {
             subworker_prompt_template_markdown: "### prompt\n{{last_terminal_output}}\n".to_string(),
             status_debug_enabled: false,
             character_id: "test".to_string(),
+            character_renderer: "3d".to_string(),
+            character_3d_vrm_path: "C:/tmp/test.vrm".to_string(),
+            character_3d_scale: 1.2,
+            character_3d_yaw_deg: -15.0,
             log_retention_lines: 100,
             terminal_watcher_enabled: true,
             terminal_font_family:

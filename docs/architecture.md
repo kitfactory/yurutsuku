@@ -6,12 +6,12 @@
 
 #1. アーキテクチャ概要
 - UI: Tauri + HTML/TypeScript + xterm.js（Terminal/Watcher/tint/Settings）
-- Tray: 運用メニューは `Open Terminal Window` / `Arrange Terminal Windows` / `Open Settings` / `Quit` に限定し、`worker_*` のデバッグ操作は常時表示しない
+- Tray: 運用メニューは `Open Terminal Window` / `Open Character Window` / `Arrange Terminal Windows` / `Open Settings` / `Quit` に限定し、`worker_*` のデバッグ操作は常時表示しない
 - Orchestrator: Rust（Session/Hook/Judge/StateIntegrator/IPC）
 - Worker: Rust（ConPTY で PTY を実行、Windows では余分なコンソールを出さない）
 - Protocol: NDJSON
 - Storage: settings.json
-- Debug: デバッグ UI（バッジ/スナップショット/スクショ）+ worker_smoke.log
+- Debug: JSONLログ（`status_debug_events.jsonl` / `subworker_debug_events.jsonl` / `subworker_io_events.jsonl`）+ worker_smoke.log
 - Environment: Windows の User/System 環境変数を統合して PTY に渡す。`NAGOMI_SESSION_ID` を付与する
 - PATH は不足分のみ後ろに追加し、User/System の不足分を補完する
 - Windows 設定画面では `Windows` カテゴリを分離し、terminal 起動方式（`cmd`/`powershell`/`wsl`）と `wsl` distro 指定を行う
@@ -26,6 +26,26 @@
 - Terminal の `:ng` は **Frontend Internal Command Layer** で解釈し、PTY へ送信しない（初期対応は `:ng ping`）
 - SubWorker はターミナル状態とモード（`ガンガン` / `慎重に` / `アドバイス`）を見て、入力代行または表示専用アドバイスを実行する
 - SubWorker 稼働中は対象ターミナルへ緑の稼働オーバーレイを適用し、終了後は元の状態色表示へ戻す
+- Watcher は通常表示（256x512, 右下）とデバッグ表示（480x960, 中央）を分離し、どちらも背景透明で描画する
+- Watcher の 3D描画は CDN 依存を複数候補（esm.sh / jsdelivr）で初期化し、VRM読込失敗時は機能実証用 3Dプロトタイプモデルへフォールバックする（依存ロード失敗時のみ2Dへ戻す）
+- キャラクター状態は terminal 状態とは別に集約し、固定モーションを `neutral` / `processing` / `waiting` / `need_user` の4状態で扱う。ワンショットは `completion` / `error_alert` を重ねて再生する
+- `error_alert` は連続発火をクールダウンで抑止し、`completion` は処理完了遷移時のみ再生する
+- 透明 watcher window は通常 watcher / `watcher-debug` とも UI フレームを選択状態（focus または pointer inside）で切り替える。native frame（decorations）も両者で同じ選択状態に合わせて切り替える
+- watcher 系IPCの発火条件は最小化する。`watcher_window_ready` は初期化時1回、`set_watcher_window_framed` は通常 watcher / `watcher-debug` の選択状態遷移時のみ、`resize_watcher_window` は通常 watcher のリサイズハンドル操作時のみ許可する。pointer enter/leave は選択状態更新として扱い、pointer down は focus 通知欠落を補う 1 回のみ再同期を許可する
+- `set_watcher_window_framed` / `resize_watcher_window` はともに Frontend 側で直列化し、in-flight 中は同時実行しない（pending は最新値へ上書き）
+- Watcher 3D は `loadWatcher3dModel` の同一路径読込を in-flight Promise で畳み、重複ロードを防ぐ。描画は pixel ratio 上限とフレーム間引きで GPU 負荷を抑える
+- 起動直後は settings hydration 完了まで通常 watcher の表示を保留し、`renderer=3d` の場合は 2D を挟まず `is-3d-loading -> is-3d` で描画を切り替える
+- watcher には準備中専用レイヤ（Div）を持たせ、settings hydration 中および 3D 再読込中は `準備中...` を表示する（2D/3D 共通）
+- 3D依存読込/VRM読込にはタイムアウトを設定し、ハングした Promise を再利用しない。期限超過時は `is-preparing` を解除してフォールバック経路へ戻す
+- `load_settings` は strict timeout 付きで複数回試行し、IPC がぶら下がる環境でも `settingsHydrated` を確実に進めて watcher の準備中固定を防ぐ
+- built-in pack fetch / stored pack list は timeout 付きで取得し、失敗時は空配列へフォールバックして `reloadCharacterPackCatalog` を完走させる
+- watcher の読み込み各段階は `status_debug_events.jsonl` へ `watcher-*` イベントを記録する。`preparing` が長時間継続した場合は `watcher-preparing-stuck` を1回出力して詰まり箇所を特定しやすくする
+- `settingsHydrated` を `true` にした直後に `applyTerminalWatcherVisibility('settings-hydrated')` を呼び、`refreshWatcherRendererMode` の再評価を強制する
+- `renderer=3d` かつ VRM 設定済みなら通常 watcher でも 3D 表示する。`watcher-debug` は大きめ 3D プレビュー用途として併用する
+- 通常 watcher は UI フレーム右下のリサイズハンドルでサイズ変更できる。サイズ変更は `resize_watcher_window` コマンドで行い、右下アンカーを維持する
+- 通常 watcher の close はフロント側で `set_terminal_watcher_enabled(false)` を呼んで即時 hide し、保存待ちで UI をブロックしない。保存失敗時のみ `save_settings` をフォールバックする
+- ターミナルライフサイクル終了時（terminal window 0 かつ session/worker 0）は、キャラクター表示ウィンドウ（通常 watcher / `watcher-debug`）を Rust 側で自動クローズし、孤立表示を残さない。新規 terminal を開いたときは `terminal_watcher_enabled=true` なら通常 watcher を再表示する
+- デバッグ表示は focus 時にデバッグフレームを表示し、`閉じる` ボタンまたはタイトルバー `×` で `watcher-debug` を閉じられる（`Esc` は割り当てない）
 - Windows ショートカット（`.lnk`）は既定ターゲットが Node.js の場合に `nodew.exe` を優先し、未検出時は `wscript.exe + *.vbs` の非表示ランチャーへ切替えて余分なウィンドウ表示を抑える（最終フォールバックのみ `node.exe`）
 
 #2. concept との対応
@@ -39,6 +59,7 @@
 | F-6 Context Menu Spawn | `apps/orchestrator/src/index.html` + `open_terminal_window_same_position_for_session` | 右クリックメニューから同位置に新規 terminal を追加 |
 | F-7 Selection Handoff | `pickup_terminal_window` + `SelectionState` + `terminal-focus-transition` | 整列済み時のみ非選択 terminal の選択交代と拡大表示を同期（未整列時は focus のみ） |
 | F-8 SubWorker Assist | `SubWorkerCoordinator` + terminal local output + settings | モード別支援（入力代行/表示専用アドバイス）と稼働可視化 |
+| F-9 Character 3D Prototype | `watcher-debug` window + 3D renderer | Pack 選択済みキャラクターを大きめ透明デバッグ表示で確認する |
 
 #3. I/F 設計
 ## 3.1 UI → Orchestrator（Tauri Command）
@@ -50,11 +71,16 @@
 - `open_terminal_window_by_index_same_position(index)`（クリック元の位置/サイズを引き継いで新規 terminal を開く）
 - `open_terminal_window_same_position_selected()`（選択中/フォーカス中の terminal の位置/サイズを引き継いで新規 terminal を開く）
 - `open_terminal_window_same_position_for_session(sessionId)`（指定 terminal の位置/サイズを引き継いで新規 terminal を開く）
+- `is_character_debug_watcher_open(ipc_session_id)`（キャラクターデバッグ表示が開いているか確認する）
+- `toggle_character_debug_watcher(ipc_session_id)`（キャラクターデバッグ表示をトグル開閉する）
+- `open_character_debug_watcher(ipc_session_id)`（キャラクターデバッグ表示ウィンドウを開く）
+- `close_character_debug_watcher(ipc_session_id)`（キャラクターデバッグ表示ウィンドウを閉じる）
+- `is_character_debug_watcher_open` / `toggle_character_debug_watcher` がタイムアウトした場合、Frontend は通常 watcher を 3D プレビュー代替として開閉するフォールバックを持つ（既存 watcher 設定は復元する）
+- `set_watcher_window_framed(framed, ipc_session_id)`（通常 watcher / `watcher-debug` の native frame を選択状態に合わせて切り替える）
+- `resize_watcher_window(width, height, ipc_session_id)`（通常 watcher の UIリサイズハンドル操作時のみ呼ぶ。送信は直列化し、最新サイズのみ適用する）
 - `tool_judge(tool, tail)` -> `{ state, summary }`
 - `set_subworker_paused(sessionId, paused)`（サブワーカー一時停止/再開）
 - `skip_subworker_once(sessionId)`（次回 1 回分のみサブワーカー実行を抑止）
-- `append_terminal_debug_snapshot(payload)`（開発用）
-- `save_debug_screenshot(ipc_session_id)`（開発用）
 
 ## 3.2 Orchestrator → UI（Tauri Event）
 - `terminal-output { session_id, stream, chunk }`
@@ -141,16 +167,6 @@
 - `start(on_event)` / `stop()`
 - `source_session_id` を伝播して関連付け（PTY セッションと hook を結びつける）
 
-### DebugSnapshot
-- 入力: UI 上の `save debug snapshot`
-- 出力: `terminal_debug_snapshots.jsonl`（JSONL, `ts_ms` 付与, `state_transitions` を含む）
-
-### DebugScreenshot
-- 入力: UI 上の `save debug screenshot`
-- 出力: `terminal_debug_screenshots/terminal-<ts>.png`
-- 実装: WebView2 DevTools（`Page.captureScreenshot`）で取得し保存
-- 失敗時: `worker_smoke.log` に理由を記録（best-effort）
-
 ### Frontend Internal Command Layer（`:ng`）
 - 配置: `apps/orchestrator/src/index.html`（入力行解釈とローカル表示）
 - 入力: キー入力バッファ（行単位）
@@ -170,10 +186,13 @@
 8) 緑の稼働オーバーレイを適用/解除する
 9) `show_advice` は Terminal 本文の表示専用ローカル出力へ追記し、PTY I/O へは流さない
 10) `subworker-decision` / `subworker-debug-events` を監査ログへ保存し、`start/skip/result` と理由を後追い参照可能にする
+11) デバッグ表示は `open_character_debug_watcher` で `watcher-debug` を開き、通常 Watcher と同じ `terminal-aggregate-state` を受信して状態同期する。native frame は通常 watcher / `watcher-debug` とも `set_watcher_window_framed` で focus/blur に合わせて制御する。終了操作は `close_character_debug_watcher`（UIボタン）またはタイトルバー `×` で行う
 
 #5. ストレージ
 - `settings.json`: 通知/AI判定/Terminal 設定を保存
-- デバッグスナップショット（開発用途）: `AppData/Roaming/com.kitfactory.nagomi/terminal_debug_snapshots.jsonl`
+- 状態デバッグログ: `AppData/Roaming/com.kitfactory.nagomi/status_debug_events.jsonl`
+- サブワーカーデバッグログ: `AppData/Roaming/com.kitfactory.nagomi/subworker_debug_events.jsonl`
+- サブワーカー入出力ログ: `AppData/Roaming/com.kitfactory.nagomi/subworker_io_events.jsonl`
 
 #6. Settings
 - `llm_enabled` / `llm_tool` / `silence_timeout_ms`
@@ -225,8 +244,9 @@
 
 #10. 観測/デバッグ
 - `terminal-output-broadcast`（任意）
-- ターミナル入力の debug snapshot 取得
-- `subworker-decision`（mode/confidence/action/result/reason）を debug snapshot とログに残す
+- `status_debug_events.jsonl`（state/judge/hook/watcher 系）
+- `subworker_debug_events.jsonl`（mode/confidence/action/result/reason）
+- `subworker_io_events.jsonl`（subworker 入出力）
 
 #11. E2E
 - tauri-driver を用いた UI/E2E

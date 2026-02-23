@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "packs": [
+    {
+      "pack_id": "nikechan-v1",
+      "display_name": "Nikechan v1 (remote)",
+      "renderer": "3d",
+      "model_vrm_path": "https://raw.githubusercontent.com/tegnike/nikechan-assets/main/vrms/nikechan_v1.vrm",
+      "motions": {},
+      "expressions": {},
+      "default_scale": 1.0,
+      "default_yaw_deg": 0.0,
+      "source": "builtin:nikechan-assets"
+    },
+    {
+      "pack_id": "nikechan-v2",
+      "display_name": "Nikechan v2 (remote)",
+      "renderer": "3d",
+      "model_vrm_path": "https://raw.githubusercontent.com/tegnike/nikechan-assets/main/vrms/nikechan_v2.vrm",
+      "motions": {},
+      "expressions": {},
+      "default_scale": 1.0,
+      "default_yaw_deg": 0.0,
+      "source": "builtin:nikechan-assets"
+    },
+    {
+      "pack_id": "nikechan-v2-outerwear",
+      "display_name": "Nikechan v2 Outerwear (remote)",
+      "renderer": "3d",
+      "model_vrm_path": "https://raw.githubusercontent.com/tegnike/nikechan-assets/main/vrms/nikechan_v2_outerwear.vrm",
+      "motions": {},
+      "expressions": {},
+      "default_scale": 1.0,
+      "default_yaw_deg": 0.0,
+      "source": "builtin:nikechan-assets"
+    }
+  ]
+}

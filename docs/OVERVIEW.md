@@ -16,6 +16,23 @@
 - グローバル `nagomi` コマンドで `--restart`（Orchestrator 強制再起動）と `--status`（実行バイナリ/health 表示、起動/停止しない）と `--debug-paths`（ログパス表示、起動/停止しない）と `debug-tail`（直近ログ要約、起動/停止しない）を使えるようにする
   - テーマは 8 種類（light-sand / light-sage / light-sky / light-mono / dark-ink / dark-ocean / dark-ember / dark-mono）を 1 つの選択UIで提供する
   - 設定画面のレスポンシブを安定化し、狭幅では 1 列、十分な幅で 2 列表示に切り替える
+  - キャラクター素材を `pack.json` ベースで管理し、`モデル/モーション/表情` の拡張を見据えた追加導線（一覧/選択/保存）と `Nikechan` 既存VRMの組み込みパックをプロトタイプとして整備する
+  - キャラクターデバッグ表示（大きめ・背景透明）を Settings から開閉できるようにし、3D表示の確認を行いやすくする
+  - `watcher-debug` 開閉コマンドがタイムアウトする環境では、Settings のデバッグトグルは通常 watcher を 3Dプレビュー代替として開閉するフォールバックを使う（既存 watcher ON/OFF は復元）
+  - 3Dキャラクター表示は CDN 依存の読み込みに複数候補を持ち、VRM読込失敗時は機能実証用の3Dプロトタイプモデルへフォールバックする（依存ロード失敗時のみ2Dへ戻す）
+  - Watcher 3D は同一 VRM 読込の多重起動を抑止し、描画は低負荷モード（pixel ratio 上限 + 描画間引き）で UI 応答性を優先する
+  - Watcher 3D は再計算/読込中に 3D を一旦非表示にし、完了後に再表示する（読込中は loading 表示）
+  - 起動時は settings 読込完了まで watcher 描画を保留し、`renderer=3d` の場合に 2D を挟まず loading から 3D へ遷移する
+  - watcher の準備中は 2D/3D 共通で専用 Div に `準備中...` を表示し、読込中であることを明示する
+  - Watcher 3D の依存/モデル読込にはタイムアウトを設け、ハング時は準備中表示を解除してフォールバックへ遷移する
+  - settings 読込（`load_settings`）にも試行ごとのタイムアウトを設け、IPCぶら下がり時に `準備中` 固定にならないようにする
+  - Watcher のデバッグ時は `status_debug_events.jsonl` に `watcher-*` イベント（`load-settings` / `pack-catalog` / `deps` / `model-load` / `fallback` / `preparing-stuck`）を追記し、`nagomi debug-tail watcher --n <N>` で段階別に追跡できるようにする
+  - キャラクターパック読込（built-in fetch / stored list）は timeout 付きで実行し、読込ハング時でも `settingsHydrated` が進んで `準備中` 固定にならないようにする
+  - `settingsHydrated=true` へ遷移した瞬間に watcher の表示再評価を強制し、`settings-hydration` のまま停止しないようにする
+  - 通常 watcher は `renderer=3d` かつ VRM 設定済みで 3D を表示し、`watcher-debug` は大きめプレビュー用途として併用する
+  - キャラクターモーションは集約状態ベースの固定4状態（`neutral` / `processing` / `waiting` / `need_user`）+ トリガー2状態（`completion` / `error_alert`）でプロトタイプ実装し、モーション素材差し替えに備える
+  - 通常 watcher は 2D/3Dキャラクター表示を最小UIで行い、デバッグフレーム・デバッグボタン（`debug ui` トグル/スナップショット/スクリーンショット）は表示しない
+  - watcher 操作系デバッグは UI ではなく `status_debug_events.jsonl` の `watcher-*` ログ（`nagomi debug-tail watcher`）で追跡する
   - Terminal 右クリックメニューに `新しいターミナルを開く` を追加し、クリック元と同位置に新規ターミナルを開けるようにする
   - 非選択ターミナルを選んだときの選択交代は維持し、拡大表示は整列済み状態でのみ適用する（未整列時はフォーカスのみ）
   - 選択ウィンドウ交代時のフォーカス切替アニメーションを高速化する
@@ -58,6 +75,8 @@
   - サブワーカーを「一時停止」「今回だけスキップ」できる即時操作は Settings > AI Coding Agent に置き、全判断ログ（mode/confidence/action/result）を残す
   - 既定値（フォント/サイズ/scrollback 等）の参照元を docs→実装まで辿れる状態にする（値は当面ハードコードでOK）
   - トレイから設定画面を開ける導線を整える
+  - トレイに `Open Character Window` を追加し、通常 watcher を閉じたあとでも再表示できるようにする
+  - すべてのターミナルが終了したら、キャラクター表示ウィンドウ（通常 watcher / `watcher-debug`）も自動で閉じる
   - docs（正本）を実装に追従させ、将来の改修が迷子にならない状態にする
 - 非ゴール（やらないこと）:
   - P1 (WSL Worker) の実装
