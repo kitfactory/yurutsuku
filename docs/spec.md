@@ -21,7 +21,7 @@
 2.8 Given: タイル表示を行う, When: セッションが更新される, Then: 小さな表情/状態/ログがタイル上に表示される  
 2.9 Given: タイルを選択する, When: ピックアップする, Then: 対応するターミナルウィンドウを同じモニタの作業領域内で中央に寄せ、作業領域の約 80% で大きく表示する  
 2.9.0 Given: 複数のターミナルがあり整列済みである, When: 非選択ターミナルをユーザーが選択する（Run タイルの選択 / Terminal 本文クリック）, Then: SelectionState を選択先へ交代し、選択ウィンドウの拡大表示を適用する  
-2.9.1 Given: Terminal 本文で右クリックメニューを開く, When: `新しいターミナルを開く` を選ぶ, Then: クリック元と同じ位置/サイズで新しいターミナルウィンドウを 1 つ追加する（取得できない場合は通常位置で追加する）  
+2.9.1 Given: Terminal 本文を操作する, When: `Shift + ダブルクリック` する, Then: クリック元と同じ位置/サイズで新しいターミナルウィンドウを 1 つ追加する（取得できない場合は通常位置で追加する）  
 2.9.2 Given: すでに選択中のターミナルを再選択する, When: 選択操作を受ける, Then: SelectionState は維持し、過剰なフォーカス遷移アニメーションは行わない  
 2.9.3 Given: 選択ウィンドウを交代する, When: 縮小→拡大アニメーションを実行する, Then: 縮小は 60-100ms、拡大は 80-140ms、合計は 240ms 以下を目標にする  
 2.9.4 Given: 連続で選択交代する, When: 先行アニメーションが未完了のまま次の交代が来る, Then: 先行遷移をキャンセルして最新の交代のみを適用し、残像やジャンプを抑える  
@@ -54,6 +54,7 @@
 2.24 Given: ターミナルが表示中, When: 観測（Watcher）を表示する, Then: **全ターミナルを代表する状態**を右下のキャラクターで示す（実装参照: `apps/orchestrator/src/assets/watcher/nagomisan_*.png` / 元データ: `apps/orchestrator/src/assets/watcher/nagomi_fullbody_icons_96_v3.zip`）  
 2.24.1 Given: 観測（Watcher）を表示する, When: 表示設定が ON, Then: **別ウィンドウ（透過）**でフルボディ（256x512）を右下に表示する  
 2.24.2 Given: 観測（Watcher）を表示する, When: 表示設定が OFF, Then: 透過ウィンドウを表示しない  
+2.24.2.1 Given: `view=watcher` の専用ウィンドウを開く, When: watcher view を初期化する, Then: terminal view 用の `terminal-board` は DOM から除外し、キャラクター表示との重なりを防ぐ  
 2.24.3 Given: 観測表示を行う, When: 全体状況で表情/モーションを選ぶ, Then: `need_input` は呼びかけ、`running` は作業中、`failure` は困った、`idle/success` は眠い表情として表示する  
 2.24.4 Given: 観測表示を行う, When: 3Dキャラ（VRM）が設定済み, Then: 3D表示を優先する（未設定なら2D画像を表示する）  
 2.24.4.1 Given: 3D表示を初期化する, When: VRM読み込みに失敗する, Then: 機能実証向けの 3Dプロトタイプモデルへフォールバックし、3D canvas 自体は維持する（依存ロード自体に失敗した場合のみ2Dへフォールバック）  

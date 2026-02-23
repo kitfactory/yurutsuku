@@ -18,7 +18,7 @@
 - Windows 設定画面では terminal 操作ショートカット（整列/次へ移動/前へ移動）を編集でき、既定は `Ctrl+Shift+Y/J/K` とする
 - テーマは 8 種類（`light-sand` / `light-sage` / `light-sky` / `light-mono` / `dark-ink` / `dark-ocean` / `dark-ember` / `dark-mono`）を 1 つの選択UIで選び、内部では mode（`dark`/`light`）+ palette に正規化して CSS 変数を切り替える
 - 設定画面のレスポンシブは「十分な幅で 2 列、狭幅で 1 列」に固定し、項目幅を潰さない
-- Terminal 右クリックメニューは「既存ウィンドウの位置/サイズを複製して新規ウィンドウを開く」経路を持つ
+- Terminal は `Shift + ダブルクリック` で「既存ウィンドウの位置/サイズを複製して新規ウィンドウを開く」経路を持つ
 - 非選択ターミナルの選択による拡大表示は「整列済みレイアウトが維持されている場合」に限定し、未整列時は SelectionState/Focus のみ更新する
 - 選択ウィンドウ交代アニメーションは短時間（縮小 60-100ms / 拡大 80-140ms / 合計 240ms 以下）で完了させ、連続交代時は旧遷移をキャンセルして最新遷移を優先する
 - `未整列` の判定は「起動後未整列」「ユーザー操作による move/resize/maximize」「ウィンドウ増減」で `arranged=false` とし、`Arrange Terminal Windows` 実行時のみ `arranged=true` に戻す
@@ -43,6 +43,7 @@
 - `settingsHydrated` を `true` にした直後に `applyTerminalWatcherVisibility('settings-hydrated')` を呼び、`refreshWatcherRendererMode` の再評価を強制する
 - `renderer=3d` かつ VRM 設定済みなら通常 watcher でも 3D 表示する。`watcher-debug` は大きめ 3D プレビュー用途として併用する
 - 通常 watcher は UI フレーム右下のリサイズハンドルでサイズ変更できる。サイズ変更は `resize_watcher_window` コマンドで行い、右下アンカーを維持する
+- watcher 専用ウィンドウ（`view=watcher`）では `terminal-board` を初期化時に DOM から除外し、Terminal UI とキャラクター表示の重なりを防ぐ
 - 通常 watcher の close はフロント側で `set_terminal_watcher_enabled(false)` を呼んで即時 hide し、保存待ちで UI をブロックしない。保存失敗時のみ `save_settings` をフォールバックする
 - ターミナルライフサイクル終了時（terminal window 0 かつ session/worker 0）は、キャラクター表示ウィンドウ（通常 watcher / `watcher-debug`）を Rust 側で自動クローズし、孤立表示を残さない。新規 terminal を開いたときは `terminal_watcher_enabled=true` なら通常 watcher を再表示する
 - デバッグ表示は focus 時にデバッグフレームを表示し、`閉じる` ボタンまたはタイトルバー `×` で `watcher-debug` を閉じられる（`Esc` は割り当てない）
@@ -56,7 +57,7 @@
 | F-3 StateIntegrator + ToolJudge | `apps/orchestrator/src/state_integrator.js` + `tool_judge` | 終了候補の判定と状態統合 |
 | F-4 Grouping | UI + Orchestrator（将来） | Workspace / Task Group / Pane の整理 |
 | F-5 Settings Theme/Responsive | `apps/orchestrator/src/index.html`（settings theme / responsive css） | モノクロテーマ追加と設定画面の崩れ防止 |
-| F-6 Context Menu Spawn | `apps/orchestrator/src/index.html` + `open_terminal_window_same_position_for_session` | 右クリックメニューから同位置に新規 terminal を追加 |
+| F-6 Shift Double Click Spawn | `apps/orchestrator/src/index.html` + `open_terminal_window_same_position_for_session` | `Shift + ダブルクリック` で同位置に新規 terminal を追加 |
 | F-7 Selection Handoff | `pickup_terminal_window` + `SelectionState` + `terminal-focus-transition` | 整列済み時のみ非選択 terminal の選択交代と拡大表示を同期（未整列時は focus のみ） |
 | F-8 SubWorker Assist | `SubWorkerCoordinator` + terminal local output + settings | モード別支援（入力代行/表示専用アドバイス）と稼働可視化 |
 | F-9 Character 3D Prototype | `watcher-debug` window + 3D renderer | Pack 選択済みキャラクターを大きめ透明デバッグ表示で確認する |

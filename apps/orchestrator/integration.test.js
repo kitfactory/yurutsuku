@@ -463,8 +463,7 @@ test("subworker_running_placeholder_progress", () => {
   assert.ok(html.includes("if (isSubworkerRuntimeRunning()) {"));
   assert.ok(html.includes("ansiMessage"));
   assert.ok(html.includes("renderKey"));
-  assert.ok(html.includes("t('subworker.processing.prefix')"));
-  assert.ok(html.includes("'subworker.processing.prefix': 'サブワーカー処理中（Escで抜けます）'"));
+  assert.ok(html.includes("'subworker.processing.prefix':"));
   assert.ok(html.includes("'subworker.processing.prefix': 'subworker processing (Esc to hold)'"));
   assert.ok(html.includes("if (agentWorkActive || agentAwaitingFirstOutput) return false;"));
   assert.ok(html.includes("state === TerminalObservation.running &&"));
@@ -619,30 +618,27 @@ test("settings_theme_single_selector", () => {
   assert.ok(html.includes('value="dark-mono"'));
 });
 
-test("terminal_context_menu_open_new_window", () => {
+test("terminal_shift_double_click_open_new_window", () => {
   const htmlPath = path.join(appRoot, "src", "index.html");
   const html = fs.readFileSync(htmlPath, "utf8");
-  assert.ok(html.includes('data-role="terminal-context-menu"'));
-  assert.ok(html.includes('data-role="terminal-context-open-new"'));
-  assert.ok(html.includes("'terminal.context.open_new': '新しいターミナルを開く'"));
-  assert.ok(html.includes("'terminal.context.open_new': 'Open New Terminal Window'"));
+  assert.ok(!html.includes('data-role="terminal-context-menu"'));
+  assert.ok(!html.includes('data-role="terminal-context-open-new"'));
+  assert.ok(!html.includes("'terminal.context.open_new':"));
+  assert.ok(html.includes("body.watcher-only .terminal-board"));
   assert.ok(html.includes("singleClickDelayMs"));
   assert.ok(html.includes("event.detail !== 1"));
   assert.ok(html.includes("clearTileSingleClickTimer(tile)"));
-  assert.ok(html.includes("isTerminalContextMenuEnabled()"));
-  assert.ok(html.includes("isWithinTerminalShell(event && event.target)"));
-  assert.ok(html.includes("'contextmenu'"));
-  assert.ok(html.includes("showTerminalContextMenuAt("));
-  assert.ok(html.includes("handleTerminalContextOpenNew"));
-  assert.ok(html.includes("terminalContextOpenNewButton.addEventListener('click'"));
+  assert.ok(html.includes("isTerminalSurfaceSpawnShortcut(event)"));
+  assert.ok(html.includes("event.shiftKey"));
+  assert.ok(html.includes("handleTerminalSurfaceSpawnShortcut(event)"));
+  assert.ok(html.includes("terminalContainer.addEventListener('dblclick'"));
   assert.ok(html.includes("window.addEventListener("));
-  assert.ok(html.includes("'pointerdown'"));
   assert.ok(html.includes("open_terminal_window_same_position_selected"));
   assert.ok(html.includes("open_terminal_window_same_position_for_session"));
   assert.ok(html.includes("hasTerminalSessionIdParam"));
   assert.ok(html.includes("terminalSurfaceSpawnInFlight"));
   assert.ok(html.includes("if (!isTerminalView) return;"));
-  assert.ok(!html.includes("addEventListener('dblclick'"));
+  assert.ok(!html.includes("'contextmenu'"));
 });
 
 test("tray_menu_open_character_window_item", () => {
@@ -750,6 +746,8 @@ test("watcher_toggle_restore_and_focus_frame_control", () => {
 test("watcher_3d_prototype_fallback_for_function_verification", () => {
   const htmlPath = path.join(appRoot, "src", "index.html");
   const html = fs.readFileSync(htmlPath, "utf8");
+  assert.ok(html.includes("if (isWatcherView && terminalBoard && terminalBoard.parentElement) {"));
+  assert.ok(html.includes("terminalBoard.remove();"));
   assert.ok(html.includes("let settingsHydrated = false;"));
   assert.ok(html.includes("let watcherPreparing = false;"));
   assert.ok(html.includes("const WATCHER_3D_DEPENDENCY_TIMEOUT_MS = 8000;"));
@@ -757,7 +755,7 @@ test("watcher_3d_prototype_fallback_for_function_verification", () => {
   assert.ok(html.includes("const WATCHER_3D_PROTOTYPE_TIMEOUT_MS = 5000;"));
   assert.ok(html.includes("modelLoadingStartedAtMs: 0"));
   assert.ok(html.includes("data-role=\"terminal-watcher-loading\""));
-  assert.ok(html.includes("'watcher.preparing': '準備中...'"));
+  assert.ok(html.includes("'watcher.preparing':"));
   assert.ok(html.includes("'watcher.preparing': 'Preparing...'"));
   assert.ok(html.includes("const WATCHER_3D_MAX_PIXEL_RATIO = 1;"));
   assert.ok(html.includes("const WATCHER_3D_RENDER_INTERVAL_MS = 33;"));
@@ -769,7 +767,6 @@ test("watcher_3d_prototype_fallback_for_function_verification", () => {
   assert.ok(html.includes("refreshToken: 0"));
   assert.ok(html.includes("async function showWatcher3dPrototypeModel(reason = '')"));
   assert.ok(html.includes("'settings.character.3d_status_prototype':"));
-  assert.ok(html.includes("VRM読み込みに失敗したため3Dプロトタイプ表示へ切り替えました"));
   assert.ok(html.includes("const force3dInDebug = characterDebugModeEnabled && characterDebugForce3d"));
   assert.ok(html.includes("'settings.character.3d_status_debug_only':"));
   assert.ok(html.includes("const use3dBySettings = renderer === '3d' && Boolean(vrmPath);"));

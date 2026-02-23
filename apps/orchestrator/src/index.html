@@ -796,8 +796,8 @@
       body.watcher-only .run-board,
       body.watcher-only .settings-board,
       body.watcher-only .mode-switch,
+      body.watcher-only .terminal-board,
       body.watcher-only #terminal-container,
-      body.watcher-only .terminal-context-menu,
       body.watcher-only .subworker-active-overlay,
       body.watcher-only .subworker-advice-overlay,
       body.watcher-only .subworker-active-banner,
@@ -869,37 +869,6 @@
         height: 100%;
         position: relative;
         z-index: 1;
-      }
-
-      .terminal-context-menu {
-        position: absolute;
-        min-width: 220px;
-        max-width: min(320px, calc(100% - 12px));
-        padding: 6px;
-        border-radius: 10px;
-        border: 1px solid rgba(148, 163, 184, 0.35);
-        background: rgba(15, 23, 42, 0.96);
-        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
-        z-index: 12;
-        pointer-events: auto;
-      }
-
-      .terminal-context-menu-item {
-        display: block;
-        width: 100%;
-        text-align: left;
-        padding: 8px 10px;
-        border-radius: 8px;
-        border: none;
-        background: transparent;
-        color: #e2e8f0;
-        font-size: 12px;
-        font-family: 'Space Grotesk', sans-serif;
-        cursor: pointer;
-      }
-
-      .terminal-context-menu-item:hover {
-        background: rgba(148, 163, 184, 0.22);
       }
 
       .panel {
@@ -1499,17 +1468,6 @@
         <h2 data-i18n="terminal.title">terminal</h2>
         <div class="terminal-shell" data-role="terminal-shell">
           <div id="terminal-container" data-role="terminal-container"></div>
-          <div class="terminal-context-menu hidden" data-role="terminal-context-menu" role="menu">
-            <button
-              class="terminal-context-menu-item"
-              data-role="terminal-context-open-new"
-              data-i18n="terminal.context.open_new"
-              type="button"
-              role="menuitem"
-            >
-              新しいターミナルを開く
-            </button>
-          </div>
           <div class="subworker-active-overlay" data-role="subworker-active-overlay"></div>
           <div class="subworker-advice-overlay" data-role="subworker-advice-overlay"></div>
           <div
@@ -1524,7 +1482,7 @@
 
       <section class="watcher-board hidden" data-role="watcher-board">
         <div class="watcher-shell" data-role="watcher-shell">
-          <div class="terminal-watcher" data-role="terminal-watcher" title="running">
+          <div class="terminal-watcher" data-role="terminal-watcher">
             <div class="terminal-watcher-3d" data-role="terminal-watcher-3d"></div>
             <div
               class="terminal-watcher-loading"
@@ -2044,7 +2002,6 @@
           'run.sample.ship': 'ship',
           'run.sample.ship_log': '[log] failed: auth',
           'terminal.title': 'ターミナル',
-          'terminal.context.open_new': '新しいターミナルを開く',
           'subworker.processing.prefix': 'サブワーカー処理中（Escで抜けます）',
           'subworker.confidence.label': '自信度',
           'subworker.threshold.label': '閾値判定',
@@ -2219,7 +2176,6 @@
           'run.sample.ship': 'ship',
           'run.sample.ship_log': '[log] failed: auth',
           'terminal.title': 'terminal',
-          'terminal.context.open_new': 'Open New Terminal Window',
           'subworker.processing.prefix': 'subworker processing (Esc to hold)',
           'subworker.confidence.label': 'confidence',
           'subworker.threshold.label': 'threshold',
@@ -2414,10 +2370,6 @@
         '[data-role="character-debug-frame-resize"]'
       );
       const terminalShell = document.querySelector('[data-role="terminal-shell"]');
-      const terminalContextMenu = document.querySelector('[data-role="terminal-context-menu"]');
-      const terminalContextOpenNewButton = document.querySelector(
-        '[data-role="terminal-context-open-new"]'
-      );
       const subworkerActiveOverlay = document.querySelector('[data-role="subworker-active-overlay"]');
       const subworkerAdviceOverlay = document.querySelector('[data-role="subworker-advice-overlay"]');
       const subworkerActiveBanner = document.querySelector('[data-role="subworker-active-banner"]');
@@ -2592,6 +2544,11 @@
       const characterDebugWidth = queryNumber('character_debug_width', 480, 96, 1400);
       const characterDebugHeight = queryNumber('character_debug_height', 960, 192, 1800);
       const characterDebugState = String(urlQuery.get('character_debug_state') || '').trim();
+      if (isWatcherView && terminalBoard && terminalBoard.parentElement) {
+        // Hard-separate watcher from terminal UI to avoid any overlap if class toggles are delayed.
+        // class 切替の遅延があっても重ならないよう、watcher view では terminal-board を物理的に除外する。
+        terminalBoard.remove();
+      }
       if (characterDebugModeEnabled) {
         document.documentElement.style.setProperty('--watcher-width', `${characterDebugWidth}px`);
         document.documentElement.style.setProperty('--watcher-height', `${characterDebugHeight}px`);
@@ -2620,7 +2577,6 @@
       let terminalPickupLastAt = 0;
       const terminalPickupCooldownMs = 120;
       let terminalSurfaceSpawnInFlight = false;
-      let terminalContextMenuVisible = false;
 
       const terminalSettingsDefaults = {
         // Prefer widely-available monospace fonts on Windows first. / Windowsで入手性が高い等幅フォントを優先
@@ -7425,7 +7381,7 @@
           terminalWatcherImage.src = terminalWatcherFaceForState(normalizedState);
         }
         if (terminalWatcher) {
-          terminalWatcher.title = title || normalizedState;
+          terminalWatcher.dataset.state = String(title || normalizedState || '');
         }
         const shell =
           (isWatcherView ? watcherShell : terminalShell) ||
@@ -9374,7 +9330,6 @@
         } else {
           document.body.classList.remove('terminal-only');
           document.documentElement.classList.remove('terminal-only');
-          hideTerminalContextMenu();
         }
         updateModeSubtitle(view);
         if (view === 'watcher') {
@@ -9564,57 +9519,25 @@
         }
       }
 
-      function hideTerminalContextMenu() {
-        if (!terminalContextMenu) return;
-        terminalContextMenu.classList.add('hidden');
-        terminalContextMenuVisible = false;
+      function isTerminalSurfaceSpawnShortcut(event) {
+        if (!event) return false;
+        if (!event.shiftKey) return false;
+        if (typeof event.button === 'number' && event.button !== 0) return false;
+        return true;
       }
 
-      function isWithinTerminalContextMenu(target) {
-        if (!terminalContextMenu || !target) return false;
-        return terminalContextMenu.contains(target);
-      }
-
-      function isWithinTerminalShell(target) {
-        if (!terminalShell || !target) return false;
-        return terminalShell.contains(target);
-      }
-
-      function isTerminalContextMenuEnabled() {
-        return isTerminalInteractionEnabled();
-      }
-
-      function showTerminalContextMenuAt(clientX, clientY) {
-        if (!terminalContextMenu || !terminalShell) return;
-        const shellRect = terminalShell.getBoundingClientRect();
-        if (!shellRect || shellRect.width <= 0 || shellRect.height <= 0) return;
-        const localX = Number(clientX || 0) - shellRect.left;
-        const localY = Number(clientY || 0) - shellRect.top;
-
-        terminalContextMenu.classList.remove('hidden');
-        const menuRect = terminalContextMenu.getBoundingClientRect();
-        const menuWidth = Math.max(140, Math.floor(menuRect.width || 0));
-        const menuHeight = Math.max(30, Math.floor(menuRect.height || 0));
-        const minX = 4;
-        const minY = 4;
-        const maxX = Math.max(minX, Math.floor(shellRect.width - menuWidth - 4));
-        const maxY = Math.max(minY, Math.floor(shellRect.height - menuHeight - 4));
-        const clampedX = Math.min(maxX, Math.max(minX, Math.floor(localX)));
-        const clampedY = Math.min(maxY, Math.max(minY, Math.floor(localY)));
-        terminalContextMenu.style.left = `${clampedX}px`;
-        terminalContextMenu.style.top = `${clampedY}px`;
-        terminalContextMenuVisible = true;
-      }
-
-      async function handleTerminalContextOpenNew(event) {
+      async function handleTerminalSurfaceSpawnShortcut(event) {
+        if (!isTerminalInteractionEnabled() || terminalSurfaceSpawnInFlight) return;
+        if (!isTerminalSurfaceSpawnShortcut(event)) return;
         if (event && typeof event.preventDefault === 'function') {
           event.preventDefault();
         }
         if (event && typeof event.stopPropagation === 'function') {
           event.stopPropagation();
         }
-        hideTerminalContextMenu();
-        if (!isTerminalContextMenuEnabled() || terminalSurfaceSpawnInFlight) return;
+        if (terminal && typeof terminal.focus === 'function') {
+          terminal.focus();
+        }
         terminalSurfaceSpawnInFlight = true;
         try {
           if (hasTerminalSessionIdParam) {
@@ -10313,7 +10236,7 @@
             };
           },
           getWatcherTitle() {
-            return terminalWatcher ? terminalWatcher.title : '';
+            return terminalWatcher ? String(terminalWatcher.dataset.state || '') : '';
           },
           sendTerminalInput(text) {
             if (typeof text !== 'string') return false;
@@ -10980,7 +10903,12 @@
         resizeObserver.observe(terminalContainer);
 
         terminalContainer.addEventListener('mousedown', (event) => {
-          if (event && event.detail >= 2 && typeof event.preventDefault === 'function') {
+          if (
+            event &&
+            event.detail >= 2 &&
+            event.shiftKey &&
+            typeof event.preventDefault === 'function'
+          ) {
             event.preventDefault();
           }
           terminal.focus();
@@ -10990,52 +10918,14 @@
           if (!event || event.detail !== 1) return;
           void pickupCurrentTerminalWindowIfNeeded('click');
         });
+        terminalContainer.addEventListener('dblclick', (event) => {
+          if (!isTerminalView) return;
+          void handleTerminalSurfaceSpawnShortcut(event);
+        });
         window.addEventListener('focus', () => {
           if (!isTerminalView) return;
           void pickupCurrentTerminalWindowIfNeeded('focus');
         });
-        window.addEventListener(
-          'contextmenu',
-          (event) => {
-            if (!isTerminalContextMenuEnabled()) return;
-            if (!isWithinTerminalShell(event && event.target)) return;
-            if (event && typeof event.preventDefault === 'function') {
-              event.preventDefault();
-            }
-            if (event && typeof event.stopPropagation === 'function') {
-              event.stopPropagation();
-            }
-            if (isWithinTerminalContextMenu(event && event.target)) return;
-            showTerminalContextMenuAt(event ? event.clientX : 0, event ? event.clientY : 0);
-            terminal.focus();
-          },
-          { capture: true }
-        );
-        window.addEventListener(
-          'pointerdown',
-          (event) => {
-            if (!terminalContextMenuVisible) return;
-            if (isWithinTerminalContextMenu(event && event.target)) return;
-            hideTerminalContextMenu();
-          },
-          { capture: true }
-        );
-        window.addEventListener('blur', () => {
-          hideTerminalContextMenu();
-        });
-        window.addEventListener('resize', () => {
-          hideTerminalContextMenu();
-        });
-        window.addEventListener('keydown', (event) => {
-          if (!terminalContextMenuVisible) return;
-          if (!event || event.key !== 'Escape') return;
-          hideTerminalContextMenu();
-        });
-        if (terminalContextOpenNewButton) {
-          terminalContextOpenNewButton.addEventListener('click', (event) => {
-            void handleTerminalContextOpenNew(event);
-          });
-        }
 
         const listen = getEventListen();
         if (!listen) {
