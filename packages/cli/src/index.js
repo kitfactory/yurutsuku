@@ -668,6 +668,7 @@ function printLauncherUsage() {
       "  nagomi --status",
       "  nagomi --debug-paths",
       "  nagomi debug-tail [status|watcher|subworker|subworker-io] [--n <count>]",
+      "  nagomi prompt-history export [--project <query>] [--format json|jsonl] [--output <path>]",
       "  nagomi terminal-send --session-id <id> --text \"<command>\"",
       "  nagomi terminal-send --session-id <id> --text-file <path>",
       "  nagomi shortcut --desktop",
@@ -769,6 +770,7 @@ function collectDebugPaths() {
   const configDir = resolveAppConfigDir();
   return {
     app_config_dir: configDir || "",
+    project_prompt_history_dir: configDir ? path.join(configDir, "project-prompt-history") : "",
     worker_smoke_log: configDir ? path.join(configDir, "worker_smoke.log") : "",
     subworker_debug_events_jsonl: configDir ? path.join(configDir, "subworker_debug_events.jsonl") : "",
     subworker_io_events_jsonl: configDir ? path.join(configDir, "subworker_io_events.jsonl") : "",
@@ -789,6 +791,198 @@ function resolveDebugLogPath(kind) {
   if (raw === "watcher") return paths.status_debug_events_jsonl;
   // default: status
   return paths.status_debug_events_jsonl;
+}
+
+function parsePromptHistoryArgs(args) {
+  let action = "";
+  let projectQuery = "";
+  let format = "json";
+  let outputPath = "";
+  let showHelp = false;
+  const unknown = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === "--help" || arg === "-h") {
+      showHelp = true;
+      continue;
+    }
+    if (arg === "--project") {
+      projectQuery = args[i + 1] || "";
+      i += 1;
+      continue;
+    }
+    if (arg === "--format") {
+      format = String(args[i + 1] || "json");
+      i += 1;
+      continue;
+    }
+    if (arg === "--output" || arg === "-o") {
+      outputPath = args[i + 1] || "";
+      i += 1;
+      continue;
+    }
+    if (!action && !arg.startsWith("-")) {
+      action = arg;
+      continue;
+    }
+    unknown.push(arg);
+  }
+  return { action, projectQuery, format, outputPath, showHelp, unknown };
+}
+
+function printPromptHistoryUsage() {
+  console.error(
+    [
+      "usage:",
+      "  nagomi prompt-history export",
+      "  nagomi prompt-history export --project yurutsuku",
+      "  nagomi prompt-history export --project C:/work/project --format jsonl",
+      "  nagomi prompt-history export --project yurutsuku --output prompt-history.json",
+    ].join("\n")
+  );
+}
+
+function listProjectPromptHistoryFiles(historyDir) {
+  if (!historyDir || !fs.existsSync(historyDir)) return [];
+  return fs
+    .readdirSync(historyDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".jsonl"))
+    .map((entry) => path.join(historyDir, entry.name))
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function readJsonlEntries(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return [];
+  const raw = fs.readFileSync(filePath, "utf8");
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter((entry) => entry && typeof entry === "object");
+}
+
+function collectProjectPromptHistoryMeta(filePath, entries) {
+  const fallbackKey = path.basename(filePath, ".jsonl");
+  const fallbackLabel = fallbackKey.replace(/-[0-9a-f]{16}$/i, "");
+  let projectKey = fallbackKey;
+  let projectLabel = fallbackLabel;
+  let cwd = "";
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    const entry = entries[i];
+    if (!entry || typeof entry !== "object") continue;
+    if (!projectKey && entry.project_key) projectKey = String(entry.project_key);
+    if (!projectLabel && entry.project_label) projectLabel = String(entry.project_label);
+    if (!cwd && entry.cwd) cwd = String(entry.cwd);
+    if (projectKey && projectLabel && cwd) break;
+  }
+  return {
+    projectKey: projectKey || fallbackKey,
+    projectLabel: projectLabel || fallbackLabel || "unknown",
+    cwd,
+  };
+}
+
+function matchesProjectPromptQuery(meta, filePath, entries, rawQuery) {
+  const query = normalizeSingleLineText(rawQuery).toLowerCase();
+  if (!query) return true;
+  const haystacks = [
+    meta && meta.projectKey ? String(meta.projectKey) : "",
+    meta && meta.projectLabel ? String(meta.projectLabel) : "",
+    meta && meta.cwd ? String(meta.cwd) : "",
+    filePath || "",
+  ];
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object") continue;
+    if (entry.project_key) haystacks.push(String(entry.project_key));
+    if (entry.project_label) haystacks.push(String(entry.project_label));
+    if (entry.cwd) haystacks.push(String(entry.cwd));
+  }
+  return haystacks.some((value) => normalizeSingleLineText(value).toLowerCase().includes(query));
+}
+
+function buildPromptHistoryExportPayload(projectQuery) {
+  const paths = collectDebugPaths();
+  const historyDir = paths.project_prompt_history_dir;
+  if (!historyDir) {
+    return { error: "project prompt history path not available (missing app_config_dir)" };
+  }
+  const files = listProjectPromptHistoryFiles(historyDir);
+  if (files.length === 0) {
+    return { error: `no project prompt history files: ${historyDir}` };
+  }
+  const projects = [];
+  for (const filePath of files) {
+    const entries = readJsonlEntries(filePath);
+    if (entries.length === 0) continue;
+    const meta = collectProjectPromptHistoryMeta(filePath, entries);
+    if (!matchesProjectPromptQuery(meta, filePath, entries, projectQuery)) {
+      continue;
+    }
+    projects.push({
+      project_key: meta.projectKey,
+      project_label: meta.projectLabel,
+      cwd: meta.cwd,
+      source_file: filePath,
+      entry_count: entries.length,
+      entries,
+    });
+  }
+  if (projects.length === 0) {
+    const suffix = projectQuery ? ` for query: ${projectQuery}` : "";
+    return { error: `no project prompt history entries${suffix}` };
+  }
+  const entryCount = projects.reduce((sum, project) => sum + Number(project.entry_count || 0), 0);
+  return {
+    payload: {
+      exported_at: new Date().toISOString(),
+      project_query: projectQuery || "",
+      project_count: projects.length,
+      entry_count: entryCount,
+      projects,
+    },
+  };
+}
+
+function serializePromptHistoryExport(payload, format) {
+  const normalizedFormat = String(format || "json").trim().toLowerCase();
+  if (normalizedFormat === "json") {
+    return JSON.stringify(payload, null, 2);
+  }
+  if (normalizedFormat === "jsonl") {
+    const lines = [];
+    for (const project of payload.projects || []) {
+      for (const entry of project.entries || []) {
+        lines.push(
+          JSON.stringify({
+            ...entry,
+            source_file: project.source_file,
+          })
+        );
+      }
+    }
+    return lines.join("\n");
+  }
+  throw new Error(`unsupported format: ${format}`);
+}
+
+function writeCliOutput(outputPath, text) {
+  if (!outputPath) {
+    console.log(text);
+    return;
+  }
+  const parent = path.dirname(outputPath);
+  if (parent && parent !== "." && parent !== outputPath) {
+    fs.mkdirSync(parent, { recursive: true });
+  }
+  fs.writeFileSync(outputPath, text, "utf8");
+  console.log(outputPath);
 }
 
 function parseDebugTailArgs(args) {
@@ -861,9 +1055,13 @@ function summarizeStatusEntry(entry) {
   }
   if (eventType === "hook-event" && entry.details) {
     const kind = entry.details.kind ? String(entry.details.kind) : "";
-    const judgeState = entry.details.judge_state ? String(entry.details.judge_state) : "";
+    const state = entry.details.state
+      ? String(entry.details.state)
+      : entry.details.judge_state
+      ? String(entry.details.judge_state)
+      : "";
     const summary = entry.details.summary ? String(entry.details.summary) : "";
-    return `${ts} hook kind=${kind} judge_state=${judgeState}${unifiedPart} summary=${summary}`;
+    return `${ts} hook kind=${kind} state=${state}${unifiedPart} summary=${summary}`;
   }
   if (eventType === "judge-skip" && entry.details) {
     const kind = entry.details.kind ? String(entry.details.kind) : "";
@@ -933,7 +1131,12 @@ function summarizeSubworkerEntry(entry) {
   const eventType = entry && entry.event_type ? String(entry.event_type) : "event";
   const observed = entry && entry.observed_state ? String(entry.observed_state) : "-";
   const status = entry && entry.observed_status ? String(entry.observed_status) : "-";
-  const src = entry && entry.judge_complete_source ? String(entry.judge_complete_source) : "-";
+  const src =
+    entry && entry.hook_complete_source
+      ? String(entry.hook_complete_source)
+      : entry && entry.judge_complete_source
+      ? String(entry.judge_complete_source)
+      : "-";
   const phase = entry && entry.subworker && entry.subworker.phase ? String(entry.subworker.phase) : "-";
   const action = entry && entry.details && entry.details.action ? String(entry.details.action) : "";
   const result = entry && entry.details && entry.details.result ? String(entry.details.result) : "";
@@ -945,14 +1148,24 @@ function summarizeSubworkerIoEntry(entry) {
   const eventType = entry && entry.event_type ? String(entry.event_type) : "event";
   const details = entry && entry.details && typeof entry.details === "object" ? entry.details : {};
   const observedState = entry && entry.observed_state ? String(entry.observed_state) : "";
-  const judgeSource = entry && entry.judge_complete_source ? String(entry.judge_complete_source) : "";
+  const hookSource =
+    entry && entry.hook_complete_source
+      ? String(entry.hook_complete_source)
+      : entry && entry.judge_complete_source
+      ? String(entry.judge_complete_source)
+      : "";
   if (eventType === "llm-start") {
     const tool = details.tool ? String(details.tool) : "";
-    const judge = details.prompt_vars && details.prompt_vars.judge_state ? String(details.prompt_vars.judge_state) : "";
+    const state =
+      details.prompt_vars && details.prompt_vars.state
+        ? String(details.prompt_vars.state)
+        : details.prompt_vars && details.prompt_vars.judge_state
+        ? String(details.prompt_vars.judge_state)
+        : "";
     const instruction = details.prompt_vars && details.prompt_vars.instruction ? String(details.prompt_vars.instruction) : "";
-    const src = judgeSource ? ` src=${judgeSource}` : "";
+    const src = hookSource ? ` src=${hookSource}` : "";
     const observed = observedState ? ` observed=${observedState}` : "";
-    return `${ts} llm-start tool=${tool}${src}${observed} judge=${judge} instruction=${truncateText(
+    return `${ts} llm-start tool=${tool}${src}${observed} state=${state} instruction=${truncateText(
       instruction,
       80
     )}`;
@@ -966,7 +1179,7 @@ function summarizeSubworkerIoEntry(entry) {
   }
   if (eventType === "llm-error") {
     const msg = details.message ? String(details.message) : "";
-    const src = judgeSource ? ` src=${judgeSource}` : "";
+    const src = hookSource ? ` src=${hookSource}` : "";
     const observed = observedState ? ` observed=${observedState}` : "";
     return `${ts} llm-error${src}${observed} ${truncateText(msg, 120)}`.trim();
   }
@@ -1062,6 +1275,38 @@ async function debugTailCli(args) {
   console.log(summaries.join("\n"));
 }
 
+async function promptHistoryCli(args) {
+  const parsed = parsePromptHistoryArgs(args);
+  if (parsed.showHelp) {
+    printPromptHistoryUsage();
+    return;
+  }
+  if (parsed.unknown.length > 0) {
+    console.error(`unknown arguments: ${parsed.unknown.join(" ")}`);
+    printPromptHistoryUsage();
+    process.exitCode = 2;
+    return;
+  }
+  if (parsed.action !== "export") {
+    printPromptHistoryUsage();
+    process.exitCode = 2;
+    return;
+  }
+  try {
+    const result = buildPromptHistoryExportPayload(parsed.projectQuery);
+    if (result.error) {
+      console.error(result.error);
+      process.exitCode = 1;
+      return;
+    }
+    const body = serializePromptHistoryExport(result.payload, parsed.format);
+    writeCliOutput(parsed.outputPath, body);
+  } catch (err) {
+    console.error(err && err.message ? err.message : String(err));
+    process.exitCode = 1;
+  }
+}
+
 function spawnOrchestrator(orchestratorPath) {
   const args = ["--start-hidden", "--exit-on-last-terminal"];
   if (isWindows()) {
@@ -1098,6 +1343,10 @@ async function main() {
   }
   if (subcommand === "debug-tail") {
     await debugTailCli(args.slice(1));
+    return;
+  }
+  if (subcommand === "prompt-history") {
+    await promptHistoryCli(args.slice(1));
     return;
   }
   if (subcommand === "terminal-send") {

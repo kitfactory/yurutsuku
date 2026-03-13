@@ -45,6 +45,8 @@ node apps/orchestrator/e2e/subworker.matrix.e2e.js
 node apps/orchestrator/e2e/subworker.advice.format.e2e.js
 node apps/orchestrator/e2e/subworker.judge.dedup.e2e.js
 node apps/orchestrator/e2e/codex.prime-minister.e2e.js
+node apps/orchestrator/e2e/settings.open-from-terminal.e2e.js
+node apps/orchestrator/e2e/settings.character.toggle.stability.e2e.js
 node apps/orchestrator/e2e/watcher.frame.e2e.js
 node apps/orchestrator/e2e/watcher.debug3d.e2e.js
 ```
@@ -60,27 +62,27 @@ npm run e2e:tint -w apps/orchestrator
 ---
 
 ## AI状態判定（色付け）確認
-目的は「状態遷移」と「色」が一致していることを確認すること。
+目的は「hook 完了だけで状態が変わること」と「色」が一致していることを確認すること。
 
 - 色マップ（固定）:
   - `idle/success` = 黒
-  - `running` = 青
   - `need_input` = オレンジ
   - `failure` = 赤
+  - `subworker-running` = 緑オーバーレイ
 - 遷移ガード:
-  - `idle/success/failure -> need_input` の直行は禁止
-  - `need_input` に入るときは必ず `running` を経由する
+  - 入力確定 / tool start / terminal exit では状態を変えない
+  - `need_input` / `success` / `failure` は hook 完了時だけ変化する
 
 ### 確認観点（P0最小）
-1. `running -> success`（正常終了）で青→黒になる
-2. `running -> failure`（異常終了）で青→赤になる
-3. `running -> need_input`（入力待ち）で青→オレンジになる
-4. `idle/success/failure` から `need_input` に入るケースで、遷移ログに `running` が必ず挟まる
+1. 入力送信直後は状態が変わらず、hook 完了まで直前状態を維持する
+2. `hook-complete(success)` で黒になる
+3. `hook-complete(failure)` で赤になる
+4. `hook-complete(need_input)` でオレンジになる
 
 ### 実施方法
 1) `node apps/orchestrator/e2e/terminal.tint.e2e.js` を実行して tint の基本回帰を確認する  
-2) nagomi Terminal で手動確認する（`echo ok` / 異常終了コマンド / 入力待ちコマンド）  
-3) `nagomi debug-tail status --n 80` で遷移イベントを確認し、`need_input` 直前に `running` があることを確認する  
+2) nagomi Terminal で手動確認する（AI への入力送信 / hook `success` / hook `need_input` / hook `failure`）  
+3) `nagomi debug-tail status --n 80` で遷移イベントを確認し、入力送信や exit では state が変わっていないことを確認する  
 
 ---
 
@@ -89,7 +91,7 @@ npm run e2e:tint -w apps/orchestrator
 
 ### 確認観点（P0最小）
 1. サブワーカー稼働中は対象ターミナルに `サブワーカーで処理中` が緑表示される
-2. サブワーカー終了時に緑表示が消え、元の状態色（黒/青/オレンジ/赤）へ戻る
+2. サブワーカー終了時に緑表示が消え、元の状態色（黒/オレンジ/赤）へ戻る
 3. アドバイス表示は Terminal 本文に「次に何を入力するか」を1行で追記し、実コマンド入力/PTY 入出力として扱われない
 4. `ガンガン`: `success` または `need_input` で入力代行またはアドバイスが実行される
 5. `慎重に`: `need_input` のときだけ稼働し、入力代行後の状態は終了判定に追従する
@@ -104,7 +106,7 @@ npm run e2e:tint -w apps/orchestrator
 ### 実施方法
 1) 設定画面で `サブワーカーON/OFF` / `サブワーカーデバッグON/OFF` / サブワーカーモード（`ガンガン` / `慎重に` / `アドバイス`）を切り替える  
 2) `自信度閾値` を変更し、入力代行/アドバイス分岐が変わることを確認する  
-3) ターミナルで `success` / `need_input` / `running` を作って、モードごとの稼働条件を確認する  
+3) ターミナルで `success` / `need_input` / `failure` を作って、モードごとの稼働条件を確認する  
 4) 稼働中の緑表示と、終了後の状態復帰を目視確認する  
 5) Settings > AI Coding Agent で `一時停止` / `今回だけスキップ` の挙動を確認する  
 6) 端末幅を狭くしてもサブワーカー結果の 1 行表示が読み取れることを確認する  
@@ -128,7 +130,7 @@ npm run test:rust:notify -w apps/orchestrator
   - `where codex` が通るかを確認する
 
 ### 追加シナリオ（現行）
-- `apps/orchestrator/e2e/codex.prime-minister.e2e.js`: 実問合せで `running -> success` 遷移と hook 経路を確認する
+- `apps/orchestrator/e2e/codex.prime-minister.e2e.js`: 実問合せで「入力送信では状態不変、hook で `success`」を確認する
 - `apps/orchestrator/e2e/subworker.matrix.e2e.js`: モード別（慎重/ガンガン/アドバイス）の行列ケースを確認する
 - `apps/orchestrator/e2e/subworker.advice.format.e2e.js`: アドバイス表示形式と Tab 適用を確認する
 - `apps/orchestrator/e2e/subworker.judge.dedup.e2e.js`: `hook-judge`/`judge-result` 連続時の dedup（`llm-start` 重複なし）と非Tabでの ghost 解除を確認する
@@ -143,8 +145,8 @@ npm run test:rust:notify -w apps/orchestrator
 - 対策: Terminal 起動時に User/System の環境変数を統合し、PATH を不足分だけ後ろに追加する
 
 ### 2) Codex の notify が動かない
-- 原因: `config.toml` の notify 設定が不正（配列指定など）
-- 対策: `notify = "nagomi-codex-notify"` を使用。fallback は `node <script>`
+- 原因: `config.toml` の notify 設定が不正、またはトップレベルではなくテーブル内に書かれている
+- 対策: トップレベルに `notify = ["node", "<script>"]` を置く（Windows の `.cmd` 名解決に依存しない）
 
 ### 3) tauri-driver / msedgedriver が見つからない
 - `NAGOMI_TAURI_DRIVER` / `NAGOMI_EDGE_DRIVER` を指定する

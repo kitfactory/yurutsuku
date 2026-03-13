@@ -5,10 +5,12 @@ use base64::Engine;
 use nagomi_protocol::Message;
 use serde::{Deserialize, Serialize};
 use socket2::{Domain, Protocol, Socket, Type};
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 #[cfg(windows)]
 use std::ffi::OsStr;
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 #[cfg(windows)]
@@ -28,6 +30,11 @@ use tauri::{
     WebviewUrl, WebviewWindowBuilder,
 };
 #[cfg(windows)]
+use windows_sys::Win32::Graphics::Dwm::{
+    DwmSetWindowAttribute, DWMNCRP_DISABLED, DWMWA_BORDER_COLOR, DWMWA_COLOR_NONE,
+    DWMWA_NCRENDERING_POLICY, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND,
+};
+#[cfg(windows)]
 use windows_sys::Win32::System::Environment::ExpandEnvironmentStringsW;
 #[cfg(windows)]
 use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, REG_EXPAND_SZ, REG_SZ};
@@ -36,7 +43,6 @@ use winreg::RegKey;
 
 mod completion_hook;
 mod ipc_session;
-mod judge;
 mod notify;
 mod worker;
 
@@ -53,6 +59,7 @@ const WATCHER_DEBUG_WINDOW_HEIGHT: u32 = 960;
 const WATCHER_DEBUG_WINDOW_MARGIN: i32 = 20;
 const TERMINAL_SHELL_CMD: &str = "cmd";
 const TERMINAL_SHELL_POWERSHELL: &str = "powershell";
+const TERMINAL_SHELL_POWERSHELL7: &str = "pwsh";
 const TERMINAL_SHELL_WSL: &str = "wsl";
 const TERMINAL_KEYBIND_ARRANGE_DEFAULT: &str = "Ctrl+Shift+Y";
 const TERMINAL_KEYBIND_FOCUS_NEXT_DEFAULT: &str = "Ctrl+Shift+J";
@@ -62,9 +69,10 @@ const SUBWORKER_DEBUG_ENABLED_DEFAULT: bool = false;
 const SUBWORKER_MODE_CAREFUL: &str = "careful";
 const SUBWORKER_CONFIDENCE_THRESHOLD_DEFAULT: f32 = 0.8;
 const STATUS_DEBUG_ENABLED_DEFAULT: bool = false;
-const CHARACTER_RENDERER_DEFAULT: &str = "2d";
+const CHARACTER_RENDERER_DEFAULT: &str = "3d";
 const CHARACTER_3D_SCALE_DEFAULT: f32 = 1.0;
 const CHARACTER_3D_YAW_DEG_DEFAULT: f32 = 0.0;
+const CHARACTER_ASSET_MAX_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -72,8 +80,6 @@ struct Settings {
     notifications_enabled: bool,
     audio_enabled: bool,
     volume: f32,
-    silence_timeout_ms: u64,
-    llm_enabled: bool,
     llm_tool: String,
     #[serde(default = "default_subworker_enabled")]
     subworker_enabled: bool,
@@ -97,6 +103,8 @@ struct Settings {
     character_3d_scale: f32,
     #[serde(default = "default_character_3d_yaw_deg")]
     character_3d_yaw_deg: f32,
+    #[serde(default)]
+    character_motion_default_paths: HashMap<String, String>,
     log_retention_lines: u32,
     terminal_watcher_enabled: bool,
     #[serde(default)]
@@ -238,7 +246,7 @@ struct HookStatePayload {
     source: String,
     kind: String,
     source_session_id: Option<String>,
-    judge_state: Option<String>,
+    state: String,
     summary: Option<String>,
 }
 
@@ -254,18 +262,18 @@ struct AggregateStatePayload {
 }
 
 #[derive(Debug, Clone, Serialize)]
+struct CharacterMotionDebugPayload {
+    base_state: String,
+    trigger_state: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 struct CodexHookSetupResult {
     status: String,
     message: String,
     config_path: String,
     script_path: String,
     hook_path: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct ToolJudgeResult {
-    state: String,
-    summary: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -376,6 +384,9 @@ struct WindowRect {
     height: u32,
 }
 
+const CONTEXT_NEW_TERMINAL_OFFSET_X: i32 = 48;
+const CONTEXT_NEW_TERMINAL_OFFSET_Y: i32 = 48;
+
 #[derive(Default)]
 struct WindowAnimationState {
     next: AtomicU64,
@@ -390,16 +401,18 @@ struct TerminalWindowLayoutState {
     internal_layout_change_deadline_ms: AtomicU64,
 }
 
+#[derive(Default)]
+struct CharacterDebugWindowControlState {
+    desired_open: Mutex<bool>,
+    worker_active: Mutex<bool>,
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
             notifications_enabled: true,
             audio_enabled: true,
             volume: 0.8,
-            // Default idle time before running the AI terminal state judge.
-            // AI繧ｿ繝ｼ繝溘リ繝ｫ迥ｶ諷句愛螳壹ｒ襍ｰ繧峨○繧九∪縺ｧ縺ｮ豐磯ｻ呎凾髢薙・譌｢螳壼､縲・
-            silence_timeout_ms: 5000,
-            llm_enabled: false,
             llm_tool: "codex".to_string(),
             subworker_enabled: default_subworker_enabled(),
             subworker_debug_enabled: default_subworker_debug_enabled(),
@@ -412,8 +425,9 @@ impl Default for Settings {
             character_3d_vrm_path: String::new(),
             character_3d_scale: default_character_3d_scale(),
             character_3d_yaw_deg: default_character_3d_yaw_deg(),
+            character_motion_default_paths: HashMap::new(),
             log_retention_lines: 20_000,
-            terminal_watcher_enabled: false,
+            terminal_watcher_enabled: true,
             terminal_font_family: "ui-monospace, 'Cascadia Mono', Consolas, 'SFMono-Regular', Menlo, Monaco, 'Liberation Mono', 'DejaVu Sans Mono', monospace".to_string(),
             terminal_font_size: 18,
             terminal_theme: "dark".to_string(),
@@ -433,8 +447,48 @@ impl Default for Settings {
 fn normalize_terminal_shell_kind(kind: &str) -> &'static str {
     match kind.trim().to_ascii_lowercase().as_str() {
         TERMINAL_SHELL_POWERSHELL => TERMINAL_SHELL_POWERSHELL,
+        TERMINAL_SHELL_POWERSHELL7 => TERMINAL_SHELL_POWERSHELL7,
         TERMINAL_SHELL_WSL => TERMINAL_SHELL_WSL,
         _ => TERMINAL_SHELL_CMD,
+    }
+}
+
+#[cfg(windows)]
+fn is_windows_command_available(command_name: &str) -> bool {
+    const CREATE_NO_WINDOW_FLAG: u32 = 0x08000000;
+    let mut command = Command::new("where.exe");
+    command
+        .arg(command_name)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW_FLAG);
+    command
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn build_windows_terminal_command_with_pwsh(settings: &Settings, pwsh_available: bool) -> String {
+    match normalize_terminal_shell_kind(&settings.terminal_shell_kind) {
+        TERMINAL_SHELL_POWERSHELL => "powershell.exe".to_string(),
+        TERMINAL_SHELL_POWERSHELL7 => {
+            if pwsh_available {
+                "pwsh.exe".to_string()
+            } else {
+                "powershell.exe".to_string()
+            }
+        }
+        TERMINAL_SHELL_WSL => {
+            let distro = settings.terminal_wsl_distro.trim();
+            if distro.is_empty() {
+                "wsl.exe".to_string()
+            } else {
+                let escaped = distro.replace('"', "\\\"");
+                format!("wsl.exe -d \"{escaped}\"")
+            }
+        }
+        _ => "cmd.exe".to_string(),
     }
 }
 
@@ -476,19 +530,7 @@ fn normalize_terminal_theme_palette(mode: &str, palette: &str) -> String {
 
 #[cfg(windows)]
 fn build_windows_terminal_command(settings: &Settings) -> String {
-    match normalize_terminal_shell_kind(&settings.terminal_shell_kind) {
-        TERMINAL_SHELL_POWERSHELL => "powershell.exe".to_string(),
-        TERMINAL_SHELL_WSL => {
-            let distro = settings.terminal_wsl_distro.trim();
-            if distro.is_empty() {
-                "wsl.exe".to_string()
-            } else {
-                let escaped = distro.replace('"', "\\\"");
-                format!("wsl.exe -d \"{escaped}\"")
-            }
-        }
-        _ => "cmd.exe".to_string(),
-    }
+    build_windows_terminal_command_with_pwsh(settings, is_windows_command_available("pwsh.exe"))
 }
 
 fn app_config_dir<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
@@ -621,6 +663,56 @@ fn normalize_character_pack_manifest(manifest: &mut CharacterPackManifest) -> Re
     Ok(())
 }
 
+fn normalize_character_motion_state(raw: &str) -> Option<&'static str> {
+    let value = raw.trim().to_ascii_lowercase();
+    match value.as_str() {
+        "neutral" => Some("neutral"),
+        "processing" => Some("processing"),
+        "waiting" => Some("waiting"),
+        "need-user" | "need_user" => Some("need-user"),
+        "completion" => Some("completion"),
+        "error-alert" | "error_alert" => Some("error-alert"),
+        _ => None,
+    }
+}
+
+fn normalize_character_motion_path_map(raw: &HashMap<String, String>) -> HashMap<String, String> {
+    raw.iter()
+        .filter_map(|(key, value)| {
+            let state = normalize_character_motion_state(key.as_str())?;
+            let path = value.trim().to_string();
+            if path.is_empty() {
+                return None;
+            }
+            Some((state.to_string(), path))
+        })
+        .collect()
+}
+
+fn write_atomic_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("asset.bin");
+    let tmp_path = path.with_file_name(format!("{file_name}.tmp-{now_ms}"));
+    fs::write(&tmp_path, bytes).map_err(|err| err.to_string())?;
+    if path.exists() {
+        fs::remove_file(path).map_err(|err| err.to_string())?;
+    }
+    fs::rename(&tmp_path, path).map_err(|err| {
+        let _ = fs::remove_file(&tmp_path);
+        err.to_string()
+    })?;
+    Ok(())
+}
+
 fn read_character_pack_manifest(path: &Path) -> Result<CharacterPackManifest> {
     let raw = fs::read_to_string(path)?;
     let mut manifest: CharacterPackManifest = serde_json::from_str(&raw)?;
@@ -628,12 +720,8 @@ fn read_character_pack_manifest(path: &Path) -> Result<CharacterPackManifest> {
     Ok(manifest)
 }
 
-fn normalize_character_renderer(raw: &str) -> &'static str {
-    if raw.trim().eq_ignore_ascii_case("3d") {
-        "3d"
-    } else {
-        "2d"
-    }
+fn normalize_character_renderer(_raw: &str) -> &'static str {
+    "3d"
 }
 
 fn normalize_character_3d_scale(raw: f32) -> f32 {
@@ -664,6 +752,14 @@ fn subworker_debug_events_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
 
 fn subworker_io_events_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
     app_config_dir(app).join("subworker_io_events.jsonl")
+}
+
+fn project_prompt_history_dir<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
+    app_config_dir(app).join("project-prompt-history")
+}
+
+fn project_prompt_history_path<R: Runtime>(app: &AppHandle<R>, project_key: &str) -> PathBuf {
+    project_prompt_history_dir(app).join(format!("{project_key}.jsonl"))
 }
 
 fn append_jsonl_entry(path: &Path, payload: serde_json::Value) -> Result<(), String> {
@@ -709,27 +805,40 @@ fn codex_notify_script_body() -> String {
         "  return path.join(os.homedir(), \".nagomi\", \"hooks\");",
         "}",
         "",
+        "function parseEvent(raw) {",
+        "  if (!raw) return null;",
+        "  try {",
+        "    return JSON.parse(raw);",
+        "  } catch {",
+        "    return { raw };",
+        "  }",
+        "}",
+        "",
         "function main() {",
         "  const raw = process.argv[2];",
         "  if (!raw) return;",
-        "  let event;",
-        "  try {",
-        "    event = JSON.parse(raw);",
-        "  } catch {",
-        "    event = { raw };",
-        "  }",
+        "  const event = parseEvent(raw);",
+        "  if (!event) return;",
+        "  const sourceSessionId = process.env.NAGOMI_SESSION_ID;",
         "  const payload = {",
         "    source: \"codex\",",
         "    event,",
         "    ts_ms: Date.now(),",
         "  };",
+        "  if (sourceSessionId) {",
+        "    payload.source_session_id = sourceSessionId;",
+        "  }",
         "  const base = hooksDir();",
         "  fs.mkdirSync(base, { recursive: true });",
         "  const filePath = path.join(base, \"codex.jsonl\");",
         "  fs.appendFileSync(filePath, JSON.stringify(payload) + \"\\n\", \"utf8\");",
         "}",
         "",
-        "main();",
+        "try {",
+        "  main();",
+        "} catch (err) {",
+        "  console.error(err);",
+        "}",
         "",
     ]
     .join("\n")
@@ -1013,45 +1122,6 @@ fn has_header_terminator(buffer: &[u8]) -> bool {
         || buffer.windows(2).any(|slice| slice == b"\n\n")
 }
 
-fn command_exists(command: &str) -> bool {
-    let path_var = match std::env::var_os("PATH") {
-        Some(value) => value,
-        None => return false,
-    };
-    let mut extensions: Vec<String> = Vec::new();
-    if cfg!(windows) {
-        if let Some(ext_var) = std::env::var_os("PATHEXT") {
-            for ext in ext_var.to_string_lossy().split(';') {
-                let trimmed = ext.trim();
-                if !trimmed.is_empty() {
-                    extensions.push(trimmed.to_string());
-                }
-            }
-        }
-        if extensions.is_empty() {
-            extensions.push(".exe".to_string());
-            extensions.push(".cmd".to_string());
-            extensions.push(".bat".to_string());
-        }
-        extensions.push(String::new());
-    } else {
-        extensions.push(String::new());
-    }
-    for dir in std::env::split_paths(&path_var) {
-        for ext in &extensions {
-            let candidate = if ext.is_empty() {
-                dir.join(command)
-            } else {
-                dir.join(format!("{command}{ext}"))
-            };
-            if candidate.exists() {
-                return true;
-            }
-        }
-    }
-    false
-}
-
 fn ensure_codex_hook_files(base_dir: &Path) -> Result<(PathBuf, PathBuf, PathBuf), String> {
     fs::create_dir_all(base_dir).map_err(|err| err.to_string())?;
     let hook_path = base_dir.join("codex.jsonl");
@@ -1059,8 +1129,12 @@ fn ensure_codex_hook_files(base_dir: &Path) -> Result<(PathBuf, PathBuf, PathBuf
         fs::write(&hook_path, "").map_err(|err| err.to_string())?;
     }
     let script_path = base_dir.join("nagomi_codex_notify.js");
-    if !script_path.exists() {
-        let body = codex_notify_script_body();
+    let body = codex_notify_script_body();
+    let needs_script_update = match fs::read_to_string(&script_path) {
+        Ok(existing) => existing != body,
+        Err(_) => true,
+    };
+    if needs_script_update {
         fs::write(&script_path, body).map_err(|err| err.to_string())?;
     }
     let legacy_py = base_dir.join("nagomi_codex_notify.py");
@@ -1109,13 +1183,20 @@ fn ensure_codex_config(script_path: &Path, legacy_py: &Path) -> Result<(String, 
         file.read_to_string(&mut current)
             .map_err(|err| err.to_string())?;
     }
-    let mut has_notify = false;
+    let mut has_top_level_notify = false;
     let mut has_legacy = false;
     let mut has_script = false;
     let mut has_command = false;
+    let mut seen_table = false;
     for line in current.lines() {
-        if line.trim_start().starts_with("notify") {
-            has_notify = true;
+        let trimmed = line.trim_start();
+        if trimmed.starts_with('[') {
+            seen_table = true;
+        }
+        if trimmed.starts_with("notify") {
+            if !seen_table {
+                has_top_level_notify = true;
+            }
             if line.contains("nagomi-codex-notify") {
                 has_command = true;
             }
@@ -1127,18 +1208,14 @@ fn ensure_codex_config(script_path: &Path, legacy_py: &Path) -> Result<(String, 
             }
         }
     }
-    if has_command || has_script {
+    if has_top_level_notify && (has_command || has_script) {
         return Ok((
             "already_installed".to_string(),
             "codex notify already configured".to_string(),
         ));
     }
-    let notify_line = if command_exists("nagomi-codex-notify") {
-        "notify = \"nagomi-codex-notify\"".to_string()
-    } else {
-        format!("notify = \"node {}\"", script_toml)
-    };
-    if has_notify && !has_legacy {
+    let notify_line = format!("notify = [\"node\", {}]", script_toml);
+    if has_top_level_notify && !has_legacy {
         return Ok((
             "skipped_existing_notify".to_string(),
             "notify already present; skipped updating config".to_string(),
@@ -1160,17 +1237,41 @@ fn ensure_codex_config(script_path: &Path, legacy_py: &Path) -> Result<(String, 
             "codex notify updated".to_string(),
         ));
     }
-    let mut next = current;
-    if !next.is_empty() && !next.ends_with('\n') {
-        next.push('\n');
-    }
-    next.push_str("# added by nagomi\n");
-    next.push_str(&format!("{notify_line}\n"));
-    fs::write(&config_path, next).map_err(|err| err.to_string())?;
+    let next = rewrite_codex_notify_config_text(&current, &notify_line);
+    fs::write(&config_path, format!("{next}\n")).map_err(|err| err.to_string())?;
     Ok((
         "installed".to_string(),
         "codex notify configured".to_string(),
     ))
+}
+
+fn rewrite_codex_notify_config_text(current: &str, notify_line: &str) -> String {
+    let mut filtered_lines: Vec<String> = Vec::new();
+    let mut insert_at = None;
+    for line in current.lines() {
+        let trimmed = line.trim_start();
+        if insert_at.is_none() && trimmed.starts_with('[') {
+            insert_at = Some(filtered_lines.len());
+        }
+        if trimmed == "# added by nagomi" || trimmed.starts_with("notify") {
+            continue;
+        }
+        filtered_lines.push(line.to_string());
+    }
+    let insert_at = insert_at.unwrap_or(filtered_lines.len());
+    let mut next_lines: Vec<String> = Vec::new();
+    next_lines.extend(filtered_lines[..insert_at].iter().cloned());
+    if !next_lines.is_empty() && !next_lines.last().map(|line| line.is_empty()).unwrap_or(false) {
+        next_lines.push(String::new());
+    }
+    // notify はトップレベルに置く / Keep notify at TOML top-level so Codex can read it.
+    next_lines.push("# added by nagomi".to_string());
+    next_lines.push(notify_line.to_string());
+    if insert_at < filtered_lines.len() {
+        next_lines.push(String::new());
+    }
+    next_lines.extend(filtered_lines[insert_at..].iter().cloned());
+    next_lines.join("\n")
 }
 
 fn start_health_server<R: Runtime>(app: AppHandle<R>) {
@@ -1719,6 +1820,8 @@ fn load_settings<R: Runtime>(
     settings.character_3d_scale = normalize_character_3d_scale(settings.character_3d_scale);
     settings.character_3d_yaw_deg = normalize_character_3d_yaw_deg(settings.character_3d_yaw_deg);
     settings.character_3d_vrm_path = settings.character_3d_vrm_path.trim().to_string();
+    settings.character_motion_default_paths =
+        normalize_character_motion_path_map(&settings.character_motion_default_paths);
     Ok(settings)
 }
 
@@ -1736,12 +1839,14 @@ fn save_settings<R: Runtime>(
     settings.character_3d_yaw_deg =
         normalize_character_3d_yaw_deg(settings.character_3d_yaw_deg);
     settings.character_3d_vrm_path = settings.character_3d_vrm_path.trim().to_string();
+    settings.character_motion_default_paths =
+        normalize_character_motion_path_map(&settings.character_motion_default_paths);
     let path = settings_path(&app);
     let hook_tool = settings.llm_tool.clone();
     write_settings(&path, &settings).map_err(|err| err.to_string())?;
     apply_completion_hook_tool(&app, Some(&hook_tool));
     let _ = app.emit("settings-updated", settings.clone());
-    sync_watcher_window(&app, &settings);
+    schedule_watcher_window_sync(&app, settings.terminal_watcher_enabled);
     Ok(())
 }
 
@@ -1784,7 +1889,7 @@ fn save_character_asset<R: Runtime>(
     if bytes.is_empty() {
         return Err("asset is empty".to_string());
     }
-    if bytes.len() > 64 * 1024 * 1024 {
+    if bytes.len() > CHARACTER_ASSET_MAX_BYTES {
         return Err("asset exceeds 64MB limit".to_string());
     }
     fs::write(&out_path, bytes).map_err(|err| err.to_string())?;
@@ -1806,6 +1911,75 @@ fn save_character_pack_manifest<R: Runtime>(
     }
     let raw = serde_json::to_string_pretty(&manifest).map_err(|err| err.to_string())?;
     fs::write(&out_path, raw).map_err(|err| err.to_string())?;
+    Ok(manifest)
+}
+
+#[tauri::command]
+fn import_character_motion_vrma<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+    pack_id: String,
+    state: String,
+    filename: String,
+    bytes_base64: String,
+    manifest_seed: Option<CharacterPackManifest>,
+) -> Result<CharacterPackManifest, String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    let normalized_pack_id = sanitize_pack_id(&pack_id);
+    if normalized_pack_id.is_empty() {
+        return Err("pack_id is empty".to_string());
+    }
+    let normalized_state = normalize_character_motion_state(&state)
+        .ok_or_else(|| format!("unsupported motion state: {}", state.trim()))?;
+    let ext = Path::new(filename.trim())
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("");
+    if !ext.eq_ignore_ascii_case("vrma") {
+        return Err("motion file must have .vrma extension".to_string());
+    }
+    let bytes = BASE64_STANDARD
+        .decode(bytes_base64.as_bytes())
+        .map_err(|err| err.to_string())?;
+    if bytes.is_empty() {
+        return Err("motion file is empty".to_string());
+    }
+    if bytes.len() > CHARACTER_ASSET_MAX_BYTES {
+        return Err("motion file exceeds 64MB limit".to_string());
+    }
+
+    let pack_dir = character_packs_dir(&app).join(&normalized_pack_id);
+    let manifest_path = pack_dir.join("pack.json");
+    let mut manifest = if manifest_path.exists() {
+        read_character_pack_manifest(&manifest_path).map_err(|err| err.to_string())?
+    } else {
+        let mut seed = manifest_seed.unwrap_or_default();
+        if seed.pack_id.trim().is_empty() {
+            seed.pack_id = normalized_pack_id.clone();
+        }
+        if seed.display_name.trim().is_empty() {
+            seed.display_name = normalized_pack_id.clone();
+        }
+        seed.pack_id = normalized_pack_id.clone();
+        normalize_character_pack_manifest(&mut seed)?;
+        seed
+    };
+
+    manifest.pack_id = normalized_pack_id.clone();
+    if manifest.display_name.trim().is_empty() {
+        manifest.display_name = normalized_pack_id.clone();
+    }
+
+    let motion_dir = pack_dir.join("motions");
+    let out_path = motion_dir.join(format!("{normalized_state}.vrma"));
+    write_atomic_bytes(&out_path, &bytes)?;
+
+    manifest
+        .motions
+        .insert(normalized_state.to_string(), out_path.to_string_lossy().to_string());
+    normalize_character_pack_manifest(&mut manifest)?;
+    let raw = serde_json::to_string_pretty(&manifest).map_err(|err| err.to_string())?;
+    write_atomic_bytes(&manifest_path, raw.as_bytes())?;
     Ok(manifest)
 }
 
@@ -1894,6 +2068,30 @@ fn list_wsl_distros<R: Runtime>(
 }
 
 #[tauri::command]
+fn list_available_terminal_shell_kinds<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+) -> Result<Vec<String>, String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    #[cfg(windows)]
+    {
+        let mut shells = vec![
+            TERMINAL_SHELL_CMD.to_string(),
+            TERMINAL_SHELL_POWERSHELL.to_string(),
+            TERMINAL_SHELL_WSL.to_string(),
+        ];
+        if is_windows_command_available("pwsh.exe") {
+            shells.push(TERMINAL_SHELL_POWERSHELL7.to_string());
+        }
+        Ok(shells)
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(Vec::new())
+    }
+}
+
+#[tauri::command]
 fn report_terminal_observation<R: Runtime>(
     app: AppHandle<R>,
     ipc_session_id: String,
@@ -1952,17 +2150,6 @@ fn ensure_codex_hook<R: Runtime>(
         script_path: script_path.to_string_lossy().to_string(),
         hook_path: hook_path.to_string_lossy().to_string(),
     })
-}
-
-#[tauri::command]
-fn tool_judge<R: Runtime>(
-    app: AppHandle<R>,
-    ipc_session_id: String,
-    tool: String,
-    tail: String,
-) -> Result<ToolJudgeResult, String> {
-    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
-    run_tool_judge(&tool, &tail).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -2093,53 +2280,26 @@ fn apply_completion_hook_tool<R: Runtime>(app: &AppHandle<R>, tool: Option<&str>
 }
 
 fn handle_hook_event<R: Runtime>(app: &AppHandle<R>, event: HookEvent) {
-    emit_hook_state(app, &event, None, None);
+    let state = normalize_hook_state(event.kind);
+    let summary = summarize_hook_event(&event);
+    let _ = append_project_prompt_history_event(app, &event, &state, &summary);
+    emit_hook_state(app, &event, &state, Some(&summary));
 }
 
 fn emit_hook_state<R: Runtime>(
     app: &AppHandle<R>,
     event: &HookEvent,
-    state: Option<judge::JudgeState>,
+    state: &str,
     summary: Option<&str>,
 ) {
     let payload = HookStatePayload {
         source: event.source.clone(),
         kind: hook_kind_to_string(event.kind),
         source_session_id: event.source_session_id.clone(),
-        judge_state: state.map(judge_state_to_string),
+        state: state.to_string(),
         summary: summary.map(|value| value.to_string()),
     };
     let _ = app.emit("completion-hook-state", payload);
-}
-
-fn run_tool_judge(tool: &str, tail: &str) -> Result<ToolJudgeResult> {
-    let tool_key = tool.trim().to_ascii_lowercase();
-    let tool_path = resolve_tool_command(&tool_key);
-    let env_args = std::env::var("NAGOMI_TOOL_ARGS").ok().unwrap_or_default();
-    let timeout_ms = std::env::var("NAGOMI_TOOL_TIMEOUT_MS")
-        .ok()
-        .and_then(|value| value.parse::<u64>().ok())
-        .unwrap_or(30000);
-    let timeout = Duration::from_millis(timeout_ms);
-
-    if env_args.trim().is_empty() && tool_key == "codex" {
-        return run_codex_judge(&tool_path, tail, timeout);
-    }
-
-    if env_args.trim().is_empty() {
-        return Ok(fallback_tool_judge(tail));
-    }
-
-    let args = split_tool_args(&env_args);
-    let prompt = build_tool_prompt(tail);
-    let output = match run_tool_command_stdout(&tool_path, &args, &prompt, timeout) {
-        Ok(output) => output,
-        Err(_) => return Ok(fallback_tool_judge(tail)),
-    };
-    if let Some(result) = parse_tool_judge_output(&output) {
-        return Ok(result);
-    }
-    Ok(fallback_tool_judge(tail))
 }
 
 struct SubworkerToolRunOutput {
@@ -2206,24 +2366,6 @@ fn split_tool_args(raw: &str) -> Vec<String> {
         .filter(|part| !part.is_empty())
         .map(|part| part.to_string())
         .collect()
-}
-
-fn build_tool_prompt(tail: &str) -> String {
-    let header = "You are a terminal output judge.\n\
-Return JSON only, matching this schema:\n\
-{\"state\":\"success|failure|need_input\",\"summary\":\"string\"}\n\
-Rules:\n\
-- success: command finished successfully.\n\
-- failure: error or failure occurred.\n\
-- need_input: process is waiting for user input or is ambiguous.\n\
-Keep summary short (1-2 lines).\n\
----\n";
-    let mut prompt = String::new();
-    prompt.push_str(header);
-    prompt.push_str("Terminal output (tail):\n");
-    prompt.push_str(tail);
-    prompt.push('\n');
-    prompt
 }
 
 fn build_tool_command(tool_path: &str, args: &[String]) -> Command {
@@ -2294,51 +2436,6 @@ fn run_tool_command_stdout(
         return Err(anyhow::anyhow!("tool failed: {stderr}"));
     }
     Ok(stdout)
-}
-
-fn run_codex_judge(tool_path: &str, tail: &str, timeout: Duration) -> Result<ToolJudgeResult> {
-    let schema = r#"{"type":"object","properties":{"state":{"type":"string","enum":["success","failure","need_input"]},"summary":{"type":"string"}},"required":["state","summary"],"additionalProperties":false}"#;
-    let schema_path = create_temp_file("nagomi-judge-schema", "json", schema)?;
-    let output_path = create_temp_path("nagomi-judge-output", "json");
-    let mut args = Vec::new();
-    args.push("exec".to_string());
-    args.push("--output-schema".to_string());
-    args.push(schema_path.to_string_lossy().to_string());
-    args.push("--output-last-message".to_string());
-    args.push(output_path.to_string_lossy().to_string());
-    args.push("--color".to_string());
-    args.push("never".to_string());
-    args.push("--sandbox".to_string());
-    args.push("read-only".to_string());
-    args.push("--skip-git-repo-check".to_string());
-
-    let prompt = build_tool_prompt(tail);
-    let mut command = build_tool_command(tool_path, &args);
-    apply_internal_tool_env(&mut command);
-    command
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped());
-    let mut child = command.spawn()?;
-    if let Some(mut stdin) = child.stdin.take() {
-        let _ = stdin.write_all(prompt.as_bytes());
-    }
-    let status = wait_with_timeout(&mut child, timeout)?;
-    let mut stderr = String::new();
-    if let Some(mut reader) = child.stderr.take() {
-        let _ = reader.read_to_string(&mut stderr);
-    }
-    let raw = fs::read_to_string(&output_path).unwrap_or_default();
-    let _ = fs::remove_file(&schema_path);
-    let _ = fs::remove_file(&output_path);
-    if !status.success() {
-        return Ok(fallback_tool_judge(tail));
-    }
-    if let Some(result) = parse_tool_judge_output(&raw) {
-        return Ok(result);
-    }
-    let _ = stderr;
-    Ok(fallback_tool_judge(tail))
 }
 
 fn run_codex_subworker_decide_with_session(
@@ -2605,100 +2702,36 @@ fn create_temp_file(prefix: &str, ext: &str, contents: &str) -> Result<PathBuf> 
     Ok(path)
 }
 
-fn parse_tool_judge_output(raw: &str) -> Option<ToolJudgeResult> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    let candidate = trimmed
-        .lines()
-        .rev()
-        .find(|line| !line.trim().is_empty())
-        .unwrap_or(trimmed);
-    let parsed: serde_json::Value = serde_json::from_str(candidate).ok()?;
-    let state_value = parsed.get("state")?.as_str()?;
-    let summary_value = parsed
-        .get("summary")
-        .and_then(|val| val.as_str())
-        .unwrap_or("");
-    let state = normalize_judge_state(state_value)?;
-    Some(ToolJudgeResult {
-        state,
-        summary: summary_value.to_string(),
-    })
-}
-
-fn normalize_judge_state(raw: &str) -> Option<String> {
-    let value = raw.trim().to_ascii_lowercase();
-    match value.as_str() {
-        "success" => Some("success".to_string()),
-        "failure" | "fail" | "error" => Some("failure".to_string()),
-        "need_input" | "need-input" | "waiting_input" | "waiting-input" => {
-            Some("need_input".to_string())
-        }
-        _ => None,
+fn normalize_hook_state(kind: HookEventKind) -> String {
+    match kind {
+        HookEventKind::Completed => "success".to_string(),
+        HookEventKind::NeedInput => "need_input".to_string(),
+        HookEventKind::Error => "failure".to_string(),
     }
 }
 
-fn fallback_tool_judge(tail: &str) -> ToolJudgeResult {
-    let lines: Vec<String> = tail.lines().map(|line| line.to_string()).collect();
-    let config = judge::JudgeConfig::default();
-    let input = judge::JudgeInput {
-        exit_code: None,
-        tail_lines: &lines,
-        last_output_at: None,
-        now: SystemTime::now(),
-    };
-    let state = judge::evaluate(&config, &input).unwrap_or(judge::JudgeState::NeedInput);
-    let summary = judge::summarize_tail(&lines, 2).join("\n");
-    ToolJudgeResult {
-        state: judge_state_to_string(state),
-        summary,
-    }
-}
-
-#[allow(dead_code)]
-fn judge_hook_event(event: &HookEvent) -> (judge::JudgeState, String) {
-    let config = judge::JudgeConfig::default();
-    let tail_lines = extract_hook_tail_lines(event);
-    let now = SystemTime::now();
-    let exit_code = match event.kind {
-        HookEventKind::Error => Some(1),
-        HookEventKind::Completed => None,
-        HookEventKind::NeedInput => None,
-    };
-    let input = judge::JudgeInput {
-        exit_code,
-        tail_lines: &tail_lines,
-        last_output_at: None,
-        now,
-    };
-    let fallback = match event.kind {
-        HookEventKind::Error => judge::JudgeState::Failure,
-        _ => judge::JudgeState::Success,
-    };
-    let state = judge::evaluate(&config, &input).unwrap_or(fallback);
-    let summary_lines = judge::summarize_tail(&tail_lines, 2);
-    let summary = summary_lines.join("\n");
-    (state, summary)
-}
-
-#[allow(dead_code)]
-fn extract_hook_tail_lines(event: &HookEvent) -> Vec<String> {
+fn summarize_hook_event(event: &HookEvent) -> String {
     let raw = match event.raw.as_ref() {
         Some(raw) => raw,
-        None => return Vec::new(),
+        None => return hook_kind_to_string(event.kind),
     };
     let text = extract_text_from_value(raw)
         .or_else(|| raw.get("event").and_then(extract_text_from_value))
         .unwrap_or_default();
-    if text.is_empty() {
-        return Vec::new();
+    let summary = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .take(2)
+        .collect::<Vec<_>>()
+        .join("\n");
+    if summary.is_empty() {
+        hook_kind_to_string(event.kind)
+    } else {
+        summary
     }
-    text.lines().map(|line| line.to_string()).collect()
 }
 
-#[allow(dead_code)]
 fn extract_text_from_value(value: &serde_json::Value) -> Option<String> {
     if let Some(text) = value.as_str() {
         return Some(text.to_string());
@@ -2719,12 +2752,262 @@ fn extract_text_from_value(value: &serde_json::Value) -> Option<String> {
     None
 }
 
-fn judge_state_to_string(state: judge::JudgeState) -> String {
-    match state {
-        judge::JudgeState::Success => "success".to_string(),
-        judge::JudgeState::Failure => "failure".to_string(),
-        judge::JudgeState::NeedInput => "need_input".to_string(),
+struct ProjectPromptHistoryRecord {
+    project_key: String,
+    payload: serde_json::Value,
+}
+
+fn append_project_prompt_history_event<R: Runtime>(
+    app: &AppHandle<R>,
+    event: &HookEvent,
+    state: &str,
+    summary: &str,
+) -> Result<Option<String>, String> {
+    let Some(record) = build_project_prompt_history_record(event, state, summary) else {
+        return Ok(None);
+    };
+    let path = project_prompt_history_path(app, &record.project_key);
+    append_jsonl_entry(&path, record.payload)?;
+    Ok(Some(path.to_string_lossy().to_string()))
+}
+
+fn build_project_prompt_history_record(
+    event: &HookEvent,
+    state: &str,
+    summary: &str,
+) -> Option<ProjectPromptHistoryRecord> {
+    let values = collect_hook_value_refs(event);
+    if values.is_empty() {
+        return None;
     }
+
+    let cwd = read_hook_string_from_values(&values, &["cwd", "directory"]).unwrap_or_default();
+    let input_messages = read_hook_string_list_from_values(
+        &values,
+        &[
+            "input-messages",
+            "input_messages",
+            "inputMessages",
+            "user_messages",
+            "userMessages",
+            "prompts",
+        ],
+    );
+    let last_assistant_message = values
+        .iter()
+        .find_map(|value| extract_text_from_value(value))
+        .unwrap_or_default();
+
+    if cwd.trim().is_empty()
+        && input_messages.is_empty()
+        && last_assistant_message.trim().is_empty()
+    {
+        return None;
+    }
+
+    let project_locator = if cwd.trim().is_empty() {
+        event.source_session_id.clone().unwrap_or_else(|| {
+            format!(
+                "{}-{}",
+                event.source,
+                hook_kind_to_string(event.kind)
+            )
+        })
+    } else {
+        normalize_project_locator(&cwd)
+    };
+    let project_label = if cwd.trim().is_empty() {
+        "unknown".to_string()
+    } else {
+        project_label_from_locator(&cwd)
+    };
+    let project_key = project_prompt_history_key(&project_locator, &project_label);
+
+    let mut payload = serde_json::Map::new();
+    payload.insert(
+        "event_type".to_string(),
+        serde_json::Value::String("project_prompt_history".to_string()),
+    );
+    payload.insert(
+        "source".to_string(),
+        serde_json::Value::String(event.source.clone()),
+    );
+    payload.insert(
+        "hook_kind".to_string(),
+        serde_json::Value::String(hook_kind_to_string(event.kind)),
+    );
+    payload.insert(
+        "state".to_string(),
+        serde_json::Value::String(state.to_string()),
+    );
+    payload.insert(
+        "project_key".to_string(),
+        serde_json::Value::String(project_key.clone()),
+    );
+    payload.insert(
+        "project_label".to_string(),
+        serde_json::Value::String(project_label),
+    );
+    payload.insert(
+        "project_locator".to_string(),
+        serde_json::Value::String(project_locator),
+    );
+    if !cwd.trim().is_empty() {
+        payload.insert("cwd".to_string(), serde_json::Value::String(cwd));
+    }
+    if let Some(source_session_id) = event.source_session_id.as_ref() {
+        if !source_session_id.trim().is_empty() {
+            payload.insert(
+                "source_session_id".to_string(),
+                serde_json::Value::String(source_session_id.clone()),
+            );
+        }
+    }
+    if let Some(thread_id) = read_hook_string_from_values(&values, &["thread-id", "thread_id", "threadId"]) {
+        payload.insert(
+            "thread_id".to_string(),
+            serde_json::Value::String(thread_id),
+        );
+    }
+    if let Some(turn_id) = read_hook_string_from_values(&values, &["turn-id", "turn_id", "turnId"]) {
+        payload.insert("turn_id".to_string(), serde_json::Value::String(turn_id));
+    }
+    if !summary.trim().is_empty() {
+        payload.insert(
+            "summary".to_string(),
+            serde_json::Value::String(summary.to_string()),
+        );
+    }
+    if !input_messages.is_empty() {
+        payload.insert(
+            "input_messages".to_string(),
+            serde_json::Value::Array(
+                input_messages
+                    .into_iter()
+                    .map(serde_json::Value::String)
+                    .collect(),
+            ),
+        );
+    }
+    if !last_assistant_message.trim().is_empty() {
+        payload.insert(
+            "last_assistant_message".to_string(),
+            serde_json::Value::String(last_assistant_message),
+        );
+    }
+
+    Some(ProjectPromptHistoryRecord {
+        project_key,
+        payload: serde_json::Value::Object(payload),
+    })
+}
+
+fn collect_hook_value_refs<'a>(event: &'a HookEvent) -> Vec<&'a serde_json::Value> {
+    let Some(raw) = event.raw.as_ref() else {
+        return Vec::new();
+    };
+    let mut values = vec![raw];
+    if let Some(inner) = raw.get("event") {
+        values.push(inner);
+    }
+    values
+}
+
+fn read_hook_string_from_values(
+    values: &[&serde_json::Value],
+    keys: &[&str],
+) -> Option<String> {
+    for value in values {
+        let Some(obj) = value.as_object() else {
+            continue;
+        };
+        for key in keys {
+            if let Some(found) = obj.get(*key).and_then(normalize_hook_text_value) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
+fn read_hook_string_list_from_values(
+    values: &[&serde_json::Value],
+    keys: &[&str],
+) -> Vec<String> {
+    for value in values {
+        let Some(obj) = value.as_object() else {
+            continue;
+        };
+        for key in keys {
+            let Some(found) = obj.get(*key) else {
+                continue;
+            };
+            let items = normalize_hook_text_list(found);
+            if !items.is_empty() {
+                return items;
+            }
+        }
+    }
+    Vec::new()
+}
+
+fn normalize_hook_text_list(value: &serde_json::Value) -> Vec<String> {
+    if let Some(text) = normalize_hook_text_value(value) {
+        return vec![text];
+    }
+    let Some(items) = value.as_array() else {
+        return Vec::new();
+    };
+    items
+        .iter()
+        .filter_map(normalize_hook_text_value)
+        .collect()
+}
+
+fn normalize_hook_text_value(value: &serde_json::Value) -> Option<String> {
+    if let Some(text) = value.as_str() {
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+    let obj = value.as_object()?;
+    for key in ["text", "content", "message", "prompt"] {
+        if let Some(text) = obj.get(key).and_then(|raw| raw.as_str()) {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn normalize_project_locator(raw: &str) -> String {
+    raw.trim()
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .to_string()
+}
+
+fn project_label_from_locator(raw: &str) -> String {
+    let normalized = normalize_project_locator(raw);
+    let leaf = normalized.rsplit('/').next().unwrap_or(normalized.as_str());
+    sanitize_project_prompt_component(leaf)
+}
+
+fn sanitize_project_prompt_component(raw: &str) -> String {
+    sanitize_asset_component(raw).to_ascii_lowercase()
+}
+
+fn project_prompt_history_key(locator: &str, label: &str) -> String {
+    format!("{label}-{}", stable_text_hash(&normalize_project_locator(locator)))
+}
+
+fn stable_text_hash(value: &str) -> String {
+    let mut hasher = DefaultHasher::new();
+    value.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
 }
 
 fn hook_kind_to_string(kind: HookEventKind) -> String {
@@ -3016,6 +3299,35 @@ fn current_window_rect<R: Runtime>(window: &tauri::WebviewWindow<R>) -> Option<W
     })
 }
 
+fn offset_window_rect<R: Runtime>(
+    app: &AppHandle<R>,
+    source_label: &str,
+    rect: WindowRect,
+    offset_x: i32,
+    offset_y: i32,
+) -> WindowRect {
+    let mut next = WindowRect {
+        x: rect.x.saturating_add(offset_x),
+        y: rect.y.saturating_add(offset_y),
+        width: rect.width,
+        height: rect.height,
+    };
+    let Some(source_window) = app.get_webview_window(source_label) else {
+        return next;
+    };
+    let Ok(Some(monitor)) = source_window.current_monitor() else {
+        return next;
+    };
+    let area = monitor.work_area();
+    let min_x = area.position.x;
+    let min_y = area.position.y;
+    let max_x = (area.position.x + area.size.width as i32 - next.width as i32).max(min_x);
+    let max_y = (area.position.y + area.size.height as i32 - next.height as i32).max(min_y);
+    next.x = next.x.clamp(min_x, max_x);
+    next.y = next.y.clamp(min_y, max_y);
+    next
+}
+
 fn ease_in_out_quad(t: f32) -> f32 {
     if t < 0.5 {
         2.0 * t * t
@@ -3280,8 +3592,8 @@ fn normalize_observed_state(raw: &str) -> String {
         "subworker_running" | "subworker-running" | "subworkerrunning" => {
             "subworker-running".to_string()
         }
-        "ai_running" | "ai-running" | "airunning" => "ai-running".to_string(),
-        "running" => "running".to_string(),
+        "ai_running" | "ai-running" | "airunning" => "idle".to_string(),
+        "running" => "idle".to_string(),
         "need_input" | "need-input" | "needinput" => "need-input".to_string(),
         "fail" | "failure" | "error" => "fail".to_string(),
         "success" => "success".to_string(),
@@ -3293,16 +3605,12 @@ fn normalize_observed_state(raw: &str) -> String {
 fn aggregate_observed_state(states: &HashMap<String, String>) -> String {
     let mut has_need_input = false;
     let mut has_fail = false;
-    let mut has_ai_running = false;
     let mut has_subworker_running = false;
-    let mut has_running = false;
     for state in states.values() {
         match state.as_str() {
             "need-input" => has_need_input = true,
             "fail" => has_fail = true,
             "subworker-running" => has_subworker_running = true,
-            "ai-running" => has_ai_running = true,
-            "running" => has_running = true,
             "success" | "idle" => {}
             _ => {}
         }
@@ -3316,12 +3624,6 @@ fn aggregate_observed_state(states: &HashMap<String, String>) -> String {
     if has_subworker_running {
         return "subworker-running".to_string();
     }
-    if has_ai_running {
-        return "ai-running".to_string();
-    }
-    if has_running {
-        return "running".to_string();
-    }
     "idle".to_string()
 }
 
@@ -3334,6 +3636,47 @@ fn emit_terminal_aggregate_state<R: Runtime>(app: &AppHandle<R>, state: &str) {
             let _ = window.emit("terminal-aggregate-state", payload.clone());
         }
     }
+}
+
+fn normalize_character_motion_debug_base(raw: Option<&str>) -> &'static str {
+    let value = raw.unwrap_or("").trim().to_ascii_lowercase();
+    match value.as_str() {
+        "neutral" => "neutral",
+        "processing" => "processing",
+        "waiting" => "waiting",
+        "need-user" | "need_user" => "need-user",
+        _ => "auto",
+    }
+}
+
+fn normalize_character_motion_debug_trigger(raw: Option<&str>) -> &'static str {
+    let value = raw.unwrap_or("").trim().to_ascii_lowercase();
+    match value.as_str() {
+        "completion" => "completion",
+        "error-alert" | "error_alert" => "error-alert",
+        _ => "none",
+    }
+}
+
+#[tauri::command]
+fn emit_character_motion_debug<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+    base_state: Option<String>,
+    trigger_state: Option<String>,
+) -> Result<(), String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    let payload = CharacterMotionDebugPayload {
+        base_state: normalize_character_motion_debug_base(base_state.as_deref()).to_string(),
+        trigger_state: normalize_character_motion_debug_trigger(trigger_state.as_deref())
+            .to_string(),
+    };
+    for label in [WINDOW_WATCHER, WINDOW_WATCHER_DEBUG] {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.emit("character-motion-debug", payload.clone());
+        }
+    }
+    Ok(())
 }
 
 fn position_watcher_window_with_size<R: Runtime>(
@@ -3390,6 +3733,7 @@ fn position_watcher_debug_window<R: Runtime>(
 fn open_watcher_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(WINDOW_WATCHER) {
         let _ = position_watcher_window(app, &window);
+        improve_watcher_window_transparency_quality(&window);
         let _ = window.show();
         return Ok(());
     }
@@ -3398,12 +3742,14 @@ fn open_watcher_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
         .title("Watcher")
         .transparent(true)
         .decorations(false)
+        .shadow(false)
         .resizable(false)
         .always_on_top(true)
         .skip_taskbar(true)
         .visible(false)
         .build()
         .map_err(|err| err.to_string())?;
+    improve_watcher_window_transparency_quality(&window);
     bind_watcher_window_events(app, &window);
     let _ = position_watcher_window(app, &window);
     let state = app.state::<TerminalAggregateState>();
@@ -3414,8 +3760,44 @@ fn open_watcher_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
         .map(|value| value.clone())
         .unwrap_or_else(|| "idle".to_string());
     emit_terminal_aggregate_state(app, &last_state);
+    let _ = window.show();
     Ok(())
 }
+
+#[cfg(windows)]
+fn improve_watcher_window_transparency_quality<R: Runtime>(window: &tauri::WebviewWindow<R>) {
+    let _ = window.set_shadow(false);
+    let Ok(hwnd) = window.hwnd() else {
+        return;
+    };
+    let hwnd = hwnd.0 as windows_sys::Win32::Foundation::HWND;
+    unsafe {
+        let border_color: u32 = DWMWA_COLOR_NONE;
+        let _ = DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_BORDER_COLOR as u32,
+            &border_color as *const _ as _,
+            std::mem::size_of::<u32>() as u32,
+        );
+        let corner_preference: i32 = DWMWCP_DONOTROUND;
+        let _ = DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_WINDOW_CORNER_PREFERENCE as u32,
+            &corner_preference as *const _ as _,
+            std::mem::size_of::<i32>() as u32,
+        );
+        let nc_rendering_policy: i32 = DWMNCRP_DISABLED;
+        let _ = DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_NCRENDERING_POLICY as u32,
+            &nc_rendering_policy as *const _ as _,
+            std::mem::size_of::<i32>() as u32,
+        );
+    }
+}
+
+#[cfg(not(windows))]
+fn improve_watcher_window_transparency_quality<R: Runtime>(_window: &tauri::WebviewWindow<R>) {}
 
 fn open_watcher_debug_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     if app.get_webview_window(WINDOW_WATCHER_DEBUG).is_some() {
@@ -3435,6 +3817,13 @@ fn open_watcher_debug_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), Strin
         .visible(false)
         .build()
         .map_err(|err| err.to_string())?;
+    let app_for_events = app.clone();
+    window.on_window_event(move |event| match event {
+        tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed => {
+            set_character_debug_window_desired_open(&app_for_events, false);
+        }
+        _ => {}
+    });
     let _ = position_watcher_debug_window(app, &window);
     let state = app.state::<TerminalAggregateState>();
     let last_state = state
@@ -3444,7 +3833,82 @@ fn open_watcher_debug_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), Strin
         .map(|value| value.clone())
         .unwrap_or_else(|| "idle".to_string());
     emit_terminal_aggregate_state(app, &last_state);
+    let _ = window.show();
     Ok(())
+}
+
+fn set_character_debug_window_desired_open<R: Runtime>(app: &AppHandle<R>, desired_open: bool) {
+    if let Some(state) = app.try_state::<CharacterDebugWindowControlState>() {
+        if let Ok(mut guard) = state.desired_open.lock() {
+            *guard = desired_open;
+        }
+    }
+}
+
+fn character_debug_window_desired_open<R: Runtime>(app: &AppHandle<R>) -> bool {
+    app.try_state::<CharacterDebugWindowControlState>()
+        .and_then(|state| state.desired_open.lock().ok().map(|guard| *guard))
+        .unwrap_or_else(|| app.get_webview_window(WINDOW_WATCHER_DEBUG).is_some())
+}
+
+fn schedule_character_debug_window_sync<R: Runtime + 'static>(app: &AppHandle<R>) {
+    let Some(state) = app.try_state::<CharacterDebugWindowControlState>() else {
+        return;
+    };
+    let should_spawn = {
+        let Ok(mut guard) = state.worker_active.lock() else {
+            return;
+        };
+        if *guard {
+            false
+        } else {
+            *guard = true;
+            true
+        }
+    };
+    if !should_spawn {
+        return;
+    }
+
+    let app = app.clone();
+    thread::spawn(move || {
+        loop {
+            let desired_open = character_debug_window_desired_open(&app);
+            if desired_open {
+                let _ = open_watcher_debug_window(&app);
+            } else if let Some(window) = app.get_webview_window(WINDOW_WATCHER_DEBUG) {
+                let _ = window.close();
+            }
+
+            let Some(state) = app.try_state::<CharacterDebugWindowControlState>() else {
+                break;
+            };
+            let stable = {
+                let desired_open = state.desired_open.lock().ok().map(|guard| *guard);
+                let actual_open = app.get_webview_window(WINDOW_WATCHER_DEBUG).is_some();
+                desired_open == Some(actual_open)
+            };
+            if stable {
+                if let Ok(mut guard) = state.worker_active.lock() {
+                    *guard = false;
+                }
+                // Re-check once more to avoid losing a toggle that landed while releasing the worker flag.
+                if character_debug_window_desired_open(&app)
+                    == app.get_webview_window(WINDOW_WATCHER_DEBUG).is_some()
+                {
+                    break;
+                }
+                if let Ok(mut guard) = state.worker_active.lock() {
+                    if *guard {
+                        break;
+                    }
+                    *guard = true;
+                }
+                continue;
+            }
+            thread::sleep(Duration::from_millis(40));
+        }
+    });
 }
 
 #[tauri::command]
@@ -3491,6 +3955,7 @@ fn close_character_windows_if_all_terminals_closed<R: Runtime>(app: &AppHandle<R
         return;
     }
     close_watcher_window(app);
+    set_character_debug_window_desired_open(app, false);
     if let Some(window) = app.get_webview_window(WINDOW_WATCHER_DEBUG) {
         let _ = window.close();
     }
@@ -3506,9 +3971,7 @@ fn set_watcher_window_framed<R: Runtime>(
     match window.label() {
         WINDOW_WATCHER => {
             let _ = window.set_decorations(framed);
-            // Keep current bounds while toggling decorations.
-            // Repositioning during move/resize can stall the window message loop on Windows.
-            // 装飾切替時は現在の位置/サイズを維持し、移動・リサイズ中の再配置競合を避ける。
+            let _ = window.set_resizable(framed);
         }
         WINDOW_WATCHER_DEBUG => {
             let _ = window.set_decorations(framed);
@@ -3529,6 +3992,15 @@ fn sync_watcher_window<R: Runtime>(app: &AppHandle<R>, settings: &Settings) {
     }
 }
 
+fn schedule_watcher_window_sync<R: Runtime + 'static>(app: &AppHandle<R>, enabled: bool) {
+    let app = app.clone();
+    thread::spawn(move || {
+        let mut settings = read_settings(&settings_path(&app)).unwrap_or_else(|_| Settings::default());
+        settings.terminal_watcher_enabled = enabled;
+        sync_watcher_window(&app, &settings);
+    });
+}
+
 fn persist_terminal_watcher_enabled<R: Runtime>(app: &AppHandle<R>, enabled: bool) {
     let path = settings_path(app);
     let mut settings = read_settings(&path).unwrap_or_else(|_| Settings::default());
@@ -3538,7 +4010,7 @@ fn persist_terminal_watcher_enabled<R: Runtime>(app: &AppHandle<R>, enabled: boo
     settings.terminal_watcher_enabled = enabled;
     let _ = write_settings(&path, &settings);
     let _ = app.emit("settings-updated", settings.clone());
-    sync_watcher_window(app, &settings);
+    schedule_watcher_window_sync(app, enabled);
 }
 
 #[tauri::command]
@@ -3605,7 +4077,8 @@ fn open_character_debug_watcher<R: Runtime>(
     ipc_session_id: String,
 ) -> Result<(), String> {
     ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
-    open_watcher_debug_window(&app)?;
+    set_character_debug_window_desired_open(&app, true);
+    schedule_character_debug_window_sync(&app);
     Ok(())
 }
 
@@ -3615,9 +4088,8 @@ fn close_character_debug_watcher<R: Runtime>(
     ipc_session_id: String,
 ) -> Result<(), String> {
     ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
-    if let Some(window) = app.get_webview_window(WINDOW_WATCHER_DEBUG) {
-        let _ = window.close();
-    }
+    set_character_debug_window_desired_open(&app, false);
+    schedule_character_debug_window_sync(&app);
     Ok(())
 }
 
@@ -3627,7 +4099,7 @@ fn is_character_debug_watcher_open<R: Runtime>(
     ipc_session_id: String,
 ) -> Result<bool, String> {
     ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
-    Ok(app.get_webview_window(WINDOW_WATCHER_DEBUG).is_some())
+    Ok(character_debug_window_desired_open(&app))
 }
 
 #[tauri::command]
@@ -3636,12 +4108,10 @@ fn toggle_character_debug_watcher<R: Runtime>(
     ipc_session_id: String,
 ) -> Result<bool, String> {
     ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
-    if let Some(window) = app.get_webview_window(WINDOW_WATCHER_DEBUG) {
-        let _ = window.close();
-        return Ok(false);
-    }
-    open_watcher_debug_window(&app)?;
-    Ok(true)
+    let next_open = !character_debug_window_desired_open(&app);
+    set_character_debug_window_desired_open(&app, next_open);
+    schedule_character_debug_window_sync(&app);
+    Ok(next_open)
 }
 
 fn available_monitors<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<tauri::Monitor>, String> {
@@ -3811,6 +4281,14 @@ fn register_terminal_window<R: Runtime>(
     Ok(())
 }
 
+fn terminal_session_id_for_label<R: Runtime>(app: &AppHandle<R>, label: &str) -> Option<String> {
+    let terminal_state = app.try_state::<TerminalSessionState>()?;
+    let guard = terminal_state.labels.lock().ok()?;
+    guard
+        .iter()
+        .find_map(|(session_id, stored_label)| (stored_label == label).then(|| session_id.clone()))
+}
+
 fn notify_smoke_match<R: Runtime>(app: &AppHandle<R>, session_id: &str, chunk: &str) {
     let state = match app.try_state::<TerminalSmokeState>() {
         Some(state) => state,
@@ -3972,13 +4450,11 @@ fn terminal_resize<R: Runtime>(
     Ok(())
 }
 
-#[tauri::command]
-fn stop_terminal_session<R: Runtime>(
-    app: AppHandle<R>,
-    ipc_session_id: String,
-    session_id: String,
+fn stop_terminal_session_inner<R: Runtime>(
+    app: &AppHandle<R>,
+    session_id: &str,
+    reason: &str,
 ) -> Result<(), String> {
-    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
     let _ = log_worker_event(&app, &format!("terminal stop requested: {session_id}"));
     let terminal_state = app
         .try_state::<TerminalSessionState>()
@@ -3988,26 +4464,26 @@ fn stop_terminal_session<R: Runtime>(
             .active
             .lock()
             .map_err(|_| "terminal session lock".to_string())?;
-        active.remove(&session_id);
+        active.remove(session_id);
     }
     {
         let mut labels = terminal_state
             .labels
             .lock()
             .map_err(|_| "terminal labels lock".to_string())?;
-        labels.remove(&session_id);
+        labels.remove(session_id);
     }
     if let Ok(mut captures) = app.state::<TerminalBuiltinCommandState>().captures.lock() {
-        captures.remove(&session_id);
+        captures.remove(session_id);
     }
     let workers = app.state::<TerminalWorkerState>();
     let mut guard = workers
         .processes
         .lock()
         .map_err(|_| "terminal worker lock".to_string())?;
-    if let Some(mut process) = guard.remove(&session_id) {
+    if let Some(mut process) = guard.remove(session_id) {
         let _ = process.send_stop_session(nagomi_protocol::StopSession {
-            session_id: session_id.clone(),
+            session_id: session_id.to_string(),
         });
         let _ = process.stop();
     }
@@ -4022,12 +4498,25 @@ fn stop_terminal_session<R: Runtime>(
             .map_err(|_| "terminal session lock".to_string())?
             .is_empty();
         if active_empty && workers_empty {
-            let _ = log_worker_event(&app, "last terminal closed: exit orchestrator");
+            let _ = log_worker_event(
+                &app,
+                &format!("last terminal closed ({reason}): exit orchestrator"),
+            );
             app.exit(0);
         }
     }
     close_character_windows_if_all_terminals_closed(&app);
     Ok(())
+}
+
+#[tauri::command]
+fn stop_terminal_session<R: Runtime>(
+    app: AppHandle<R>,
+    ipc_session_id: String,
+    session_id: String,
+) -> Result<(), String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    stop_terminal_session_inner(&app, &session_id, "frontend-beforeunload")
 }
 
 #[tauri::command]
@@ -4169,6 +4658,110 @@ fn open_terminal_window_same_position_inner<R: Runtime + 'static>(
     Ok(session_id)
 }
 
+#[tauri::command]
+fn open_terminal_window_offset_from_current<R: Runtime + 'static>(
+    window: tauri::WebviewWindow<R>,
+    ipc_session_id: String,
+    offset_x: Option<i32>,
+    offset_y: Option<i32>,
+) -> Result<String, String> {
+    ipc_session::touch_ipc_session_for_window(&window, &ipc_session_id)?;
+    let app = window.app_handle();
+    let mut windows = collect_terminal_windows(&app);
+    windows.sort_by_key(|candidate| candidate.label().to_string());
+    let hint_label = window.label().to_string();
+    let source_label = if hint_label.starts_with("terminal-")
+        && app.get_webview_window(&hint_label).is_some()
+    {
+        Some(hint_label.clone())
+    } else {
+        let selected_label = app
+            .state::<SelectionState>()
+            .current
+            .lock()
+            .ok()
+            .and_then(|guard| guard.clone());
+        let focused_label = windows
+            .iter()
+            .find(|candidate| candidate.is_focused().unwrap_or(false))
+            .map(|candidate| candidate.label().to_string());
+        selected_label
+            .or(focused_label)
+            .or_else(|| windows.first().map(|candidate| candidate.label().to_string()))
+            .or_else(|| {
+                app.get_webview_window(&hint_label)
+                    .map(|current| current.label().to_string())
+            })
+    }
+    .ok_or_else(|| "window not found".to_string())?;
+    let source_rect = app
+        .get_webview_window(&source_label)
+        .and_then(|source_window| current_window_rect(&source_window));
+
+    mark_terminal_layout_arranged(&app, false);
+
+    let session_id = generate_terminal_session_id();
+    let session_id_for_spawn = session_id.clone();
+    let source_label_for_spawn = source_label.clone();
+    let source_rect_for_spawn = source_rect;
+    let offset_x = offset_x.unwrap_or(CONTEXT_NEW_TERMINAL_OFFSET_X);
+    let offset_y = offset_y.unwrap_or(CONTEXT_NEW_TERMINAL_OFFSET_Y);
+    let app_for_spawn = app.clone();
+    thread::spawn(move || {
+        if let Err(err) =
+            open_terminal_window_inner(app_for_spawn.clone(), session_id_for_spawn.clone())
+        {
+            let _ = log_worker_event(
+                &app_for_spawn,
+                &format!(
+                    "offset open failed: session={} error={err}",
+                    session_id_for_spawn
+                ),
+            );
+            return;
+        }
+        if let Some(rect) = source_rect_for_spawn {
+            let new_label = terminal_window_label(&session_id_for_spawn);
+            if let Some(new_window) = app_for_spawn.get_webview_window(&new_label) {
+                let offset_rect = offset_window_rect(
+                    &app_for_spawn,
+                    &source_label_for_spawn,
+                    rect,
+                    offset_x,
+                    offset_y,
+                );
+                apply_window_rect(&app_for_spawn, &new_window, offset_rect);
+                let _ = new_window.set_focus();
+                if let Ok(mut layout) = app_for_spawn
+                    .state::<TerminalWindowLayoutState>()
+                    .layout
+                    .lock()
+                {
+                    layout.insert(new_label.clone(), offset_rect);
+                }
+            }
+            if let Ok(mut order) = app_for_spawn
+                .state::<TerminalWindowLayoutState>()
+                .order
+                .lock()
+            {
+                if !order.iter().any(|label| label == &new_label) {
+                    if let Some(pos) = order
+                        .iter()
+                        .position(|label| label == &source_label_for_spawn)
+                    {
+                        order.insert(pos + 1, new_label.clone());
+                    } else {
+                        order.push(new_label.clone());
+                    }
+                }
+            }
+        }
+    });
+
+    Ok(session_id)
+}
+
 fn open_terminal_window_inner<R: Runtime>(
     app: AppHandle<R>,
     session_id: String,
@@ -4193,6 +4786,26 @@ fn open_terminal_window_inner<R: Runtime>(
         let _ = window.show();
         let _ = window.set_focus();
     }
+    Ok(())
+}
+
+fn open_settings_window_inner<R: Runtime + 'static>(app: AppHandle<R>) {
+    let focus_existing = app.get_webview_window(WINDOW_SETTINGS).is_some();
+    thread::spawn(move || {
+        let _ = create_window(&app, WINDOW_SETTINGS, "Settings", "settings");
+        if let Some(window) = app.get_webview_window(WINDOW_SETTINGS) {
+            let _ = window.show();
+            if focus_existing {
+                let _ = window.set_focus();
+            }
+        }
+    });
+}
+
+#[tauri::command]
+fn open_settings_window<R: Runtime>(app: AppHandle<R>, ipc_session_id: String) -> Result<(), String> {
+    ipc_session::touch_ipc_session(&app, &ipc_session_id)?;
+    open_settings_window_inner(app);
     Ok(())
 }
 
@@ -4552,6 +5165,7 @@ fn create_window<R: Runtime>(
     let window = builder.build()?;
     if label.starts_with("terminal-") {
         let app_for_events = app.clone();
+        let window_label = label.to_string();
         window.on_window_event(move |event| match event {
             tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
                 if is_internal_layout_change_active(&app_for_events) {
@@ -4561,6 +5175,22 @@ fn create_window<R: Runtime>(
             }
             tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed => {
                 mark_terminal_layout_arranged(&app_for_events, false);
+                if let Some(session_id) =
+                    terminal_session_id_for_label(&app_for_events, &window_label)
+                {
+                    let _ = log_worker_event(
+                        &app_for_events,
+                        &format!(
+                            "terminal window close detected: label={} session={}",
+                            window_label, session_id
+                        ),
+                    );
+                    let _ = stop_terminal_session_inner(
+                        &app_for_events,
+                        &session_id,
+                        "native-window-close",
+                    );
+                }
                 close_character_windows_if_all_terminals_closed(&app_for_events);
             }
             _ => {}
@@ -4608,11 +5238,7 @@ fn build_tray<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
         .tooltip("nagomi")
         .on_menu_event(|app, event| match event.id() {
             id if id == "open_settings" => {
-                let _ = create_window(app, WINDOW_SETTINGS, "Settings", "settings");
-                if let Some(window) = app.get_webview_window(WINDOW_SETTINGS) {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
+                open_settings_window_inner(app.clone());
             }
             id if id == "open_terminal" => {
                 let session_id = generate_terminal_session_id();
@@ -5236,8 +5862,10 @@ fn main() {
             save_settings,
             save_character_asset,
             save_character_pack_manifest,
+            import_character_motion_vrma,
             list_character_packs,
             list_wsl_distros,
+            list_available_terminal_shell_kinds,
             watcher_window_ready,
             set_watcher_window_framed,
             set_terminal_watcher_enabled,
@@ -5246,15 +5874,17 @@ fn main() {
             close_character_debug_watcher,
             is_character_debug_watcher_open,
             toggle_character_debug_watcher,
+            emit_character_motion_debug,
             report_terminal_observation,
             ensure_codex_hook,
-            tool_judge,
             subworker_codex_session_started,
             subworker_llm_decide,
             open_terminal_window,
+            open_terminal_window_offset_from_current,
             open_terminal_window_by_index_same_position,
             open_terminal_window_same_position_selected,
             open_terminal_window_same_position_for_session,
+            open_settings_window,
             arrange_terminal_windows,
             pickup_terminal_window,
             pickup_terminal_window_by_index,
@@ -5286,6 +5916,7 @@ fn main() {
             });
             handle.manage(TerminalAggregateState::default());
             handle.manage(TerminalWindowLayoutState::default());
+            handle.manage(CharacterDebugWindowControlState::default());
             handle.manage(TerminalSessionState {
                 active: Mutex::new(HashSet::new()),
                 labels: Mutex::new(HashMap::new()),
@@ -5352,8 +5983,6 @@ mod tests {
             notifications_enabled: false,
             audio_enabled: true,
             volume: 0.5,
-            silence_timeout_ms: 4000,
-            llm_enabled: false,
             llm_tool: "codex".to_string(),
             subworker_enabled: true,
             subworker_debug_enabled: false,
@@ -5366,6 +5995,10 @@ mod tests {
             character_3d_vrm_path: "C:/tmp/test.vrm".to_string(),
             character_3d_scale: 1.2,
             character_3d_yaw_deg: -15.0,
+            character_motion_default_paths: HashMap::from([
+                ("neutral".to_string(), "C:/tmp/motions/neutral.vrma".to_string()),
+                ("waiting".to_string(), "C:/tmp/motions/waiting.vrma".to_string()),
+            ]),
             log_retention_lines: 100,
             terminal_watcher_enabled: true,
             terminal_font_family:
@@ -5585,6 +6218,136 @@ debug suffix: end"#;
     }
 
     #[test]
+    fn build_project_prompt_history_record_extracts_hook_io_by_project() {
+        let event = HookEvent {
+            source: "codex".to_string(),
+            kind: HookEventKind::Completed,
+            ts_ms: 123,
+            source_session_id: Some("ipc-1".to_string()),
+            raw: Some(serde_json::json!({
+                "source": "codex",
+                "cwd": "C:/Users/kitad/workspace/yurutsuku",
+                "event": {
+                    "type": "agent-turn-complete",
+                    "thread-id": "thread_123",
+                    "turn-id": "turn_456",
+                    "input-messages": ["Fix the failing test."],
+                    "last-assistant-message": "Patched and verified."
+                }
+            })),
+        };
+
+        let record = build_project_prompt_history_record(
+            &event,
+            "success",
+            "Patched and verified.",
+        )
+        .expect("record");
+        let payload = record.payload.as_object().expect("payload object");
+
+        assert!(record.project_key.starts_with("yurutsuku-"));
+        assert_eq!(
+            payload.get("cwd").and_then(|value| value.as_str()),
+            Some("C:/Users/kitad/workspace/yurutsuku")
+        );
+        assert_eq!(
+            payload
+                .get("input_messages")
+                .and_then(|value| value.as_array())
+                .and_then(|items| items.first())
+                .and_then(|value| value.as_str()),
+            Some("Fix the failing test.")
+        );
+        assert_eq!(
+            payload
+                .get("last_assistant_message")
+                .and_then(|value| value.as_str()),
+            Some("Patched and verified.")
+        );
+        assert_eq!(
+            payload.get("thread_id").and_then(|value| value.as_str()),
+            Some("thread_123")
+        );
+        assert_eq!(
+            payload.get("turn_id").and_then(|value| value.as_str()),
+            Some("turn_456")
+        );
+    }
+
+    #[test]
+    fn project_prompt_history_key_is_stable_for_same_locator() {
+        let left = project_prompt_history_key(
+            "C:/Users/kitad/workspace/yurutsuku",
+            "yurutsuku",
+        );
+        let right = project_prompt_history_key(
+            "C:/Users/kitad/workspace/yurutsuku/",
+            "yurutsuku",
+        );
+        let other = project_prompt_history_key(
+            "C:/Users/kitad/workspace/another-project",
+            "another-project",
+        );
+
+        assert_eq!(
+            left,
+            project_prompt_history_key("C:/Users/kitad/workspace/yurutsuku", "yurutsuku")
+        );
+        assert_eq!(left, right);
+        assert_ne!(left, other);
+        assert_eq!(
+            normalize_project_locator("C:/Users/kitad/workspace/yurutsuku/"),
+            "C:/Users/kitad/workspace/yurutsuku"
+        );
+    }
+
+    #[test]
+    fn rewrite_codex_notify_config_keeps_notify_at_top_level() {
+        let current = r#"model = "gpt-5.4"
+[features]
+
+[notice.model_migrations]
+"gpt-5.2" = "gpt-5.3-codex"
+# added by nagomi
+notify = "nagomi-codex-notify"
+"#;
+        let next = rewrite_codex_notify_config_text(
+            current,
+            r#"notify = ["node", "C:/Users/test/.nagomi/hooks/nagomi_codex_notify.js"]"#,
+        );
+        let expected = r#"model = "gpt-5.4"
+
+# added by nagomi
+notify = ["node", "C:/Users/test/.nagomi/hooks/nagomi_codex_notify.js"]
+
+[features]
+
+[notice.model_migrations]
+"gpt-5.2" = "gpt-5.3-codex""#;
+        assert_eq!(next, expected);
+    }
+
+    #[test]
+    fn rewrite_codex_notify_config_replaces_existing_top_level_notify() {
+        let current = r#"model = "gpt-5.4"
+# added by nagomi
+notify = ["nagomi-codex-notify"]
+
+[features]"#;
+        let next = rewrite_codex_notify_config_text(
+            current,
+            r#"notify = ["node", "C:/Users/test/.nagomi/hooks/nagomi_codex_notify.js"]"#,
+        );
+        let expected = r#"model = "gpt-5.4"
+
+# added by nagomi
+notify = ["node", "C:/Users/test/.nagomi/hooks/nagomi_codex_notify.js"]
+
+[features]"#;
+        assert_eq!(next, expected);
+    }
+
+    #[test]
     fn tauri_config_windows() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json");
         let raw = fs::read_to_string(&path).expect("read config");
@@ -5634,18 +6397,37 @@ debug suffix: end"#;
 
         settings.terminal_shell_kind = TERMINAL_SHELL_CMD.to_string();
         settings.terminal_wsl_distro = String::new();
-        assert_eq!(build_windows_terminal_command(&settings), "cmd.exe");
+        assert_eq!(
+            build_windows_terminal_command_with_pwsh(&settings, false),
+            "cmd.exe"
+        );
 
         settings.terminal_shell_kind = TERMINAL_SHELL_POWERSHELL.to_string();
-        assert_eq!(build_windows_terminal_command(&settings), "powershell.exe");
+        assert_eq!(
+            build_windows_terminal_command_with_pwsh(&settings, false),
+            "powershell.exe"
+        );
+
+        settings.terminal_shell_kind = TERMINAL_SHELL_POWERSHELL7.to_string();
+        assert_eq!(
+            build_windows_terminal_command_with_pwsh(&settings, false),
+            "powershell.exe"
+        );
+        assert_eq!(
+            build_windows_terminal_command_with_pwsh(&settings, true),
+            "pwsh.exe"
+        );
 
         settings.terminal_shell_kind = TERMINAL_SHELL_WSL.to_string();
         settings.terminal_wsl_distro = String::new();
-        assert_eq!(build_windows_terminal_command(&settings), "wsl.exe");
+        assert_eq!(
+            build_windows_terminal_command_with_pwsh(&settings, false),
+            "wsl.exe"
+        );
 
         settings.terminal_wsl_distro = "Ubuntu".to_string();
         assert_eq!(
-            build_windows_terminal_command(&settings),
+            build_windows_terminal_command_with_pwsh(&settings, false),
             "wsl.exe -d \"Ubuntu\""
         );
     }

@@ -19,7 +19,6 @@
 
   var ObservationState = Object.freeze({
     idle: 'idle',
-    running: 'running',
     needInput: 'need-input',
     success: 'success',
     fail: 'fail',
@@ -35,20 +34,20 @@
   function observeHookPayload(payload) {
     if (!payload) return null;
     var kind = payload.kind;
-    var judgeState = payload.judge_state;
+    var state = payload.state || payload.judge_state;
     var source = payload.source;
 
     if (kind === 'need_input') {
       return { state: ObservationState.needInput, reason: 'hook need_input', source: source };
     }
-    if (judgeState === 'success') {
-      return { state: ObservationState.success, reason: 'judge success', source: source };
+    if (state === 'success') {
+      return { state: ObservationState.success, reason: 'hook success', source: source };
     }
-    if (judgeState === 'failure') {
-      return { state: ObservationState.fail, reason: 'judge failure', source: source };
+    if (state === 'failure') {
+      return { state: ObservationState.fail, reason: 'hook failure', source: source };
     }
-    if (judgeState === 'need_input' || judgeState === 'need-input') {
-      return { state: ObservationState.needInput, reason: 'judge need_input', source: source };
+    if (state === 'need_input' || state === 'need-input') {
+      return { state: ObservationState.needInput, reason: 'hook need_input', source: source };
     }
     return null;
   }

@@ -4,7 +4,12 @@ use std::time::{Duration, SystemTime};
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_notification::NotificationExt;
 
-use crate::judge::JudgeState;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotifyState {
+    Success,
+    Failure,
+    NeedInput,
+}
 
 pub trait ToastSink {
     fn show(&self, title: &str, body: &str) -> Result<()>;
@@ -100,11 +105,11 @@ pub fn notify_flow<T: ToastSink, A: AudioSink>(
     audio: &A,
     cooldown: &NotifyCooldown,
     now: SystemTime,
-    state: JudgeState,
+    state: NotifyState,
     summary: &str,
     settings: &NotifySettings,
 ) -> Result<bool> {
-    if !matches!(state, JudgeState::Failure | JudgeState::NeedInput) {
+    if !matches!(state, NotifyState::Failure | NotifyState::NeedInput) {
         return Ok(false);
     }
     if !cooldown.should_notify(now) {
@@ -112,9 +117,9 @@ pub fn notify_flow<T: ToastSink, A: AudioSink>(
     }
 
     let title = match state {
-        JudgeState::Failure => "failure",
-        JudgeState::Success => "success",
-        JudgeState::NeedInput => "need_input",
+        NotifyState::Failure => "failure",
+        NotifyState::Success => "success",
+        NotifyState::NeedInput => "need_input",
     };
     let body = if summary.is_empty() {
         "no summary"
@@ -226,7 +231,7 @@ mod tests {
             &audio,
             &cooldown,
             now,
-            JudgeState::Failure,
+            NotifyState::Failure,
             "summary",
             &settings,
         )
@@ -240,7 +245,7 @@ mod tests {
             &audio,
             &cooldown,
             SystemTime::UNIX_EPOCH + Duration::from_millis(2000),
-            JudgeState::NeedInput,
+            NotifyState::NeedInput,
             "summary",
             &settings,
         )

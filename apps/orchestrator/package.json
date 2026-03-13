@@ -19,6 +19,8 @@
     "e2e:subworker:advice:format": "node e2e/subworker.advice.format.e2e.js",
     "e2e:subworker:judge:dedup": "node e2e/subworker.judge.dedup.e2e.js",
     "e2e:codex:prime-minister": "node e2e/codex.prime-minister.e2e.js",
+    "e2e:settings:open-from-terminal": "node e2e/settings.open-from-terminal.e2e.js",
+    "e2e:settings:character-toggle-stability": "node e2e/settings.character.toggle.stability.e2e.js",
     "e2e:watcher:frame": "node e2e/watcher.frame.e2e.js",
     "e2e:watcher:debug3d": "node e2e/watcher.debug3d.e2e.js"
   },
